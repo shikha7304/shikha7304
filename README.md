@@ -1,78 +1,94 @@
-public class NotificationException extends RuntimeException {
-
-    private String errorCode;
-    private String errorMessage;
-    private List<ErrorDto> errorMessages;
+public final class SmsService {
+    LoggerUtility logger = LoggerFactoryUtility.getLogger(SmsService.class);
+    private final SmsClient smsClient;
 
     /**
-     * This is parametrised constructor for taking errorCode and  errorMessage
+     * This method will be used for validating smsDTO object and send sms
      *
-     * @param errorCode
-     * @param errorMessage
+     * @param smsDTO passing as parameter for send sms
+     * @return boolean true or false
+     * @throws NotificationException if any exception occur
      */
-    public NotificationException(String errorCode, String errorMessage) {
-        super(errorMessage);
-        this.errorCode = errorCode;
-        this.errorMessage = errorMessage;
+    public boolean sendSMS(SmsDTO smsDTO) throws JsonProcessingException, NotificationException {
+        logger.info("ClassName - SmsService,MethodName -sendSMS, Method-Start");
+        SmsValidator.validateSMS(smsDTO);
+        logger.info("ClassName - SmsService,MethodName -sendSMS, Method-end");
+        return smsClient.sendSMS(smsDTO);
     }
+
+}
+
+
+public class SmsClient extends ApiClient {
+
+    private final ObjectMapper objectMapper;
+    Logger logger = LoggerFactory.getLogger(this.getClass().getName());
 
     /**
-     * This constructor used for list of errorMessages
+     * This constructor used for baseUrl and objectMapper
      *
-     * @param errorMessages
+     * @param baseUrl for sms
      */
-    public NotificationException(List<ErrorDto> errorMessages) {
-        this.errorMessages = import org.junit.jupiter.api.Test;
-
-import java.util.Arrays;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-class NotificationExceptionTest {
-
-    @Test
-    void testNotificationExceptionWithErrorCodeAndErrorMessage() {
-        // Arrange
-        String expectedErrorCode = "400";
-        String expectedErrorMessage = "Invalid Notification";
-
-        // Act
-        NotificationException exception = new NotificationException(expectedErrorCode, expectedErrorMessage);
-
-        // Assert
-        assertNotNull(exception, "Exception object should not be null");
-        assertEquals(expectedErrorCode, exception.getErrorCode(), "Error code should match the expected value");
-        assertEquals(expectedErrorMessage, exception.getErrorMessage(), "Error message should match the expected value");
-        assertEquals(expectedErrorMessage, exception.getMessage(), "Error message should also match the RuntimeException message");
+    public SmsClient(@Value("${sms.gateway.url}") String baseUrl) {
+        super(baseUrl);
+        this.objectMapper = new ObjectMapper();
     }
 
-    @Test
-    void testNotificationExceptionWithErrorMessagesList() {
-        // Arrange
-        ErrorDto error1 = new ErrorDto("ERR001", "Error 1 description");
-        ErrorDto error2 = new ErrorDto("ERR002", "Error 2 description");
-        List<ErrorDto> expectedErrorMessages = Arrays.asList(error1, error2);
 
-        // Act
-        NotificationException exception = new NotificationException(expectedErrorMessages);
+    /**
+     * This method will be used for sending sms
+     *
+     * @param smsDTO for sending sms
+     * @return boolean true or false
+     * @throws NotificationException   if any exception occurs
+     * @throws JsonProcessingException if any exception occurs
+     */
+    public boolean sendSMS(SmsDTO smsDTO) throws NotificationException, JsonProcessingException {
+        logger.info("ClassName - SmsClient,MethodName - sendSMS,Method-start");
 
-        // Assert
-        assertNotNull(exception, "Exception object should not be null");
-        assertEquals(expectedErrorMessages, exception.getErrorMessages(), "Error messages list should match the expected value");
-        assertNull(exception.getErrorCode(), "Error code should be null for this constructor");
-        assertNull(exception.getErrorMessage(), "Error message should be null for this constructor");
-    }
+        String smsRequest = objectMapper.writeValueAsString(smsDTO);
+        HttpEntity<String> requestEntity = prepareHttpEntity(smsRequest, prepareHttpHeaders());
+        ResponseEntity<String> response = getRestTemplate().exchange(getBaseUrl(), HttpMethod.POST, requestEntity, String.class);
+        if (response.getStatusCode().is2xxSuccessful()) {
+            return true;
+        } else {
+            throw new NotificationException(NotificationConstant.FAILURE_CODE, MessageFormat.format(NotificationConstant.FAILURE_MSG, "SMS"));
+        }
 
-    @Test
-    void testNotificationExceptionWithNullErrorMessagesList() {
-        // Act
-        NotificationException exception = new NotificationException((List<ErrorDto>) null);
-
-        // Assert
-        assertNotNull(exception, "Exception object should not be null");
-        assertNull(exception.getErrorMessages(), "Error messages list should be null");
     }
 }
 
 
+public class SmsValidator {
+
+    static LoggerUtility logger = LoggerFactoryUtility.getLogger(SmsValidator.class);
+    /**
+     * This method will be used for validating the sms
+     *
+     * @param smsRequest for validate sms
+     * @throws NotificationException if any exception occurs
+     */
+    public static void validateSMS(SmsDTO smsRequest) throws NotificationException {
+        logger.info("ClassName - SMSValidator,MethodName - validateSMS, method-start");
+        List<ErrorDto> errorList = new ArrayList<>();
+
+        if (StringUtils.isEmpty(smsRequest.getMessage())) {
+            errorList.add(new ErrorDto(NotificationConstant.MANDATORY_ERROR_CODE, MessageFormat.format(NotificationConstant.MANDATORY_ERROR_MESSAGE, "SMS Message")));
+        }
+
+        if (StringUtils.isEmpty(smsRequest.getMobileNumber())) {
+            errorList.add(new ErrorDto(NotificationConstant.MANDATORY_ERROR_CODE, MessageFormat.format(NotificationConstant.MANDATORY_ERROR_MESSAGE, "Mobile Number")));
+        }
+
+        /**
+         *  this method of Collection.isEmpty check if
+         *  the error list have some error
+         *  then it throw exception
+         **/
+        if (!CollectionUtils.isEmpty(errorList)) {
+            logger.error("Error -> ",errorList);
+            throw new NotificationException(errorList);
+        }
+        logger.info("ClassName - SMSValidator,MethodName - validateSMS, method-end");
+    }
+}
