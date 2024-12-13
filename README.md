@@ -124,3 +124,21 @@ Service: Handles OTP logic, including expiration. 
         
       
 Repository: Stores OTP data in the database for validation and expiration. 
+
+Acceptance Criteria 
+
+
+        
+      OTP should generate dynamically on each request with six digits random number. 
+
+        
+      OTP should expire after 5 minutes. 
+
+        
+      Validation should confirm the user-provided OTP matches the stored OTP. 
+
+        
+      Users can resend the OTP if needed.
+
+        
+      All requests and responses must be logged for traceability. 
