@@ -346,3 +346,47 @@ Logs all requests and responses for traceability.
 
         
       All requests and responses must be logged for traceability. 
+
+
+
+ if (otpGenerationRequest.getUserId().contains(String.valueOf('@'))) {
+            EmailDTO emailDTO = new EmailDTO();
+            isOtpSend = emailService.sendEmail(emailDTO);
+
+        } else {
+            try {
+                SmsDTO smsDTO = new SmsDTO();
+                isOtpSend = smsService.sendSMS(smsDTO);
+
+            }
+            catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+import java.util.regex.Pattern;
+
+public class RegexValidation {
+
+    // Regex for validating phone number
+    private static final String PHONE_REGEX = "^\\+?[0-9]{10,15}$";
+
+    // Regex for validating email
+    private static final String EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@(.+)$";
+
+    // Validate phone number
+    public static boolean validatePhone(String phone) {
+        return phone != null && Pattern.matches(PHONE_REGEX, phone);
+    }
+
+    // Validate email
+    public static boolean validateEmail(String email) {
+        return email != null && Pattern.matches(EMAIL_REGEX, email);
+    }
+
+    // Validate user ID (alphanumeric check)
+    public static boolean validateUserId(String userId) {
+        return userId != null && userId.matches("^[a-zA-Z0-9]+$");
+    }
+}
+        
