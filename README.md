@@ -1662,5 +1662,166 @@ public class SmsDTO {
     }
 }
 
+package com.epay.merchant.service;
 
-    
+import com.epay.merchant.entity.NotificationEntity;
+import com.epay.merchant.entity.Otp;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.model.response.OtpGenerationResponse;
+import com.epay.merchant.model.response.ResponseDto;
+import com.epay.merchant.repository.NotificationRepository;
+import com.epay.merchant.repository.OtpRepository;
+import com.epay.merchant.util.AppConstants;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.RegexValidation;
+import com.epay.merchant.validator.OtpGenerationValidator;
+import com.sbi.epay.notification.model.EmailDTO;
+import com.sbi.epay.notification.model.SmsDTO;
+import com.sbi.epay.notification.service.EmailService;
+import com.sbi.epay.notification.service.SmsService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Random;
+import java.util.UUID;
+
+
+
+@Service
+@RequiredArgsConstructor
+public class OtpService {
+
+    private final OtpRepository otpRepository;
+    private final EmailService emailService;
+    private final SmsService smsService;
+    private final NotificationRepository notificationRepository;
+    private boolean isOtpSend = false;
+    private final OtpGenerationValidator otpGenerationValidator;
+    private final RegexValidation regexValidation;
+
+
+    public ResponseDto<OtpGenerationResponse> generateOtp(OtpGenerationRequest otpGenerationRequest) {
+        otpGenerationValidator.validateOtpRequest(otpGenerationRequest);
+
+
+        String requestOtp = String.valueOf(new Random().nextInt(900000) + 100000); // Generate 6-digit OTP
+        Long currentTimeMillis = System.currentTimeMillis();
+        Long expiryTimeMillis = currentTimeMillis + (5 * 60 * 1000);
+        Otp otp = new Otp();
+        otp.setRequestType(otpGenerationRequest.getRequestType());
+        otp.setUserId(otpGenerationRequest.getUserId());
+        otp.setRequestID(UUID.randomUUID());
+        otp.setOtpCode(requestOtp);
+        otp.setExpiryTime(expiryTimeMillis);
+        otp.setIsVerified(false);
+        otp.setCreateDate(currentTimeMillis);
+        otp.setUpdateDate(currentTimeMillis);
+
+        // Save to DB
+        otp = otpRepository.save(otp);
+
+        //TODO to call producer and KAFKA Implementation
+        //call utility
+
+
+        String userId = otpGenerationRequest.getUserId();
+        if (RegexValidation.validateEmail(userId)) {
+            // Send Email
+            //  if (otpGenerationRequest.getUserId().contains(String.valueOf('@'))) {
+            EmailDTO emailDTO = new EmailDTO();
+            emailDTO.setRecipient(userId);
+            emailDTO.setBody(requestOtp);
+            isOtpSend = emailService.sendEmail(emailDTO);
+
+        } else if (RegexValidation.validatePhone(userId)) {
+            try {
+                SmsDTO smsDTO = new SmsDTO();
+                smsDTO.setMobileNumber(userId);
+                smsDTO.setMessage(requestOtp);
+                isOtpSend = smsService.sendSMS(smsDTO);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+
+            if (isOtpSend) {
+                NotificationEntity notificationEntity = new NotificationEntity();
+                notificationEntity.setENTITY_NAME(otpGenerationRequest.getRequestType());
+                notificationEntity.setTYPE("OTP");
+                notificationEntity.setMODE_TYPE(otpGenerationRequest.getUserId().contains(String.valueOf('@')) ? "EMAIL" : "SMS");
+                notificationEntity.setVALUE("");
+                notificationEntity.setSTATUS("Completed");
+                notificationEntity.setCREATED_AT(currentTimeMillis);
+                notificationEntity.setCREATED_BY(otpGenerationRequest.getUserId());
+
+                notificationEntity = notificationRepository.save(notificationEntity);
+
+                OtpGenerationResponse otpGenerationResponse = new OtpGenerationResponse(otp.getUserId(), "OTP successfully generated for user: " + otp.getUserId());
+
+                return ResponseDto.<OtpGenerationResponse>builder()
+                        .status(AppConstants.RESPONSE_SUCCESS)
+                        .data(List.of(otpGenerationResponse))
+                        .count(1L)
+                        .total(1L)
+                        .build();
+            }
+            OtpGenerationResponse errorResponse = new OtpGenerationResponse(null, "failed to send otp");
+
+            return ResponseDto.<OtpGenerationResponse>builder()
+                    .status(AppConstants.RESPONSE_FAILURE)
+                    .data(List.of(errorResponse))
+                    .count(1L)
+                    .total(1L)
+                    .build();
+
+        }
+
+        throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "User Id"));
+    }
+}
+
+    package com.epay.merchant.validator;
+import com.epay.merchant.dto.OtpRequest;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.RequestType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.logging.ErrorManager;
+
+
+@Component
+@RequiredArgsConstructor
+public class OtpGenerationValidator extends BaseValidator {
+   // private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(OtpRequest.class);
+//   /* private final OtpRequest otpRequest;*/
+
+
+    public void validateOtpRequest(OtpGenerationRequest otpGenerationRequest) {
+        //logger.debug("Customer validation start for {}", otpRequest);
+        validateMandatoryFields(otpGenerationRequest);
+       // logger.debug("Customer mandatory validation completed for {}", otpRequest);
+        validateEnumValue(otpGenerationRequest.getRequestType());
+       // logger.debug("Customer field validation completed for {}", otpRequest);
+    }
+
+    private void validateMandatoryFields(OtpGenerationRequest otpGenerationRequest) {
+        checkMandatoryField(otpGenerationRequest.getRequestType(), "Request type");
+        checkMandatoryField(otpGenerationRequest.getUserId(), "Userid");
+        throwIfErrors();
+    }
+
+    private void validateEnumValue(String value) {
+        if (!(value.equals(RequestType.LOGIN.getValue()) || value.equals(RequestType.CHANGE_PASSWORD.getValue()) || value.equals(RequestType.RESET_PASSWORD.getValue()))) {
+            throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE,MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Request Type"));
+        }
+    }
+
+
+}
+
