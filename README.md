@@ -1825,3 +1825,261 @@ public class OtpGenerationValidator extends BaseValidator {
 
 }
 
+
+
+
+junit 
+
+
+import com.epay.merchant.entity.NotificationEntity;
+import com.epay.merchant.entity.Otp;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.model.response.OtpGenerationResponse;
+import com.epay.merchant.model.response.ResponseDto;
+import com.epay.merchant.repository.NotificationRepository;
+import com.epay.merchant.repository.OtpRepository;
+import com.epay.merchant.util.RegexValidation;
+import com.epay.merchant.validator.OtpGenerationValidator;
+import com.sbi.epay.notification.model.EmailDTO;
+import com.sbi.epay.notification.model.SmsDTO;
+import com.sbi.epay.notification.service.EmailService;
+import com.sbi.epay.notification.service.SmsService;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.Optional;
+import java.util.Random;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class OtpServiceTest {
+
+    @Mock
+    private OtpRepository otpRepository;
+
+    @Mock
+    private EmailService emailService;
+
+    @Mock
+    private SmsService smsService;
+
+    @Mock
+    private NotificationRepository notificationRepository;
+
+    @Mock
+    private OtpGenerationValidator otpGenerationValidator;
+
+    @InjectMocks
+    private OtpService otpService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testGenerateOtp_SuccessWithEmail() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserId("user@example.com");
+        request.setRequestType("LOGIN");
+
+        Otp savedOtp = new Otp();
+        savedOtp.setOtpCode("123456");
+        when(otpRepository.save(any(Otp.class))).thenReturn(savedOtp);
+        when(emailService.sendEmail(any(EmailDTO.class))).thenReturn(true);
+
+        // Act
+        ResponseDto<OtpGenerationResponse> response = otpService.generateOtp(request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        assertEquals(1, response.getCount());
+        verify(emailService, times(1)).sendEmail(any(EmailDTO.class));
+        verify(notificationRepository, times(1)).save(any(NotificationEntity.class));
+    }
+
+    @Test
+    void testGenerateOtp_SuccessWithSms() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserId("+1234567890");
+        request.setRequestType("LOGIN");
+
+        Otp savedOtp = new Otp();
+        savedOtp.setOtpCode("123456");
+        when(otpRepository.save(any(Otp.class))).thenReturn(savedOtp);
+        when(smsService.sendSMS(any(SmsDTO.class))).thenReturn(true);
+
+        // Act
+        ResponseDto<OtpGenerationResponse> response = otpService.generateOtp(request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        assertEquals(1, response.getCount());
+        verify(smsService, times(1)).sendSMS(any(SmsDTO.class));
+        verify(notificationRepository, times(1)).save(any(NotificationEntity.class));
+    }
+
+    @Test
+    void testGenerateOtp_FailureToSendOtp() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserId("+1234567890");
+        request.setRequestType("LOGIN");
+
+        Otp savedOtp = new Otp();
+        savedOtp.setOtpCode("123456");
+        when(otpRepository.save(any(Otp.class))).thenReturn(savedOtp);
+        when(smsService.sendSMS(any(SmsDTO.class))).thenReturn(false);
+
+        // Act
+        ResponseDto<OtpGenerationResponse> response = otpService.generateOtp(request);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals("FAILURE", response.getStatus());
+        assertEquals(1, response.getCount());
+        verify(smsService, times(1)).sendSMS(any(SmsDTO.class));
+        verify(notificationRepository, never()).save(any(NotificationEntity.class));
+    }
+
+    @Test
+    void testGenerateOtp_InvalidUserId() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserId("invalid_user");
+        request.setRequestType("LOGIN");
+
+        doThrow(new MerchantException("ERR001", "Invalid User ID"))
+                .when(otpGenerationValidator).validateOtpRequest(any(OtpGenerationRequest.class));
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, () -> otpService.generateOtp(request));
+        assertEquals("Invalid User ID", exception.getMessage());
+        verify(otpRepository, never()).save(any(Otp.class));
+        verify(emailService, never()).sendEmail(any(EmailDTO.class));
+        verify(smsService, never()).sendSMS(any(SmsDTO.class));
+    }
+
+    @Test
+    void testGenerateOtp_ExceptionWhileSendingSms() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserId("+1234567890");
+        request.setRequestType("LOGIN");
+
+        Otp savedOtp = new Otp();
+        savedOtp.setOtpCode("123456");
+        when(otpRepository.save(any(Otp.class))).thenReturn(savedOtp);
+        when(smsService.sendSMS(any(SmsDTO.class))).thenThrow(new RuntimeException("SMS service error"));
+
+        // Act & Assert
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> otpService.generateOtp(request));
+        assertEquals("SMS service error", exception.getMessage());
+        verify(smsService, times(1)).sendSMS(any(SmsDTO.class));
+    }
+}
+
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.RequestType;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.MockitoAnnotations;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
+class OtpGenerationValidatorTest {
+
+    @InjectMocks
+    private OtpGenerationValidator otpGenerationValidator;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testValidateOtpRequest_Success() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestType(RequestType.LOGIN.getValue());
+        request.setUserId("user@example.com");
+
+        // Act & Assert
+        assertDoesNotThrow(() -> otpGenerationValidator.validateOtpRequest(request));
+    }
+
+    @Test
+    void testValidateOtpRequest_MissingRequestType() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestType(null); // Missing request type
+        request.setUserId("user@example.com");
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, 
+            () -> otpGenerationValidator.validateOtpRequest(request));
+        assert exception.getMessage().contains("Request type");
+    }
+
+    @Test
+    void testValidateOtpRequest_MissingUserId() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestType(RequestType.LOGIN.getValue());
+        request.setUserId(null); // Missing userId
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, 
+            () -> otpGenerationValidator.validateOtpRequest(request));
+        assert exception.getMessage().contains("Userid");
+    }
+
+    @Test
+    void testValidateOtpRequest_InvalidRequestType() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestType("INVALID_TYPE"); // Invalid request type
+        request.setUserId("user@example.com");
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, 
+            () -> otpGenerationValidator.validateOtpRequest(request));
+        assert exception.getMessage().contains("Request Type");
+    }
+
+    @Test
+    void testValidateOtpRequest_SuccessWithValidRequestTypes() {
+        // Arrange
+        OtpGenerationRequest loginRequest = new OtpGenerationRequest();
+        loginRequest.setRequestType(RequestType.LOGIN.getValue());
+        loginRequest.setUserId("user@example.com");
+
+        OtpGenerationRequest changePasswordRequest = new OtpGenerationRequest();
+        changePasswordRequest.setRequestType(RequestType.CHANGE_PASSWORD.getValue());
+        changePasswordRequest.setUserId("user@example.com");
+
+        OtpGenerationRequest resetPasswordRequest = new OtpGenerationRequest();
+        resetPasswordRequest.setRequestType(RequestType.RESET_PASSWORD.getValue());
+        resetPasswordRequest.setUserId("user@example.com");
+
+        // Act & Assert
+        assertDoesNotThrow(() -> otpGenerationValidator.validateOtpRequest(loginRequest));
+        assertDoesNotThrow(() -> otpGenerationValidator.validateOtpRequest(changePasswordRequest));
+        assertDoesNotThrow(() -> otpGenerationValidator.validateOtpRequest(resetPasswordRequest));
+    }
+}
