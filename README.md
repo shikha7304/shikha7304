@@ -2083,3 +2083,124 @@ class OtpGenerationValidatorTest {
         assertDoesNotThrow(() -> otpGenerationValidator.validateOtpRequest(resetPasswordRequest));
     }
 }
+
+
+
+
+
+
+
+Mian class 
+
+
+
+
+package com.epay.merchant;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.thymeleaf.TemplateEngine;
+
+/**
+ * Class Name: EpayMerchantServiceApplication
+ * *
+ * Description:
+ * *
+ * Author: V1017903(bhushan wadekar)
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
+
+@SpringBootApplication
+@ComponentScan(basePackages = {"org.springframework.boot.context.embedded.tomcat","com.sbi.epay.notification", "com.sbi.epay.encryptdecrypt"})
+@EnableJpaRepositories(basePackages = "com.epay.merchant.repository")
+@EnableJpaAuditing
+@EnableScheduling
+@EntityScan(basePackages = {"com.epay.merchant","com.sbi.epay.notification", "com.sbi.epay.encryptdecrypt"})
+
+public class EpayMerchantServiceApplication implements WebMvcConfigurer {
+
+	public static void main(String[] args) {
+		SpringApplication.run(EpayMerchantServiceApplication.class, args);
+	}
+	@Bean
+	public TemplateEngine getTemplateEngine() {
+		return new TemplateEngine();
+	}
+}
+
+
+
+
+
+package com.epay.merchant.controller;
+
+import com.epay.merchant.dto.OtpRequest;
+import com.epay.merchant.entity.Otp;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.model.response.OtpGenerationResponse;
+import com.epay.merchant.model.response.ResponseDto;
+import com.epay.merchant.service.OtpService;
+import com.epay.merchant.util.enums.RequestType;
+import com.sbi.epay.notification.service.SmsService;
+import io.swagger.v3.oas.annotations.Operation;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static com.epay.merchant.util.enums.RequestType.LOGIN;
+
+
+@RestController
+@RequiredArgsConstructor
+public class OtpController {
+
+    private final OtpService otpService;
+    private  final SmsService smsService;
+
+    //private static final LoggerUtility log = LoggerFactoryUtility.getLogger(OtpController.class);
+
+    @PostMapping("/call")
+    @Operation(summary = "Merchant User OTP Generation")
+    public ResponseDto<OtpGenerationResponse> generateOTP (@RequestBody OtpGenerationRequest otpGenerationRequest) {
+        return otpService.generateOtp(otpGenerationRequest);
+    }
+
+}
+
+curl --location --request POST 'http://localhost:9094/call' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "requestType" : "LOGIN",
+    "userId" : "h"
+}'
+
+{
+    "timestamp": "2024-12-18T14:34:28.382+00:00",
+    "status": 404,
+    "error": "Not Found",
+    "trace": "org.springframework.web.servlet.resource.NoResourceFoundException: No static resource call.\r\n\tat org.springframework.web.servlet.resource.ResourceHttpRequestHandler.handleRequest(ResourceHttpRequestHandler.java:585)\r\n\tat org.springframework.web.servlet.mvc.HttpRequestHandlerAdapter.handle(HttpRequestHandlerAdapter.java:52)\r\n\tat org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089)\r\n\tat org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:979)\r\n\tat org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014)\r\n\tat org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:914)\r\n\tat jakarta.servlet.http.HttpServlet.service(HttpServlet.java:590)\r\n\tat org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885)\r\n\tat jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:195)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)\r\n\tat org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)\r\n\tat org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)\r\n\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)\r\n\tat org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)\r\n\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)\r\n\tat org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:113)\r\n\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)\r\n\tat org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201)\r\n\tat org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:164)\r\n\tat org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:140)\r\n\tat org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:167)\r\n\tat org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:90)\r\n\tat org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:483)\r\n\tat org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115)\r\n\tat org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93)\r\n\tat org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:74)\r\n\tat org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:344)\r\n\tat org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:384)\r\n\tat org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63)\r\n\tat org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:904)\r\n\tat org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1741)\r\n\tat org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52)\r\n\tat org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1190)\r\n\tat org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659)\r\n\tat org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)\r\n\tat java.base/java.lang.Thread.run(Thread.java:1583)\r\n",
+    "message": "No static resource call.",
+    "path": "/call"
+}
