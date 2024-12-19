@@ -1,0 +1,614 @@
+2. Model Class
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.example.passwordreset.model;
+
+import javax.persistence.*;
+
+@Entity
+@Table(name = "users")
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String username;
+    private String password; // Store hashed password
+
+    // Getters and Setters
+}
+3. DTO Class
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.example.passwordreset.dto;
+
+public class PasswordChangeRequest {
+    private String username;
+    private String oldPassword;
+    private String newPassword;
+
+    // Getters and Setters
+}
+4. DAO Interface
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.example.passwordreset.dao;
+
+import com.example.passwordreset.model.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    User findByUsername(String username);
+}
+5. Service Class
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.example.passwordreset.service;
+
+import com.example.passwordreset.dao.UserRepository;
+import com.example.passwordreset.dto.PasswordChangeRequest;
+import com.example.passwordreset.model.User;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+public class UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private BCryptPasswordEncoder passwordEncoder;
+
+    public boolean changePassword(PasswordChangeRequest request) {
+        User user = userRepository.findByUsername(request.getUsername());
+        if (user != null && passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+            userRepository.save(user);
+            return true;
+        }
+        return false;
+    }
+}
+6. Controller Class
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.example.passwordreset.controller;
+
+import com.example.passwordreset.dto.PasswordChangeRequest;
+import com.example.passwordreset.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/password")
+public class PasswordController {
+
+    @Autowired
+    private UserService userService;
+
+    @PostMapping("/change")
+    public ResponseEntity<String> changePassword(@RequestBody PasswordChangeRequest request) {
+        boolean isChanged = userService.changePassword(request);
+        if (isChanged) {
+            return ResponseEntity.ok("Password changed successfully.");
+        } else {
+            return ResponseEntity.badRequest().body("Invalid username or password.");
+        }
+    }
+}
+
+
+@Component @AllArgsConstructor @Slf4j public class PasswordDao {
+
+
+Verify
+
+Open In Editor
+Run
+Copy code
+private final UserRepository userRepository;
+
+/**
+ * Update user password in the database.
+ *
+ * @param user User entity with updated password.
+ * @return Updated user entity.
+ */
+public User updatePassword(User user) {
+    try {
+        log.info("Updating password for user: {}", user.getUserId());
+        return userRepository.save(user); // Save updates to the database
+    } catch (Exception e) {
+        log.error("Error occurred while updating password for user {}: {}", user.getUserId(), e.getMessage(), e);
+        throw new RuntimeException("Failed to update password", e);
+    }
+}
+
+/**
+ * Find a user by their email.
+ *
+ * @param email Email of the user.
+ * @return User entity if found.
+ */
+public User findUserByEmail(String email) {
+    try {
+        log.info("Finding user by email: {}", email);
+        return userRepository.findByEmail(email);
+    } catch (Exception e) {
+        log.error("Error occurred while finding user by email {}: {}", email, e.getMessage(), e);
+        throw new RuntimeException("Failed to find user by email", e);
+    }
+}
+
+/**
+ * Find a user by their user ID.
+ *
+ * @param userId User ID.
+ * @return User entity if found.
+ */
+public User findUserByUserId(String userId) {
+    try {
+        log.info("Finding user by userId: {}", userId);
+        return userRepository.findByUserId(userId);
+    } catch (Exception e) {
+        log.error("Error occurred while finding user by userId {}: {}", userId, e.getMessage(), e);
+        throw new RuntimeException("Failed to find user by userId", e);
+    }
+}
+} 2. Repository Layer UserRepository.java java Copy code package com.epay.merchant.repository;
+
+import com.epay.merchant.entity.User; import org.springframework.data.jpa.repository.JpaRepository; import org.springframework.stereotype.Repository;
+
+@Repository public interface UserRepository extends JpaRepository<User, String> { User findByEmail(String email); User findByUserId(String userId); } 3. Service Layer PasswordService.java The DAO methods will be utilized in the service layer to implement business logic.
+
+java Copy code package com.epay.merchant.service;
+
+import com.epay.merchant.dao.PasswordDao; import com.epay.merchant.dto.PasswordChangeRequest; import com.epay.merchant.dto.PasswordResetRequest; import com.epay.merchant.dto.ResponseDto; import com.epay.merchant.entity.User; import com.epay.merchant.exception.MerchantException; import com.epay.merchant.util.ErrorConstants; import lombok.RequiredArgsConstructor; import org.springframework.stereotype.Service;
+
+@Service @RequiredArgsConstructor public class PasswordService {
+
+
+Verify
+
+Open In Editor
+Run
+Copy code
+private final PasswordDao passwordDao;
+
+/**
+ * Handles password reset.
+ *
+ * @param request PasswordResetRequest object.
+ * @return ResponseDto with the result of the operation.
+ */
+public ResponseDto<String> resetPassword(PasswordResetRequest request) {
+    User user = passwordDao.findUserByEmail(request.getEmail());
+    if (user == null) {
+        throw new MerchantException(ErrorConstants.USER_NOT_FOUND);
+    }
+
+    // Validate OTP (replace with actual OTP validation)
+    if (!"123456".equals(request.getOtp())) {
+        throw new MerchantException(ErrorConstants.INVALID_OTP);
+    }
+
+    user.setPassword(request.getNewPassword()); // Encrypt the password in real-world scenarios
+    passwordDao.updatePassword(user);
+
+    return ResponseDto.<String>builder()
+            .status("SUCCESS")
+            .message("Password reset successful.")
+            .data(null)
+            .build();
+}
+
+/**
+ * Handles password change.
+ *
+ * @param request PasswordChangeRequest object.
+ * @return ResponseDto with the result of the operation.
+ */
+public ResponseDto<String> changePassword(PasswordChangeRequest request) {
+    User user = passwordDao.findUserByUserId(request.getUserId());
+    if (user == null) {
+        throw new MerchantException(ErrorConstants.USER_NOT_FOUND);
+    }
+
+    // Verify old password
+    if (!user.getPassword().equals(request.getOldPassword())) {
+        throw new MerchantException(ErrorConstants.PASSWORD_MISMATCH);
+    }
+
+    user.setPassword(request.getNewPassword()); // Encrypt the password in real-world scenarios
+    passwordDao.updatePassword(user);
+
+    return ResponseDto.<String>builder()
+            .status("SUCCESS")
+            .message("Password changed successfully.")
+            .data(null)
+            .build();
+}
+} 4. Controller Layer PasswordController.java java Copy code package com.epay.merchant.controller;
+
+import com.epay.merchant.dto.PasswordChangeRequest; import com.epay.merchant.dto.PasswordResetRequest; import com.epay.merchant.dto.ResponseDto; import com.epay.merchant.service.PasswordService; import lombok.RequiredArgsConstructor; import org.springframework.web.bind.annotation.*;
+
+@RestController @RequestMapping("/api/password") @RequiredArgsConstructor public class PasswordController {
+
+
+Verify
+
+Open In Editor
+Run
+Copy code
+private final PasswordService passwordService;
+
+@PostMapping("/reset")
+public ResponseDto<String> resetPassword(@RequestBody PasswordResetRequest request) {
+    return passwordService.resetPassword(request);
+}
+
+@PostMapping("/change")
+public ResponseDto<String> changePassword(@RequestBody PasswordChangeRequest request) {
+    return passwordService.changePassword(request);
+}
+} 5. DTOs PasswordResetRequest.java java Copy code package com.epay.merchant.dto;
+
+import lombok.Data;
+
+@Data public class PasswordResetRequest { private String email; private String otp; private String newPassword; } PasswordChangeRequest.java java Copy code package com.epay.merchant.dto;
+
+import lombok.Data;
+
+@Data public class PasswordChangeRequest { private String userId; private String oldPassword; private String newPassword; } ResponseDto.java java Copy code package com.epay.merchant.dto;
+
+import lombok.Builder; import lombok.Data;
+
+@Data @Builder public class ResponseDto<T> { private String status; private String message; private T data; } 6. Entity User.java java Copy code package com.epay.merchant.entity;
+
+import jakarta.persistence.Entity; import jakarta.persistence.Id; import lombok.Data;
+
+@Entity @Data public class User { @Id private String userId; private String email; private String password; }
+
+BLACKBOXAI
+
+Your code structure for the password reset and change functionality looks good. However, I will make some modifications and improvements to ensure best practices, especially regarding password handling (like hashing) and error handling. Below is the modified code for each component.
+
+1. PasswordDao.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.dao;
+
+import com.epay.merchant.entity.User;
+import com.epay.merchant.repository.UserRepository;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+@Component
+@AllArgsConstructor
+@Slf4j
+public class PasswordDao {
+
+    private final UserRepository userRepository;
+
+    public User updatePassword(User user) {
+        try {
+            log.info("Updating password for user: {}", user.getUser Id());
+            return userRepository.save(user); // Save updates to the database
+        } catch (Exception e) {
+            log.error("Error occurred while updating password for user {}: {}", user.getUser Id(), e.getMessage(), e);
+            throw new RuntimeException("Failed to update password", e);
+        }
+    }
+
+    public User findUser ByEmail(String email) {
+        try {
+            log.info("Finding user by email: {}", email);
+            return userRepository.findByEmail(email);
+        } catch (Exception e) {
+            log.error("Error occurred while finding user by email {}: {}", email, e.getMessage(), e);
+            throw new RuntimeException("Failed to find user by email", e);
+        }
+    }
+
+    public User findUser ByUser Id(String userId) {
+        try {
+            log.info("Finding user by userId: {}", userId);
+            return userRepository.findByUser Id(userId);
+        } catch (Exception e) {
+            log.error("Error occurred while finding user by userId {}: {}", userId, e.getMessage(), e);
+            throw new RuntimeException("Failed to find user by userId", e);
+        }
+    }
+}
+2. UserRepository.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.repository;
+
+import com.epay.merchant.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface UserRepository extends JpaRepository<User, String> {
+    User findByEmail(String email);
+    User findByUser Id(String userId);
+}
+3. PasswordService.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.PasswordDao;
+import com.epay.merchant.dto.PasswordChangeRequest;
+import com.epay.merchant.dto.PasswordResetRequest;
+import com.epay.merchant.dto.ResponseDto;
+import com.epay.merchant.entity.User;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.util.ErrorConstants;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class PasswordService {
+
+    private final PasswordDao passwordDao;
+    private final BCryptPasswordEncoder passwordEncoder;
+
+    public ResponseDto<String> resetPassword(PasswordResetRequest request) {
+        User user = passwordDao.findUser ByEmail(request.getEmail());
+        if (user == null) {
+            throw new MerchantException(ErrorConstants.USER_NOT_FOUND);
+        }
+
+        // Validate OTP (replace with actual OTP validation)
+        if (!"123456".equals(request.getOtp())) {
+            throw new MerchantException(ErrorConstants.INVALID_OTP);
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword())); // Hash the new password
+        passwordDao.updatePassword(user);
+
+        return ResponseDto.<String>builder()
+                .status("SUCCESS")
+                .message("Password reset successful.")
+                .data(null)
+                .build();
+    }
+
+    public ResponseDto<String> changePassword(PasswordChangeRequest request) {
+        User user = passwordDao.findUser ByUser Id(request.getUser Id());
+        if (user == null) {
+            throw new MerchantException(ErrorConstants.USER_NOT_FOUND);
+        }
+
+        // Verify old password
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new MerchantException(ErrorConstants.PASSWORD_MISMATCH);
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword())); // Hash the new password
+        passwordDao.updatePassword(user);
+
+        return ResponseDto.<String>builder()
+                .status("SUCCESS")
+                .message("Password changed successfully.")
+                .data(null)
+                .build();
+    }
+}
+4. PasswordController.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.controller;
+
+import com.epay.merchant.dto.PasswordChangeRequest;
+import com.epay.merchant.dto.PasswordResetRequest;
+import com.epay.merchant.dto.ResponseDto;
+import com.epay.merchant.service.PasswordService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/password")
+@RequiredArgsConstructor
+public class PasswordController {
+
+    private final PasswordService passwordService;
+
+    @PostMapping
+You
+
+this is incomplete
+
+BLACKBOXAI
+
+Apologies for the incomplete response. Let's continue from where we left off and ensure that the entire implementation is complete, including the PasswordController, DTOs, and any necessary configurations.
+
+4. PasswordController.java (continued)
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+    @PostMapping("/reset")
+    public ResponseDto<String> resetPassword(@RequestBody PasswordResetRequest request) {
+        return passwordService.resetPassword(request);
+    }
+
+    @PostMapping("/change")
+    public ResponseDto<String> changePassword(@RequestBody PasswordChangeRequest request) {
+        return passwordService.changePassword(request);
+    }
+}
+5. DTOs
+PasswordResetRequest.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.dto;
+
+import lombok.Data;
+
+@Data
+public class PasswordResetRequest {
+    private String email;
+    private String otp; // One-Time Password for verification
+    private String newPassword; // New password to set
+}
+PasswordChangeRequest.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.dto;
+
+import lombok.Data;
+
+@Data
+public class PasswordChangeRequest {
+    private String userId; // User ID for the account
+    private String oldPassword; // Current password for verification
+    private String newPassword; // New password to set
+}
+ResponseDto.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.dto;
+
+import lombok.Builder;
+import lombok.Data;
+
+@Data
+@Builder
+public class ResponseDto<T> {
+    private String status; // Status of the operation (e.g., SUCCESS, ERROR)
+    private String message; // Message providing additional information
+    private T data; // Any additional data to return
+}
+6. Entity
+User.java
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import lombok.Data;
+
+@Entity
+@Data
+public class User {
+    @Id
+    private String userId; // Unique identifier for the user
+    private String email; // User's email address
+    private String password; // Hashed password
+}
+7. Exception Handling
+MerchantException.java
+You may want to create a custom exception class for better error handling.
+
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.exception;
+
+public class MerchantException extends RuntimeException {
+    public MerchantException(String message) {
+        super(message);
+    }
+}
+8. Error Constants
+ErrorConstants.java
+Define error constants for better maintainability.
+
+java
+
+Verify
+
+Open In Editor
+Run
+Copy code
+package com.epay.merchant.util;
+
+public class ErrorConstants {
+    public static final String USER_NOT_FOUND = "User  not found.";
+    public static final String INVALID_OTP = "Invalid OTP.";
+    public static final String PASSWORD_MISMATCH = "Old password does not match.";
+}
