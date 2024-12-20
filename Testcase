@@ -1,0 +1,201 @@
+package com.epay.merchant.service;
+
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.MerchantDAO;
+import com.epay.merchant.dto.OtpRequestDto;
+import com.epay.merchant.entity.NotificationEntity;
+import com.epay.merchant.entity.OtpManagement;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.model.response.OtpGenerationResponse;
+import com.epay.merchant.model.response.ResponseDto;
+import com.epay.merchant.repository.NotificationRepository;
+import com.epay.merchant.repository.OtpManagementRepository;
+import com.epay.merchant.util.MerchantUtil;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.OtpGenerationValidator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+//@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
+class OtpServiceTest {
+
+    @Mock
+    OtpRequestDto otpRequestDto;
+
+    @Mock
+    OtpManagementRepository otpManagementRepository;
+
+    @Mock
+    OtpGenerationResponse otpGenerationResponse;
+
+    @InjectMocks
+    OtpService otpService;
+
+    @Mock
+    private MerchantConfig merchantConfig;
+
+    @Mock
+    OtpGenerationValidator otpGenerationValidator;
+
+
+   @BeforeEach
+    void setUp() {
+       OtpGenerationRequest  otpGenerationRequest = new OtpGenerationRequest();
+       otpGenerationRequest.setRequestType(RequestType.LOGIN.getName());
+       otpGenerationRequest.setUserName("Shikha@gmail.com");
+       otpRequestDto = new OtpRequestDto();
+       otpRequestDto.setOtpCode("123654");
+       otpRequestDto.setUserId(UUID.randomUUID());
+       otpRequestDto.setExpiryTime(LocalDateTime.now().plusMinutes(merchantConfig.getExpiryTime()).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+       otpRequestDto.setId(UUID.randomUUID());
+       otpRequestDto.setIsVerified(false);
+       otpRequestDto.setCreateDate(System.currentTimeMillis());
+       otpRequestDto.setUpdateDate(System.currentTimeMillis());
+   }
+   
+
+
+    @Test
+    void testGenerateOtp_InvalidUserId() throws JsonProcessingException {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserName("");
+        request.setRequestType("");
+
+        doThrow(new MerchantException("1001", "Invalid User Name"))
+                .when(otpGenerationValidator).validateOtpRequest(any(OtpGenerationRequest.class));
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, () -> otpService.generateOtp(request));
+        assertEquals("Invalid User Name", exception.getMessage());
+        verify(otpManagementRepository, never()).save(any(OtpManagement.class));
+
+    }
+
+    }
+
+
+update the Junit test case as per below format for success and fail scneario
+package com.epay.merchant.service;
+
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.CaptchaDao;
+import com.epay.merchant.dto.CaptchaDto;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.mapper.CaptchaMapper;
+import com.epay.merchant.model.request.CaptchaRequest;
+import com.epay.merchant.model.response.CaptchaResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.CaptchaValidator;
+import com.google.code.kaptcha.impl.DefaultKaptcha;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.awt.image.BufferedImage;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Base64;
+import java.util.UUID;
+
+import static com.epay.merchant.util.MerchantConstant.RESPONSE_SUCCESS;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class CaptchaServiceTest {
+
+    @Mock
+    private DefaultKaptcha captchaProducer;
+
+    @Mock
+    private MerchantConfig merchantConfig;
+
+    @Mock
+    private CaptchaDao captchaDao;
+
+    @Mock
+    private CaptchaValidator captchaValidator;
+
+    @Mock
+    private CaptchaMapper captchaMapper;
+
+    @InjectMocks
+    private CaptchaService captchaService;
+
+    private CaptchaRequest captchaRequest;
+    private CaptchaDto captcha;
+    private BufferedImage bufferedImage;
+
+    @BeforeEach
+    void setUp() {
+        captchaRequest = new CaptchaRequest();
+        captchaRequest.setRequestId(UUID.randomUUID());
+        captchaRequest.setRequestType(RequestType.LOGIN.getName());
+
+        captcha = new CaptchaDto();
+        captcha.setCaptchaImage(Base64.getEncoder().encodeToString(("BASE64_IMAGE").getBytes(StandardCharsets.UTF_8)));
+        captcha.setRequestId(UUID.randomUUID());
+        captcha.setRequestType(RequestType.LOGIN);
+        captcha.setExpiryTime(LocalDateTime.now().plusMinutes(merchantConfig.getExpiryTime()).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+
+        CaptchaResponse captchaResponse = new CaptchaResponse();
+        captchaResponse.setCaptchaImage(Base64.getEncoder().encodeToString(("BASE64_IMAGE").getBytes(StandardCharsets.UTF_8)));
+        captchaResponse.setExpiryTime(LocalDateTime.now().plusMinutes(merchantConfig.getExpiryTime()).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+
+        bufferedImage = new BufferedImage(200, 50, BufferedImage.TYPE_INT_RGB);
+    }
+
+    @Test
+    void testGenerateCaptcha_Success() {
+        when(captchaProducer.createText()).thenReturn("ABCD12");
+        when(captchaProducer.createImage(anyString())).thenReturn(bufferedImage);
+        when(captchaDao.save(any(), any(), any())).thenReturn(captcha);
+        when(captchaMapper.mapCaptchaDtoToCaptchaResponse(captcha)).thenReturn(CaptchaResponse.builder().captchaImage(captcha.getCaptchaImage()).requestId(captcha.getRequestId()).requestType(captcha.getRequestType().getName()).build());
+
+        MerchantResponse<CaptchaResponse> response = captchaService.generateCaptcha(captchaRequest);
+
+        assertNotNull(response);
+        assertEquals(RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(1, response.getData().size());
+        assertEquals(Base64.getEncoder().encodeToString(("BASE64_IMAGE").getBytes(StandardCharsets.UTF_8)), response.getData().getFirst().getCaptchaImage());
+
+        verify(captchaValidator, times(1)).requestValidator(captchaRequest);
+        verify(captchaProducer, times(1)).createText();
+        verify(captchaProducer, times(1)).createImage("ABCD12");
+        verify(captchaDao, times(1)).save(any(), any(), any());
+    }
+
+    @Test
+    void testGenerateCaptcha_Exception() {
+        doThrow(new MerchantException("726", "Captcha generation failed.")).when(captchaValidator).requestValidator(any(CaptchaRequest.class));
+        MerchantException exception = assertThrows(MerchantException.class, () -> captchaService.generateCaptcha(captchaRequest));
+
+        assertEquals("726", exception.getErrorCode());
+        assertEquals("Captcha generation failed.", exception.getErrorMessage());
+        verify(captchaValidator, times(1)).requestValidator(captchaRequest);
+        verifyNoInteractions(captchaProducer, captchaDao);
+    }
+}
+
