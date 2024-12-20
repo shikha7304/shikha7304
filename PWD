@@ -645,4 +645,84 @@ INSERT INTO MERCHANT_USER (
     1715563200
 );
 
-
+INSERT INTO MERCHANT_INFO (
+    MERCHANT_ID, MID, MERCHANT_NAME, BUSINESS_NAME, BRAND_NAME, BUSINESS_CATEGORY, CATEGORY_CODE,
+    ADDRESS_LINE1, ADDRESS_LINE2, STATE, CITY, COUNTRY, PINCODE, MOBILE_NUMBER, PHONE_NUMBER,
+    PRIMARY_EMAIL, SECONDARY_EMAIL, MERCHANT_URL, STATUS, VALIDITY_START_TIME, VALIDITY_END_TIME,
+    ONBOARDING_TIME, ENCRYPTED_ALGO, RM_NAME, BANK_CODE, BRANCH_CODE, GST_NUMBER, IS_CHARGEBACK_ALLOWED,
+    AGGREGATOR_ID, NOTIFICATION, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT
+)
+VALUES (
+    SYS_GUID(),
+    'MID12345',
+    'Merchant ABC',
+    'ABC Pvt Ltd',
+    'ABC Brand',
+    'Retail',
+    'R123',
+    '123 Main Street',
+    'Suite 100',
+    'Maharashtra',
+    'Mumbai',
+    'India',
+    '400001',
+    '9876543210',
+    '02212345678',
+    'merchantabc@example.com',
+    'merchantabc.secondary@example.com',
+'https://merchantabc.com',
+    'Active',
+    1715563200,
+    1718155200,
+    1715563200,
+    'SHA-256',
+    'John Doe',
+    'BANK123',
+    'BRANCH456',
+    '27AABCU9603R1ZV',
+    'Y',
+    'AGG123',
+    'All notifications enabled',
+    'Admin',
+    1715563200,
+    'Admin',
+    1715563200
+);
+ 
+ 
+INSERT INTO MERCHANT_USER (
+    ID, MID, PARENT_USERID, USER_NAME, FIRST_NAME, MIDDLE_NAME, LAST_NAME, EMAIL, PRIMARY_PHONE,
+    SECONDARY_PHONE, MOBILE_PHONE, OFFICE_PHONE, COUNTRY_CODE, STATE_CODE, PIN_CODE, CITY, ROLE,
+    STATUS, PASSWORD, LAST_PASSWORD_CHANGE, PASSWORD_EXPIRY_TIME, LOGIN_FAIL_ATTEMPT, LAST_SUCCESS_LOGIN,
+    LAST_FAIL_LOGIN, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT
+)
+VALUES (
+    SYS_GUID(),
+    'MID12345',
+    NULL,
+    'UserABC',
+    'John',
+    'Michael',
+    'Doe',
+    'john.doe@example.com',
+    '9876543210',
+    '02212345678',
+    '9876543210',
+    '02212345678',
+    'IN',
+    'MH',
+    '400001',
+    'Mumbai',
+    'Admin',
+    'Active',
+    'Password123',
+    1715563200,
+    1718155200,
+    0,
+    1715563200,
+    1715563200,
+    'Admin',
+    1715563200,
+    'Admin',
+    1715563200
+);
