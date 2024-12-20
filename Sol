@@ -165,3 +165,68 @@ CREATE TABLE MERCHANT_USER (
     UPDATED_AT	NUMBER NOT NULL,
     CONSTRAINT FK_MERCHANT FOREIGN KEY (MID) REFERENCES MERCHANT_INFO(MID) -- Foreign Key to `merchant_info` table
 );
+
+
+
+
+INSERT INTO MERCHANT_USER (
+    ID,
+    MID,
+    PARENT_USERID,
+    USER_NAME,
+    FIRST_NAME,
+    MIDDLE_NAME,
+    LAST_NAME,
+    EMAIL,
+    PRIMARY_PHONE,
+    SECONDARY_PHONE,
+    MOBILE_PHONE,
+    OFFICE_PHONE,
+    COUNTRY_CODE,
+    STATE_CODE,
+    PIN_CODE,
+    CITY,
+    ROLE,
+    STATUS,
+    PASSWORD,
+    LAST_PASSWORD_CHANGE,
+    PASSWORD_EXPIRY_TIME,
+    LOGIN_FAIL_ATTEMPT,
+    LAST_SUCCESS_LOGIN,
+    LAST_FAIL_LOGIN,
+    CREATED_BY,
+    CREATED_AT,
+    UPDATED_BY,
+    UPDATED_AT
+)
+VALUES (
+    SYS_GUID(), -- Automatically generate a unique ID
+    'MID12345', -- Example Merchant ID
+    NULL, -- No parent user
+    'UserABC', -- Example Username
+    'John', -- First Name
+    'Michael', -- Middle Name
+    'Doe', -- Last Name
+    'john.doe@example.com', -- Email
+    '9876543210', -- Primary Phone
+    '02212345678', -- Secondary Phone
+    '9876543210', -- Mobile Phone
+    '02212345678', -- Office Phone
+    'IN', -- Country Code
+    'MH', -- State Code
+    '400001', -- PIN Code
+    'Mumbai', -- City
+    'Admin', -- Role
+    'Active', -- Status
+    'Password123', -- Password (consider hashing in a real app)
+    1715563200, -- Timestamp for last password change
+    1718155200, -- Password expiry time
+    0, -- Login Fail Attempts
+    1715563200, -- Last Successful Login
+    1715563200, -- Last Failed Login
+    'Admin', -- Created By
+    1715563200, -- Created At (timestamp)
+    'Admin', -- Updated By
+    1715563200  -- Updated At (timestamp)
+);
+
