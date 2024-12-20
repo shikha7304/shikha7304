@@ -199,3 +199,99 @@ class CaptchaServiceTest {
     }
 }
 
+
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dto.OtpRequestDto;
+import com.epay.merchant.entity.OtpManagement;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.model.response.OtpGenerationResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.repository.OtpManagementRepository;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.OtpGenerationValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.UUID;
+
+import static com.epay.merchant.util.MerchantConstant.RESPONSE_SUCCESS;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class OtpServiceTest {
+
+    @Mock
+    private MerchantConfig merchantConfig;
+
+    @Mock
+    private OtpManagementRepository otpManagementRepository;
+
+    @Mock
+    private OtpGenerationValidator otpGenerationValidator;
+
+    @InjectMocks
+    private OtpService otpService;
+
+    private OtpGenerationRequest otpGenerationRequest;
+    private OtpRequestDto otpRequestDto;
+
+    @BeforeEach
+    void setUp() {
+        otpGenerationRequest = new OtpGenerationRequest();
+        otpGenerationRequest.setRequestType(RequestType.LOGIN.getName());
+        otpGenerationRequest.setUserName("Shikha@gmail.com");
+
+        otpRequestDto = new OtpRequestDto();
+        otpRequestDto.setOtpCode("123654");
+        otpRequestDto.setUserId(UUID.randomUUID());
+        otpRequestDto.setExpiryTime(LocalDateTime.now().plusMinutes(10).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+        otpRequestDto.setId(UUID.randomUUID());
+        otpRequestDto.setIsVerified(false);
+        otpRequestDto.setCreateDate(System.currentTimeMillis());
+        otpRequestDto.setUpdateDate(System.currentTimeMillis());
+    }
+
+    @Test
+    void testGenerateOtp_Success() {
+        // Arrange
+        when(merchantConfig.getExpiryTime()).thenReturn(10);
+        when(otpManagementRepository.save(any(OtpManagement.class))).thenReturn(new OtpManagement());
+
+        // Act
+        MerchantResponse<OtpGenerationResponse> response = otpService.generateOtp(otpGenerationRequest);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(RESPONSE_SUCCESS, response.getStatus());
+        assertNotNull(response.getData());
+        verify(otpGenerationValidator, times(1)).validateOtpRequest(otpGenerationRequest);
+        verify(otpManagementRepository, times(1)).save(any(OtpManagement.class));
+    }
+
+    @Test
+    void testGenerateOtp_Exception() {
+        // Arrange
+        doThrow(new MerchantException("1001", "Invalid User Name"))
+                .when(otpGenerationValidator).validateOtpRequest(any(OtpGenerationRequest.class));
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, () -> otpService.generateOtp(otpGenerationRequest));
+        assertEquals("1001", exception.getErrorCode());
+        assertEquals("Invalid User Name", exception.getMessage());
+        verify(otpGenerationValidator, times(1)).validateOtpRequest(otpGenerationRequest);
+        verifyNoInteractions(otpManagementRepository);
+    }
+}
+
+
