@@ -1,0 +1,442 @@
+Description
+
+For merchant, we need to create View Profile mechanism so that user can use it to either login or reset or change password using OTP.
+
+API Details
+Method: GET
+API Endpoint: /v1/merchant/user/profile
+Access Type: Open API 
+
+Request Header:
+
+
+
+{
+  "Authorization": Bearer Token
+}
+
+
+
+
+
+Authorization Token: token contains valid userName.
+
+
+Success Response Body
+
+{
+  "data": [
+    {
+       "userName": String,
+       "firstName": String,
+       "middleName": String,
+       "lastName": String,
+       "email": String,
+       "mobilePhone": String,
+       "role": String
+       "created_date": DATE,
+       "active_status" : String
+    }
+   ],
+  "status":1,
+  "count": 1,
+  "total": 1
+}
+
+
+Failure Response Body :
+
+              
+               {
+   "errors": [
+      {
+         "errorCode":"ERROR_CODE ",
+         "errorMessage":"ERROR_MSG",
+          "reason":"ERROR_REASON"
+      },
+    ],
+   "status":0
+}
+
+Authentication utility i need to use 
+
+package com.sbi.epay.authentication.filter;
+
+import java.io.IOException;
+import java.text.MessageFormat;
+import java.text.ParseException;
+import java.util.List;
+import java.util.UUID;
+
+import com.sbi.epay.authentication.common.ErrorConstants;
+import com.sbi.epay.authentication.exception.AuthenticationException;
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.authentication.model.JwtAuthenticationToken;
+import com.sbi.epay.authentication.service.AuthenticationUserService;
+import com.sbi.epay.authentication.service.JwtAuthenticationProvider;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.jsonwebtoken.JwtException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
+import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import com.sbi.epay.authentication.service.JwtService;
+
+
+/**
+ * Class Name: JwtFilter
+ * *
+ * Description: JWT Filter for handling authentication based on JWT tokens. This filter checks for the presence of a JWT in the Authorization header
+ * and authenticates the user if the token is valid. JwtFilter is a custom filter that processes incoming HTTP requests to validate JWT tokens.
+ * It extends OncePerRequestFilter to ensure it is invoked once per request.
+ * *
+ * Author: V1018217(Nirvay K. Bikram)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
+@Component
+@RequiredArgsConstructor
+public class JwtFilter extends OncePerRequestFilter {
+    private static final LoggerUtility loggerUtility = LoggerFactoryUtility.getLogger(JwtFilter.class);
+    private final JwtService jwtService;
+    private final AuthenticationUserService authenticationUserService;
+
+    private final String AUTHORIZATION = "Authorization";
+    private final String BEARER = "Bearer ";
+    private List<String> whitelistURLs;
+    @Value("${whitelisted.endpoints}")
+    public void setWhitelistURLs( List<String> whitelistURLs) {
+        this.whitelistURLs = whitelistURLs;
+    }
+    /**
+     * This method filters incoming requests to extract and validate the JWT token.
+     * If the token is valid, it sets the authentication in the security context.
+     *
+     * @param request     The incoming HTTP request.
+     * @param response    The outgoing HTTP response.
+     * @param filterChain The filter chain to continue processing.
+     */
+    @Override
+    protected void doFilterInternal(@NonNull HttpServletRequest request,
+                                    @NonNull HttpServletResponse response,
+                                    @NonNull FilterChain filterChain) {
+        try {
+            String correlationId = request.getHeader("X-Correlation-ID");
+            if (StringUtils.isEmpty(correlationId)) {
+                correlationId = UUID.randomUUID().toString();
+            }
+            LoggerFactoryUtility.putMDC("requestId", correlationId);
+
+            final String authHeader = request.getHeader("Authorization");
+            String requestUri = request.getRequestURI();
+
+            if (whiteListingCheck(request, response, filterChain, authHeader, requestUri)) return;
+
+            mandatoryCheck(authHeader, requestUri);
+
+            if (loginAPICall(request, response, filterChain, authHeader)) return;
+
+            authentication(request, authHeader);
+
+            filterChain.doFilter(request, response);
+        } catch (Exception exception) {
+            LoggerFactoryUtility.clearMDCContext();
+        }
+    }
+
+    private void authentication(HttpServletRequest request, String authHeader) throws ParseException {
+        final String jwt = authHeader.substring(7);
+        final String userName = jwtService.getUsernameFromToken(jwt);
+        if (StringUtils.isNotEmpty(userName) && SecurityContextHolder.getContext().getAuthentication() == null) {
+            EPayPrincipal authenticateUser = authenticationUserService.loadUserByUserName(userName)
+                    .orElseThrow(() -> new AuthenticationException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName")));
+            if ( jwtService.isTokenValid(jwt, authenticateUser)) {
+                SecurityContext context = SecurityContextHolder.createEmptyContext();
+                JwtAuthenticationToken jwtAuthenticationToken = new JwtAuthenticationToken(jwt);
+                jwtAuthenticationToken.setAuthenticated(true);
+                JwtAuthenticationProvider jwtAuthenticationProvider = new JwtAuthenticationProvider(jwtService);
+                Authentication authenticate = jwtAuthenticationProvider.authenticate(jwtAuthenticationToken);
+                context.setAuthentication(authenticate);
+                SecurityContextHolder.setContext(context);
+            }
+        }
+    }
+
+    private static boolean loginAPICall(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain, String authHeader) throws IOException, ServletException {
+        if (StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer ")) {
+            filterChain.doFilter(request, response);
+            return true;
+        }
+        return false;
+    }
+
+    private static void mandatoryCheck(String authHeader, String requestUri) {
+        if ((StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer "))
+                && (!StringUtils.endsWith(requestUri, "/token") || !StringUtils.endsWith(requestUri, "/login"))){
+            throw new JwtException("Token is required.");
+        }
+    }
+
+    private boolean whiteListingCheck(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain, String authHeader, String requestUri) throws IOException, ServletException {
+        if ((StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer "))){
+            String withoutContext = requestUri.replaceFirst(request.getContextPath(),"");
+            for(String whitelistURL : whitelistURLs){
+                if(withoutContext.startsWith(whitelistURL)){
+                    filterChain.doFilter(request, response);
+                    return true;
+                }
+            }
+        }
+        if ((StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer ")) && request.getMethod().equalsIgnoreCase(HttpMethod.OPTIONS.name())) {
+            filterChain.doFilter(request, response);
+            return true;
+        }
+        return false;
+    }
+
+}
+
+
+package com.sbi.epay.authentication.service;
+
+import com.sbi.epay.authentication.common.AppConfig;
+import com.sbi.epay.authentication.model.*;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.time.DateUtils;
+import org.springframework.stereotype.Component;
+
+import java.security.Key;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Function;
+
+/**
+ * Class Name: JwtService
+ * *
+ * Description: Service Class for generating and validating JSON Web Tokens (JWT).
+ * * This class provides methods to create signed JWTs using various inputs, including username/password, API keys, and hashed values.
+ * *
+ * Author: V1018217(Nirvay K. Bikram)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class JwtService {
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(JwtService.class);
+    private final AppConfig appConfig;
+
+    /**
+     * Generates a JWT token with the specified claims, secret key, and expiration time.
+     *
+     * @param claims         A map of claims to include in the token.
+     * @param userName       The secret key used to sign the token.
+     * @param expirationTime The expiration time of the token in milliseconds.
+     * @return A signed JWT token as a string.
+     */
+    private String generateToken(Map<String, Object> claims, String userName, int expirationTime) {
+        logger.info("ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, secret key, and expiration time.");
+        return Jwts.builder().claims(claims).subject(userName) // Subject (e.g., user ID)
+                .issuedAt(new Date(System.currentTimeMillis()))// Issued time
+                .expiration(DateUtils.addHours(new Date(), expirationTime))
+                .signWith(SignatureAlgorithm.HS512, appConfig.getSecretKey()) // Use the HS512 algorithm
+                .compact();
+
+
+    }
+
+    /**
+     * Generates a JWT token using a username, expirationTime and role.
+     *
+     * @param userTokenRequest
+     * @returnA signed JWT token as a string.
+     */
+    public String generateUserLoginToken(UserTokenRequest userTokenRequest) {
+        logger.info("ClassName - JwtService,MethodName - generateTokenWithUsernamePassword, Generates a JWT token using a username, expirationTime and role.");
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(EPayPlatformJwtClaimsSet.USERNAME, userTokenRequest.getUsername());
+        claims.put(EPayPlatformJwtClaimsSet.ROLE, userTokenRequest.getRoles());
+        claims.put(EPayPlatformJwtClaimsSet.TYPE, userTokenRequest.getTokenType());
+        return generateToken(claims, appConfig.getSecretKey(), userTokenRequest.getExpirationTime());
+    }
+
+    /**
+     * Generates a JWT token for a payment.
+     *
+     * @param paymentTokenRequest
+     * @returnA signed JWT token as a string.
+     */
+    public String generatePaymentToken(PaymentTokenRequest paymentTokenRequest) {
+        logger.info("ClassName - JwtService,MethodName - generateTokenWithUsernamePassword, Generates a JWT token using a username, expirationTime and role.");
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(EPayPlatformJwtClaimsSet.USERNAME, paymentTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(EPayPlatformJwtClaimsSet.ROLE, paymentTokenRequest.getRoles());
+        claims.put(EPayPlatformJwtClaimsSet.TYPE, paymentTokenRequest.getTokenType());
+        claims.put(EPayPlatformJwtClaimsSet.ORDER_NUMBER, paymentTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(EPayPlatformJwtClaimsSet.ATRN_NUMBER, paymentTokenRequest.getAtrnNumber());
+        claims.put(EPayPlatformJwtClaimsSet.MID, paymentTokenRequest.getMid());
+        return generateToken(claims, appConfig.getSecretKey(), paymentTokenRequest.getExpirationTime());
+    }
+
+    /**
+     * Generates a JWT token using an API key , role, expirationTime and secret.
+     *
+     * @param accessTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateAccessToken(AccessTokenRequest accessTokenRequest) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(EPayPlatformJwtClaimsSet.USERNAME, accessTokenRequest.getMid());
+        claims.put(EPayPlatformJwtClaimsSet.MID, accessTokenRequest.getMid());
+        claims.put(EPayPlatformJwtClaimsSet.ROLE, accessTokenRequest.getRoles());
+        claims.put(EPayPlatformJwtClaimsSet.TYPE, accessTokenRequest.getTokenType());
+        return generateToken(claims, accessTokenRequest.getMid(), accessTokenRequest.getExpirationTime());
+    }
+
+    /**
+     * Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.
+     *
+     * @param transactionTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateTransactionToken(TransactionTokenRequest transactionTokenRequest) {
+        logger.info("ClassName - JwtService,MethodName - generateTokenWithHash, Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.");
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(EPayPlatformJwtClaimsSet.ORDER_NUMBER, transactionTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(EPayPlatformJwtClaimsSet.MID, transactionTokenRequest.getMid());
+        claims.put(EPayPlatformJwtClaimsSet.USERNAME, transactionTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(EPayPlatformJwtClaimsSet.ROLE, transactionTokenRequest.getRoles());
+        claims.put(EPayPlatformJwtClaimsSet.TYPE, transactionTokenRequest.getTokenType());
+        return generateToken(claims, appConfig.getSecretKey(), transactionTokenRequest.getExpirationTime());
+    }
+
+
+    /**
+     * Get all claims from token. and @Param token
+     *
+     * @param token as a String
+     * @return Claims of the token
+     */
+    public Claims getAllClaimsFromToken(String token) {
+        logger.info("ClassName - JwtService,MethodName - getAllClaimsFromToken, getting all claims from token.");
+        return Jwts.parser().setSigningKey(getSignKey()).build().parseClaimsJws(token).getBody();
+    }
+
+    /**
+     * Get SigningKey
+     *
+     * @return signed key
+     */
+    private Key getSignKey() {
+        logger.info("ClassName - JwtService,MethodName - getSignKey, getting SigningKey.");
+        byte[] keyBytes = Decoders.BASE64.decode(appConfig.getSecretKey());
+        return Keys.hmacShaKeyFor(keyBytes);
+
+    }
+
+
+    /**
+     * Get username from token
+     *
+     * @param token as a String
+     * @return String username from token
+     */
+    public String getUsernameFromToken(String token) {
+        logger.info("ClassName - JwtService,MethodName - getUsernameFromToken, username from token.");
+        final Claims claims = getAllClaimsFromToken(token);
+        return claims.get(EPayPlatformJwtClaimsSet.USERNAME) == null ? null : String.valueOf(claims.get(EPayPlatformJwtClaimsSet.USERNAME));
+    }
+
+
+    /**
+     * Get Claims from Token
+     *
+     * @param token
+     * @param claimsResolver
+     * @param <T>
+     * @return All Claims from the token
+     */
+    private <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
+        logger.info("ClassName - JwtService,MethodName - getClaimFromToken, Claims from token.");
+        final Claims claims = getAllClaimsFromToken(token);
+        return claimsResolver.apply(claims);
+    }
+
+
+    /**
+     * Get expiration time from token
+     *
+     * @param token is as String
+     * @return Boolean true if token is expired otherwise false.
+     */
+    private Boolean isTokenExpired(String token) {
+        logger.info("ClassName - JwtService,MethodName - isTokenExpired, getting expiration time from token.");
+        final Date expiration = getExpirationDateFromToken(token);
+        return expiration.before(new Date());
+    }
+
+    /**
+     * Getting expiration time from token.
+     *
+     * @param token
+     * @return Date from token
+     */
+    protected Date getExpirationDateFromToken(String token) {
+        logger.info("ClassName - JwtService,MethodName - getExpirationDateFromToken, getting expiration time from token.");
+        return getClaimFromToken(token, Claims::getExpiration);
+
+    }
+
+    /**
+     * Validate token using user details and expiration time.
+     *
+     * @param token
+     * @param authenticateUser
+     * @return Boolean if username and expiration is valid then return true else return false.
+     */
+    public boolean isTokenValid(String token, EPayPrincipal authenticateUser) {
+        final String userName = getUsernameFromToken(token);
+        return (userName.equals(authenticateUser.getUsername())) && !isTokenExpired(token);
+    }
+
+    /**
+     * <p>
+     * Get role from JWT token
+     *
+     * @param token
+     * @return String Role from token
+     */
+    private String getRoleFromToken(String token) {
+        logger.info("ClassName - JwtService,MethodName - getApiKeyFromToken, getting role from JWT token.");
+        final Claims claims = getAllClaimsFromToken(token);
+        return claims.get(EPayPlatformJwtClaimsSet.ROLE) == null ? null : String.valueOf(claims.get(EPayPlatformJwtClaimsSet.ROLE));
+    }
+
+
+}
