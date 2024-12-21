@@ -251,3 +251,112 @@ class OtpServiceTest {
         verify(otpManagementRepository, never()).save(any(OtpManagement.class));
     }
 }
+
+
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.MerchantDAO;
+import com.epay.merchant.dao.OtpDao;
+import com.epay.merchant.dto.OtpRequestDto;
+import com.epay.merchant.entity.MerchantUser;
+import com.epay.merchant.entity.OtpManagement;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.model.response.OtpGenerationResponse;
+import com.epay.merchant.model.response.ResponseDto;
+import com.epay.merchant.util.AppConstants;
+import com.epay.merchant.util.DateTimeUtils;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantUtil;
+import com.epay.merchant.validator.OtpGenerationValidator;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.UUID;
+
+
+@Service
+@RequiredArgsConstructor
+public class OtpService {
+
+    private final OtpDao otpDao;
+    private final MerchantDAO merchantDAO;
+    private final OtpGenerationValidator otpGenerationValidator;
+    private final MerchantConfig merchantConfig;
+
+    public ResponseDto<OtpGenerationResponse> generateOtp(OtpGenerationRequest otpGenerationRequest) {
+        otpGenerationValidator.validateOtpRequest(otpGenerationRequest);
+
+        MerchantUser merchantUser = merchantDAO.getMerchantUserByUserNameOrEmailOrMobile(otpGenerationRequest.getUserName())
+                .orElseThrow((() -> new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "UserName", "Not Found"))));
+
+          // Generate 6-digit OTP
+
+        String GeneratedOtp= MerchantUtil.generatedSixDigitOtp();
+
+        OtpRequestDto otpRequestDto = saveOtp(otpGenerationRequest,GeneratedOtp, merchantUser.getId() );
+        //TODO to call producer and KAFKA Implementation
+        //call utility
+//
+            OtpGenerationResponse otpGenerationResponse = OtpGenerationResponse.<OtpGenerationResponse>builder()
+                    .requestId(otpRequestDto.getRequestID())
+                    .otpDescription("OTP Generated successfully")
+                    .build();
+
+            return ResponseDto.<OtpGenerationResponse>builder()
+                    .status(AppConstants.RESPONSE_FAILURE)
+                    .data(List.of(otpGenerationResponse))
+                    .count(1L)
+                    .total(1L)
+                    .build();
+
+    }
+
+    public OtpRequestDto saveOtp(OtpGenerationRequest otpGenerationRequest, String otpHash, UUID userId) {
+        OtpManagement otp = OtpManagement.builder()
+                .otpCode(otpHash)
+                .requestType(otpGenerationRequest.getRequestType())
+                .userId(userId)
+                .expiryTime(DateTimeUtils.addMinutes(merchantConfig.getOtpExpiryTime()))
+                .isVerified(false)
+                .requestID(UUID.randomUUID())
+                .build();
+        // Save to DB
+        return otpDao.saveOtp(otp);
+    }
+}
+
+org.opentest4j.AssertionFailedError: expected: <1> but was: <0>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:177)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:538)
+	at com.epay.merchant.service.OtpServiceTest.testGenerateOtp_Success(OtpServiceTest.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+Disconnected from the target VM, address: 'localhost:50962', transport: 'socket'
+
+> Task :test
+OtpServiceTest > testGenerateOtp_Success() FAILED
+    org.opentest4j.AssertionFailedError at OtpServiceTest.java:103
+1 test completed, 1 failed
+> Task :test FAILED
+FAILURE: Build failed with an exception.
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///D:/Projects/epay_merchant_service/build/reports/tests/test/index.html
+* Try:
+> Run with --scan to get full insights.
+BUILD FAILED in 10s
+4 actionable tasks: 1 executed, 3 up-to-date
+
