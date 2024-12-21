@@ -163,3 +163,91 @@ Execution failed for task ':test'.
 BUILD FAILED in 11s
 4 actionable tasks: 2 executed, 2 up-to-date
 
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class OtpServiceTest {
+
+    @Mock
+    OtpDao otpDao;
+
+    @Mock
+    OtpManagementRepository otpManagementRepository;
+
+    @Mock
+    OtpGenerationResponse otpGenerationResponse;
+
+    @Mock
+    MerchantConfig merchantConfig;
+
+    @Mock
+    OtpGenerationValidator otpGenerationValidator;
+
+    @Mock
+    MerchantDAO merchantDAO;
+
+    @InjectMocks
+    OtpService otpService;
+
+    private OtpRequestDto otpRequestDto;
+    private OtpGenerationRequest otpGenerationRequest;
+    private MerchantUser merchantUser;
+
+    @BeforeEach
+    void setUp() {
+        otpGenerationRequest = new OtpGenerationRequest();
+        otpGenerationRequest.setRequestType(RequestType.LOGIN.getName());
+        otpGenerationRequest.setUserName("Shikha@gmail.com");
+
+        otpRequestDto = new OtpRequestDto();
+        otpRequestDto.setOtpCode("123654");
+        otpRequestDto.setUserId(UUID.randomUUID());
+        otpRequestDto.setExpiryTime(LocalDateTime.now()
+                .plusMinutes(5)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli());
+        otpRequestDto.setId(UUID.randomUUID());
+        otpRequestDto.setIsVerified(false);
+        otpRequestDto.setCreateDate(System.currentTimeMillis());
+        otpRequestDto.setUpdateDate(System.currentTimeMillis());
+        otpRequestDto.setRequestID(UUID.randomUUID());
+
+        merchantUser = new MerchantUser();
+        merchantUser.setUserName("Shikha@gmail.com");
+    }
+
+    @Test
+    void testGenerateOtp_Success() {
+        // Arrange
+        when(merchantConfig.getExpiryTime()).thenReturn(5);
+        when(otpManagementRepository.save(any(OtpManagement.class))).thenReturn(new OtpManagement());
+        when(merchantDAO.getMerchantUserByUserNameOrEmailOrMobile("Shikha@gmail.com"))
+                .thenReturn(Optional.of(merchantUser));
+
+        // Act
+        ResponseDto<OtpGenerationResponse> response = otpService.generateOtp(otpGenerationRequest);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(RESPONSE_SUCCESS, response.getStatus());
+        assertNotNull(response.getData());
+        verify(otpGenerationValidator, times(1)).validateOtpRequest(otpGenerationRequest);
+        verify(otpManagementRepository, times(1)).save(any(OtpManagement.class));
+    }
+
+    @Test
+    void testGenerateOtp_InvalidUserId() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserName("");
+        request.setRequestType("");
+
+        doThrow(new MerchantException("1001", "Invalid User Name"))
+                .when(otpGenerationValidator).validateOtpRequest(any(OtpGenerationRequest.class));
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, () -> otpService.generateOtp(request));
+        assertEquals("Invalid User Name", exception.getMessage());
+        verify(otpManagementRepository, never()).save(any(OtpManagement.class));
+    }
+}
