@@ -528,3 +528,31 @@ public class UserProfileResponse {
     private String active_status;
 
 }
+
+
+
+
+package com.epay.merchant.controller;
+
+import com.epay.merchant.model.UserProfileResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.service.MerchantUserProfileService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/v1/merchant/user")
+@RequiredArgsConstructor
+public class ViewProfileController {
+
+    private final MerchantUserProfileService merchantUserProfileService;
+
+    @GetMapping("/profile")
+    public MerchantResponse<UserProfileResponse> getProfileResponse(@RequestHeader("Authorization") String authHeader) {
+        return merchantUserProfileService.getProfileResponse(authHeader);
+    }
+
+}
