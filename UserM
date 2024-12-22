@@ -440,3 +440,91 @@ public class JwtService {
 
 
 }
+
+
+
+
+
+serviceclass
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.MerchantDAO;
+import com.epay.merchant.entity.MerchantUser;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.model.UserProfileResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.AppConstants;
+import com.epay.merchant.util.ErrorConstants;
+import com.sbi.epay.authentication.service.JwtService;
+import lombok.AllArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.text.MessageFormat;
+import java.util.List;
+
+@Service
+@AllArgsConstructor
+public class MerchantUserProfileService {
+
+    private final JwtService jwtService;
+    private final MerchantDAO merchantDAO;
+    public MerchantResponse<UserProfileResponse> getProfileResponse(String authHeader) {
+
+
+        String userName = jwtService.getUsernameFromToken(authHeader);
+
+        MerchantUser merchantUser = merchantDAO.getMerchantUserByUserNameOrEmailOrMobile(userName)
+                .orElseThrow((() -> new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "UserName", "Not Found"))));
+
+
+        UserProfileResponse userProfileResponse = UserProfileResponse.<UserProfileResponse>builder()
+                .userName(merchantUser.getUserName())
+                .firstName(merchantUser.getFirstName())
+                .middleName(merchantUser.getMiddleName())
+                .lastName(merchantUser.getLastName())
+                .email(merchantUser.getEmail())
+                .mobilePhone(merchantUser.getMobilePhone())
+                .role(merchantUser.getRole())// need to check string or UUID
+                .created_date(merchantUser.getCreatedAt())
+                .active_status(merchantUser.getStatus())
+                .build();
+
+        return MerchantResponse.<UserProfileResponse>builder()
+                .status(AppConstants.RESPONSE_SUCCESS)
+                .data(List.of(userProfileResponse))
+                .count(1L)
+                .total(1L)
+                .build();
+    }
+}
+
+
+
+package com.epay.merchant.model;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.*;
+
+import java.util.Date;
+import java.util.UUID;
+
+@AllArgsConstructor
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UserProfileResponse {
+
+    private String userName;
+    private String firstName;
+    private String middleName;
+    private String lastName;
+    private String email;
+    private String mobilePhone;
+    private UUID role;
+    private Long created_date;
+    private String active_status;
+
+}
