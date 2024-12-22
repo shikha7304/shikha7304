@@ -556,3 +556,31 @@ public class ViewProfileController {
     }
 
 }
+
+
+
+package com.epay.merchant.dto;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+import java.io.Serializable;
+import java.util.Date;
+
+
+@Data
+@AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UserProfileDto implements Serializable {
+
+    private String userName;
+    private String firstName;
+    private String middleName;
+    private String lastName;
+    private String email;
+    private String mobilePhone;
+    private String role;
+    private Date created_date;
+    private String active_status;
+}
