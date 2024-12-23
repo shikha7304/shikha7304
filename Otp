@@ -39,6 +39,70 @@ public class OtpManagementDao {
 
 
 
+
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.OtpManagementDao;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.RequestType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+
+@Component
+@RequiredArgsConstructor
+public class OtpValidator extends BaseValidator {
+
+    private final OtpManagementDao otpManagementDao;
+
+    public void validateOtpGeneration(OtpGenerationRequest otpGenerationRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(otpGenerationRequest);
+        //validateEnumFieldValue(otpGenerationRequest.getRequestType());
+        validateMerchantUser(otpGenerationRequest);
+        validateRequestId(otpGenerationRequest);
+        checkRequestInProgress(otpGenerationRequest);
+    }
+
+    void checkRequestInProgress(OtpGenerationRequest otpGenerationRequest) {
+        boolean requestAlreadyInProcess = otpManagementDao.isRequestAlreadyInProcess(otpGenerationRequest.getUserName(),
+                RequestType.getRequestType(otpGenerationRequest.getRequestType()));
+        if (requestAlreadyInProcess) {
+            addError("Request", ErrorConstants.ALREADY_EXIST_ERROR_CODE, ErrorConstants.ALREADY_IN_PROCESS_ERROR_MESSAGE);
+        }
+        throwIfErrors();
+    }
+
+    void validateRequestId(OtpGenerationRequest otpGenerationRequest) {
+        boolean requestIdExists = otpManagementDao.isRequestIdExists(otpGenerationRequest.getRequestId());
+        if (requestIdExists) {
+            addError("Request Id", ErrorConstants.ALREADY_EXIST_ERROR_CODE, ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE);
+        }
+        throwIfErrors();
+    }
+
+    void validateMerchantUser(OtpGenerationRequest otpGenerationRequest) {
+        boolean merchantUserExists = otpManagementDao.isValidMerchantUserExists(otpGenerationRequest.getUserName());
+        if (!merchantUserExists) {
+            addError("User Name", ErrorConstants.NOT_FOUND_ERROR_CODE, ErrorConstants.NOT_FOUND_ERROR_MESSAGE);
+        }
+        throwIfErrors();
+    }
+
+    void validateMandatoryFields(OtpGenerationRequest otpGenerationRequest) {
+        checkMandatoryField(String.valueOf(otpGenerationRequest.getRequestId()), "Request Id");
+       // checkMandatoryField(otpGenerationRequest.getRequestType(), "Request Type");
+        checkMandatoryField(otpGenerationRequest.getUserName(), "User Name");
+        throwIfErrors();
+    }
+
+}
+
+
+
+
 @Repository
 public interface MerchantUserRepository extends JpaRepository<MerchantUser, UUID> {
 
