@@ -1,0 +1,103 @@
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.OtpManagementDao;
+import com.epay.merchant.dto.OtpGenerationDto;
+import com.epay.merchant.mapper.OtpManagementMapper;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.DateTimeUtils;
+import com.epay.merchant.util.EncryptionDecryptionUtil;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.MerchantUtil;
+import com.epay.merchant.util.enums.NotificationType;
+import com.epay.merchant.validator.OtpValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+class OtpServiceTest {
+
+    @InjectMocks
+    private OtpService otpService;
+
+    @Mock
+    private OtpValidator otpValidator;
+
+    @Mock
+    private OtpManagementDao otpManagementDao;
+
+    @Mock
+    private OtpManagementMapper otpManagementMapper;
+
+    @Mock
+    private EncryptionDecryptionUtil encryptionDecryptionUtil;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testGenerateOtp_Success() {
+        // Arrange
+        OtpGenerationRequest otpGenerationRequest = OtpGenerationRequest.builder()
+                .userName("testUser")
+                .requestId(UUID.randomUUID())
+                .requestType("LOGIN")
+                .build();
+
+        OtpGenerationDto otpGenerationDto = new OtpGenerationDto();
+        otpGenerationDto.setOtpCode("hashedOtp");
+        otpGenerationDto.setExpiryTime(DateTimeUtils.addMinutes(5));
+        otpGenerationDto.setId(UUID.randomUUID());
+
+        String otp = "123456";
+
+        when(otpManagementMapper.mapOtpGenerationToOtpGenerationDto(any())).thenReturn(otpGenerationDto);
+        when(otpManagementDao.save(any())).thenReturn(otpGenerationDto.getId());
+        doNothing().when(otpValidator).validateOtpGeneration(any());
+        when(MerchantUtil.generateOtp()).thenReturn(otp);
+        when(EncryptionDecryptionUtil.hashValue(otp)).thenReturn("hashedOtp");
+
+        // Act
+        MerchantResponse<String> response = otpService.generateOtp(otpGenerationRequest);
+
+        // Assert
+        verify(otpValidator, times(1)).validateOtpGeneration(otpGenerationRequest);
+        verify(otpManagementMapper, times(1)).mapOtpGenerationToOtpGenerationDto(otpGenerationRequest);
+        verify(otpManagementDao, times(1)).save(otpGenerationDto);
+        verify(otpManagementDao, times(2)).saveNotification(any(), anyString(), eq(MerchantConstant.RESPONSE_SUCCESS), any(NotificationType.class));
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus(), "Response status should be success");
+        assertEquals("Otp Generated", response.getData().get(0).split(" ")[0], "Response message should indicate OTP generation");
+    }
+}
+
+
+@Test
+void testGenerateOtp_ValidationFailure() {
+    // Arrange
+    OtpGenerationRequest otpGenerationRequest = OtpGenerationRequest.builder()
+            .userName("testUser")
+            .requestId(UUID.randomUUID())
+            .requestType("LOGIN")
+            .build();
+
+    doThrow(new IllegalArgumentException("Validation failed")).when(otpValidator).validateOtpGeneration(otpGenerationRequest);
+
+    // Act & Assert
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, 
+        () -> otpService.generateOtp(otpGenerationRequest));
+
+    assertEquals("Validation failed", exception.getMessage(), "Exception message should match expected value");
+    verify(otpValidator, times(1)).validateOtpGeneration(otpGenerationRequest);
+    verifyNoInteractions(otpManagementMapper, otpManagementDao); // Ensure no further interactions if validation fails
+}
+
