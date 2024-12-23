@@ -142,3 +142,189 @@ public class OtpManagement extends AuditEntityByDate {
     private boolean isVerified;
 
 }
+
+
+
+
+
+
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.OtpManagementDao;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.RequestType;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.*;
+
+class OtpValidatorTest {
+
+    @Mock
+    private OtpManagementDao otpManagementDao;
+
+    @InjectMocks
+    private OtpValidator otpValidator;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testValidateMandatoryFields_success() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestId(UUID.randomUUID());
+        request.setUserName("testUser");
+
+        // Act
+        otpValidator.validateMandatoryFields(request);
+
+        // Assert
+        // No exception is expected, so no assertion is required for a successful test.
+    }
+
+    @Test
+    void testValidateMandatoryFields_missingFields() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+
+        // Act & Assert
+        assertThrows(Exception.class, () -> otpValidator.validateMandatoryFields(request));
+    }
+
+    @Test
+    void testValidateMerchantUser_success() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserName("testUser");
+
+        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(true);
+
+        // Act
+        otpValidator.validateMerchantUser(request);
+
+        // Assert
+        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
+    }
+
+    @Test
+    void testValidateMerchantUser_userNotFound() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserName("invalidUser");
+
+        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(false);
+
+        // Act & Assert
+        assertThrows(Exception.class, () -> otpValidator.validateMerchantUser(request));
+        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
+    }
+
+    @Test
+    void testValidateRequestId_success() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestId(UUID.randomUUID());
+
+        when(otpManagementDao.isRequestIdExists(request.getRequestId())).thenReturn(false);
+
+        // Act
+        otpValidator.validateRequestId(request);
+
+        // Assert
+        verify(otpManagementDao, times(1)).isRequestIdExists(request.getRequestId());
+    }
+
+    @Test
+    void testValidateRequestId_requestIdExists() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestId(UUID.randomUUID());
+
+        when(otpManagementDao.isRequestIdExists(request.getRequestId())).thenReturn(true);
+
+        // Act & Assert
+        assertThrows(Exception.class, () -> otpValidator.validateRequestId(request));
+        verify(otpManagementDao, times(1)).isRequestIdExists(request.getRequestId());
+    }
+
+    @Test
+    void testCheckRequestInProgress_success() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserName("testUser");
+        request.setRequestType(RequestType.LOGIN.name());
+
+        when(otpManagementDao.isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN)).thenReturn(false);
+
+        // Act
+        otpValidator.checkRequestInProgress(request);
+
+        // Assert
+        verify(otpManagementDao, times(1))
+                .isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN);
+    }
+
+    @Test
+    void testCheckRequestInProgress_requestInProgress() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setUserName("testUser");
+        request.setRequestType(RequestType.LOGIN.name());
+
+        when(otpManagementDao.isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN)).thenReturn(true);
+
+        // Act & Assert
+        assertThrows(Exception.class, () -> otpValidator.checkRequestInProgress(request));
+        verify(otpManagementDao, times(1))
+                .isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN);
+    }
+
+    @Test
+    void testValidateOtpGeneration_success() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestId(UUID.randomUUID());
+        request.setUserName("testUser");
+        request.setRequestType(RequestType.LOGIN.name());
+
+        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(true);
+        when(otpManagementDao.isRequestIdExists(request.getRequestId())).thenReturn(false);
+        when(otpManagementDao.isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN)).thenReturn(false);
+
+        // Act
+        otpValidator.validateOtpGeneration(request);
+
+        // Assert
+        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
+        verify(otpManagementDao, times(1)).isRequestIdExists(request.getRequestId());
+        verify(otpManagementDao, times(1))
+                .isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN);
+    }
+
+    @Test
+    void testValidateOtpGeneration_failure() {
+        // Arrange
+        OtpGenerationRequest request = new OtpGenerationRequest();
+        request.setRequestId(UUID.randomUUID());
+        request.setUserName("testUser");
+        request.setRequestType(RequestType.LOGIN.name());
+
+        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(false);
+
+        // Act & Assert
+        assertThrows(Exception.class, () -> otpValidator.validateOtpGeneration(request));
+        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
+        verify(otpManagementDao, never()).isRequestIdExists(any());
+        verify(otpManagementDao, never()).isRequestAlreadyInProcess(any(), any());
+    }
+}
