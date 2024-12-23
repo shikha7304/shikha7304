@@ -1,276 +1,48 @@
 package com.epay.merchant.service;
 
-import com.epay.merchant.config.MerchantConfig;
-import com.epay.merchant.dao.MerchantDAO;
-import com.epay.merchant.dao.OtpDao;
-import com.epay.merchant.dto.OtpRequestDto;
-import com.epay.merchant.entity.MerchantUser;
-import com.epay.merchant.entity.OtpManagement;
-import com.epay.merchant.exception.MerchantException;
 import com.epay.merchant.model.request.OtpGenerationRequest;
-import com.epay.merchant.model.response.OtpGenerationResponse;
-import com.epay.merchant.model.response.ResponseDto;
-import com.epay.merchant.repository.OtpManagementRepository;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.validator.OtpGenerationValidator;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import org.junit.jupiter.api.BeforeEach;
+import com.epay.merchant.validator.OtpValidator;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Optional;
 import java.util.UUID;
 
-import static com.epay.merchant.util.AppConstants.RESPONSE_SUCCESS;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
-//@RunWith(MockitoJUnitRunner.class)
-
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class OtpServiceTest {
 
-    @Mock
-    OtpRequestDto otpRequestDto;
-
-    @Mock
-    OtpDao otpDao;
-
-    @Mock
-    OtpManagementRepository otpManagementRepository;
-
-    @Mock
-    OtpGenerationResponse otpGenerationResponse;
-
-    @Mock
-    OtpGenerationRequest otpGenerationRequest;
 
     @InjectMocks
-    OtpService otpService;
+    OtpService  otpService;
 
     @Mock
-    private MerchantConfig merchantConfig;
+    OtpValidator otpValidator;
 
-    @Mock
-    OtpGenerationValidator otpGenerationValidator;
-
-    @Mock
-    MerchantDAO merchantDAO;
-
-    @Mock
-    MerchantUser merchantUser;
-
-
-
-   @BeforeEach
-    void setUp() {
-       otpGenerationRequest = new OtpGenerationRequest();
-       otpGenerationRequest.setRequestType(RequestType.LOGIN.getName());
-       otpGenerationRequest.setUserName("Shikha@gmail.com");
-       otpRequestDto = new OtpRequestDto();
-       otpRequestDto.setOtpCode("123654");
-       otpRequestDto.setUserId(UUID.randomUUID());
-       otpRequestDto.setExpiryTime(LocalDateTime.now().plusMinutes(merchantConfig.getExpiryTime()).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
-       otpRequestDto.setId(UUID.randomUUID());
-       otpRequestDto.setIsVerified(false);
-       otpRequestDto.setCreateDate(System.currentTimeMillis());
-       otpRequestDto.setUpdateDate(System.currentTimeMillis());
-       otpRequestDto.setRequestID(UUID.randomUUID());
-       merchantUser= new MerchantUser();
-       merchantUser.setUserName("Shikha@gmail.com");
-
-   }
-    @Test
-    void testGenerateOtp_Success() {
-        // Arrange
-        when(merchantConfig.getExpiryTime()).thenReturn(5);
-        when(otpManagementRepository.save(any(OtpManagement.class))).thenReturn(new OtpManagement());
-        when(merchantDAO.getMerchantUserByUserNameOrEmailOrMobile("Shikha@gmail.com")).thenReturn(Optional.ofNullable(merchantUser));
-        // Act
-        ResponseDto<OtpGenerationResponse> response = otpService.generateOtp(otpGenerationRequest);
-        // Assert
-        assertNotNull(response);
-        assertEquals(RESPONSE_SUCCESS, response.getStatus());
-        assertNotNull(response.getData());
-        verify(otpGenerationValidator, times(1)).validateOtpRequest(otpGenerationRequest);
-        verify(otpManagementRepository, times(1)).save(any(OtpManagement.class));
-    }
-
+    
 
 
     @Test
-    void testGenerateOtp_InvalidUserId() throws JsonProcessingException {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setUserName("");
-        request.setRequestType("");
-
-        doThrow(new MerchantException("1001", "Invalid User Name"))
-                .when(otpGenerationValidator).validateOtpRequest(any(OtpGenerationRequest.class));
-
-        // Act & Assert
-        MerchantException exception = assertThrows(MerchantException.class, () -> otpService.generateOtp(request));
-        assertEquals("Invalid User Name", exception.getMessage());
-        verify(otpManagementRepository, never()).save(any(OtpManagement.class));
-
-    }
-
-    }
-
-
-> Task :compileJava UP-TO-DATE
-> Task :processResources UP-TO-DATE
-> Task :classes UP-TO-DATE
-> Task :compileTestJava
-> Task :processTestResources NO-SOURCE
-> Task :testClasses
-WARNING: A Java agent has been loaded dynamically (C:\Users\V1014352\.gradle\caches\modules-2\files-2.1\net.bytebuddy\byte-buddy-agent\1.14.19\154da3a65b4f4a909d3e5bdec55d1b2b4cbb6ce1\byte-buddy-agent-1.14.19.jar)
-WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
-WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
-WARNING: Dynamic loading of agents will be disallowed by default in a future release
-
-Cannot invoke "com.epay.merchant.dto.OtpRequestDto.getRequestID()" because "otpRequestDto" is null
-java.lang.NullPointerException: Cannot invoke "com.epay.merchant.dto.OtpRequestDto.getRequestID()" because "otpRequestDto" is null
-	at com.epay.merchant.service.OtpService.generateOtp(OtpService.java:50)
-	at com.epay.merchant.service.OtpServiceTest.testGenerateOtp_Success(OtpServiceTest.java:99)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-
-
-OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
-
-> Task :test
-OtpServiceTest > testGenerateOtp_Success() FAILED
-    java.lang.NullPointerException at OtpServiceTest.java:99
-2 tests completed, 1 failed
-> Task :test FAILED
-FAILURE: Build failed with an exception.
-* What went wrong:
-Execution failed for task ':test'.
-> There were failing tests. See the report at: file:///D:/Projects/epay_merchant_service/build/reports/tests/test/index.html
-* Try:
-> Run with --scan to get full insights.
-BUILD FAILED in 11s
-4 actionable tasks: 2 executed, 2 up-to-date
-
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
-class OtpServiceTest {
-
-    @Mock
-    OtpDao otpDao;
-
-    @Mock
-    OtpManagementRepository otpManagementRepository;
-
-    @Mock
-    OtpGenerationResponse otpGenerationResponse;
-
-    @Mock
-    MerchantConfig merchantConfig;
-
-    @Mock
-    OtpGenerationValidator otpGenerationValidator;
-
-    @Mock
-    MerchantDAO merchantDAO;
-
-    @InjectMocks
-    OtpService otpService;
-
-    private OtpRequestDto otpRequestDto;
-    private OtpGenerationRequest otpGenerationRequest;
-    private MerchantUser merchantUser;
-
-    @BeforeEach
-    void setUp() {
-        otpGenerationRequest = new OtpGenerationRequest();
-        otpGenerationRequest.setRequestType(RequestType.LOGIN.getName());
-        otpGenerationRequest.setUserName("Shikha@gmail.com");
-
-        otpRequestDto = new OtpRequestDto();
-        otpRequestDto.setOtpCode("123654");
-        otpRequestDto.setUserId(UUID.randomUUID());
-        otpRequestDto.setExpiryTime(LocalDateTime.now()
-                .plusMinutes(5)
-                .atZone(ZoneId.systemDefault())
-                .toInstant()
-                .toEpochMilli());
-        otpRequestDto.setId(UUID.randomUUID());
-        otpRequestDto.setIsVerified(false);
-        otpRequestDto.setCreateDate(System.currentTimeMillis());
-        otpRequestDto.setUpdateDate(System.currentTimeMillis());
-        otpRequestDto.setRequestID(UUID.randomUUID());
-
-        merchantUser = new MerchantUser();
-        merchantUser.setUserName("Shikha@gmail.com");
-    }
-
-    @Test
-    void testGenerateOtp_Success() {
-        // Arrange
-        when(merchantConfig.getExpiryTime()).thenReturn(5);
-        when(otpManagementRepository.save(any(OtpManagement.class))).thenReturn(new OtpManagement());
-        when(merchantDAO.getMerchantUserByUserNameOrEmailOrMobile("Shikha@gmail.com"))
-                .thenReturn(Optional.of(merchantUser));
-
-        // Act
-        ResponseDto<OtpGenerationResponse> response = otpService.generateOtp(otpGenerationRequest);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(RESPONSE_SUCCESS, response.getStatus());
-        assertNotNull(response.getData());
-        verify(otpGenerationValidator, times(1)).validateOtpRequest(otpGenerationRequest);
-        verify(otpManagementRepository, times(1)).save(any(OtpManagement.class));
-    }
-
-    @Test
-    void testGenerateOtp_InvalidUserId() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setUserName("");
-        request.setRequestType("");
-
-        doThrow(new MerchantException("1001", "Invalid User Name"))
-                .when(otpGenerationValidator).validateOtpRequest(any(OtpGenerationRequest.class));
-
-        // Act & Assert
-        MerchantException exception = assertThrows(MerchantException.class, () -> otpService.generateOtp(request));
-        assertEquals("Invalid User Name", exception.getMessage());
-        verify(otpManagementRepository, never()).save(any(OtpManagement.class));
+    void TestGenerateOtp_success() {
+        OtpGenerationRequest otpGenerationRequest = OtpGenerationRequest.builder().userName("userName").requestId(UUID.fromString("48234277-4836-45e5-8133-ad824d5c015f")).requestType("LOGIN").build();
+       
+        
+        
     }
 }
-
-
 
 package com.epay.merchant.service;
 
 import com.epay.merchant.config.MerchantConfig;
-import com.epay.merchant.dao.MerchantDAO;
-import com.epay.merchant.dao.OtpDao;
-import com.epay.merchant.dto.OtpRequestDto;
-import com.epay.merchant.entity.MerchantUser;
-import com.epay.merchant.entity.OtpManagement;
-import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.dao.OtpManagementDao;
+import com.epay.merchant.dto.OtpGenerationDto;
+import com.epay.merchant.mapper.OtpManagementMapper;
 import com.epay.merchant.model.request.OtpGenerationRequest;
-import com.epay.merchant.model.response.OtpGenerationResponse;
-import com.epay.merchant.model.response.ResponseDto;
-import com.epay.merchant.util.AppConstants;
+import com.epay.merchant.model.response.MerchantResponse;
 import com.epay.merchant.util.DateTimeUtils;
-import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.EncryptionDecryptionUtil;
+import com.epay.merchant.util.MerchantConstant;
 import com.epay.merchant.util.MerchantUtil;
-import com.epay.merchant.validator.OtpGenerationValidator;
+import com.epay.merchant.util.enums.NotificationType;
+import com.epay.merchant.validator.OtpValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -283,80 +55,82 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OtpService {
 
-    private final OtpDao otpDao;
-    private final MerchantDAO merchantDAO;
-    private final OtpGenerationValidator otpGenerationValidator;
+    private final OtpManagementDao otpManagementDao;
+    private final OtpValidator otpValidator;
+    private final OtpManagementMapper otpManagementMapper;
     private final MerchantConfig merchantConfig;
 
-    public ResponseDto<OtpGenerationResponse> generateOtp(OtpGenerationRequest otpGenerationRequest) {
-        otpGenerationValidator.validateOtpRequest(otpGenerationRequest);
-
-        MerchantUser merchantUser = merchantDAO.getMerchantUserByUserNameOrEmailOrMobile(otpGenerationRequest.getUserName())
-                .orElseThrow((() -> new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "UserName", "Not Found"))));
-
-          // Generate 6-digit OTP
-
-        String GeneratedOtp= MerchantUtil.generatedSixDigitOtp();
-
-        OtpRequestDto otpRequestDto = saveOtp(otpGenerationRequest,GeneratedOtp, merchantUser.getId() );
-        //TODO to call producer and KAFKA Implementation
-        //call utility
-//
-            OtpGenerationResponse otpGenerationResponse = OtpGenerationResponse.<OtpGenerationResponse>builder()
-                    .requestId(otpRequestDto.getRequestID())
-                    .otpDescription("OTP Generated successfully")
-                    .build();
-
-            return ResponseDto.<OtpGenerationResponse>builder()
-                    .status(AppConstants.RESPONSE_FAILURE)
-                    .data(List.of(otpGenerationResponse))
-                    .count(1L)
-                    .total(1L)
-                    .build();
-
-    }
-
-    public OtpRequestDto saveOtp(OtpGenerationRequest otpGenerationRequest, String otpHash, UUID userId) {
-        OtpManagement otp = OtpManagement.builder()
-                .otpCode(otpHash)
-                .requestType(otpGenerationRequest.getRequestType())
-                .userId(userId)
-                .expiryTime(DateTimeUtils.addMinutes(merchantConfig.getOtpExpiryTime()))
-                .isVerified(false)
-                .requestID(UUID.randomUUID())
-                .build();
-        // Save to DB
-        return otpDao.saveOtp(otp);
+    public MerchantResponse<String> generateOtp(OtpGenerationRequest otpGenerationRequest) {
+        // Step 1 : Validate OtpGenerationRequest
+        otpValidator.validateOtpGeneration(otpGenerationRequest);
+        // Step 2 : Generate the OTP and save Hashed value in DB
+        OtpGenerationDto otpGenerationDto = otpManagementMapper.mapOtpGenerationToOtpGenerationDto(otpGenerationRequest);
+        String otp = MerchantUtil.generateOtp();
+        otpGenerationDto.setOtpCode(EncryptionDecryptionUtil.hashValue(otp));
+        otpGenerationDto.setExpiryTime(DateTimeUtils.addMinutes(merchantConfig.getOtpExpiryTime()));
+        UUID entityId = otpManagementDao.save(otpGenerationDto);
+        otpGenerationDto.setId(entityId);
+        // Step 3 : Send the Notification to User via Notification Service
+        // TODO : Call the the Notification Service to send the email and sms
+        // Step 4 : Save Notification info in Table
+        otpManagementDao.saveNotification(otpGenerationDto, "OTP for validation on Email :"+otp, MerchantConstant.RESPONSE_SUCCESS, NotificationType.EMAIL);
+        otpManagementDao.saveNotification(otpGenerationDto, "OTP for validation on SMS :"+otp, MerchantConstant.RESPONSE_SUCCESS, NotificationType.SMS);
+        // Step 5 : Build Merchant success Response and send
+        return MerchantResponse.<String>builder().data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, "Otp Generated"))).status(MerchantConstant.RESPONSE_SUCCESS).build();
     }
 }
 
-org.opentest4j.AssertionFailedError: expected: <1> but was: <0>
-	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
-	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
-	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
-	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:182)
-	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:177)
-	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:538)
-	at com.epay.merchant.service.OtpServiceTest.testGenerateOtp_Success(OtpServiceTest.java:103)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+public class OtpValidator extends BaseValidator {
+
+    private final OtpManagementDao otpManagementDao;
+
+    public void validateOtpGeneration(OtpGenerationRequest otpGenerationRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(otpGenerationRequest);
+        //validateEnumFieldValue(otpGenerationRequest.getRequestType());
+        validateMerchantUser(otpGenerationRequest);
+        validateRequestId(otpGenerationRequest);
+        checkRequestInProgress(otpGenerationRequest);
+    }
 
 
-OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
-Disconnected from the target VM, address: 'localhost:50962', transport: 'socket'
+import com.epay.merchant.dto.OtpGenerationDto;
+import com.epay.merchant.entity.OtpManagement;
+import com.epay.merchant.model.request.OtpGenerationRequest;
+import com.epay.merchant.util.enums.RequestType;
+import org.mapstruct.AfterMapping;
+import org.mapstruct.Builder;
+import org.mapstruct.Mapper;
+import org.mapstruct.MappingTarget;
 
-> Task :test
-OtpServiceTest > testGenerateOtp_Success() FAILED
-    org.opentest4j.AssertionFailedError at OtpServiceTest.java:103
-1 test completed, 1 failed
-> Task :test FAILED
-FAILURE: Build failed with an exception.
-* What went wrong:
-Execution failed for task ':test'.
-> There were failing tests. See the report at: file:///D:/Projects/epay_merchant_service/build/reports/tests/test/index.html
-* Try:
-> Run with --scan to get full insights.
-BUILD FAILED in 10s
-4 actionable tasks: 1 executed, 3 up-to-date
+@Mapper(builder = @Builder(disableBuilder = true), componentModel = "spring")
+public interface OtpManagementMapper {
 
+    OtpGenerationDto mapOtpGenerationToOtpGenerationDto(OtpGenerationRequest otpGenerationRequest);
+    @AfterMapping
+    default void afterMapOtpGenerationToOtpGenerationDto(OtpGenerationRequest otpGenerationRequest, @MappingTarget OtpGenerationDto otpGenerationDto) {
+        otpGenerationDto.setRequestType(RequestType.getRequestType(otpGenerationRequest.getRequestType().toUpperCase()));
+    }
+
+    OtpManagement mapOtpGenerationDtoToOtpManagement(OtpGenerationDto otpGenerationDto);
+}
+
+public class OtpManagementDao {
+
+    private final OtpManagementRepository otpManagementRepository;
+    private final MerchantUserRepository merchantUserRepository;
+    private final NotificationDao notificationDao;
+    private final OtpManagementMapper otpManagementMapper;
+
+ 
+public UUID save(OtpGenerationDto otpGenerationDto) {
+        MerchantUser merchantUser = merchantUserRepository.findByUserNameOrEmailOrMobilePhone(otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), otpGenerationDto.getUserName());
+        OtpManagement otpManagement = otpManagementMapper.mapOtpGenerationDtoToOtpManagement(otpGenerationDto);
+        otpManagement.setUserId(merchantUser.getId());
+        otpManagement = otpManagementRepository.save(otpManagement);
+        return otpManagement.getId();
+    }
+
+public void saveNotification(OtpGenerationDto otpGenerationDto, String content, int status, NotificationType notificationType) {
+        notificationDao.saveOtpGenerationNotification(otpGenerationDto, content, status, notificationType);
+    }
