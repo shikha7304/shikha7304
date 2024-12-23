@@ -29,6 +29,47 @@ class OtpServiceTest {
     }
 }
 
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.entity.Captcha;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.validator.MerchantLoginValidator;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+
+@ExtendWith(MockitoExtension.class)
+class LoginServiceTest {
+
+    @InjectMocks
+    LoginService loginService;
+
+    @Mock
+    MerchantLoginValidator merchantLoginValidator;
+
+
+    @Test
+    void testMerchantLogin_ValidData() {
+        MerchantLoginRequest merchantLoginRequest = MerchantLoginRequest.builder().userName("userName").requestId(UUID.fromString("48234277-4836-45e5-8133-ad824d5c015f")).password("abcd123").captchaText("image").build();
+        Captcha captcha = Captcha.builder().expiryTime(1734414068155L).captchaImage("image").build();
+        assertDoesNotThrow(() -> merchantLoginValidator.validateMerchantLoginRequest(any()));
+        MerchantResponse<String> responseDto = loginService.merchantLogin(merchantLoginRequest);
+        assertEquals(responseDto.getStatus(), MerchantConstant.RESPONSE_SUCCESS);
+        assertEquals(responseDto.getData().getFirst(), "Login User Found successfully");
+    }
+
+}
 package com.epay.merchant.service;
 
 import com.epay.merchant.config.MerchantConfig;
