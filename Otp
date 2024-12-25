@@ -1,330 +1,133 @@
-package com.epay.merchant.dao;
+package com.epay.merchant.service;
 
-import com.epay.merchant.dto.OtpGenerationDto;
-import com.epay.merchant.entity.MerchantUser;
-import com.epay.merchant.entity.OtpManagement;
-import com.epay.merchant.mapper.OtpManagementMapper;
-import com.epay.merchant.repository.MerchantUserRepository;
-import com.epay.merchant.repository.OtpManagementRepository;
-import com.epay.merchant.util.enums.NotificationType;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.util.enums.UserStatus;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-import java.util.UUID;
-
-@Repository
-@RequiredArgsConstructor
-public class OtpManagementDao {
-
-    private final OtpManagementRepository otpManagementRepository;
-    private final MerchantUserRepository merchantUserRepository;
-    private final NotificationDao notificationDao;
-    private final OtpManagementMapper otpManagementMapper;
-
-    public UUID save(OtpGenerationDto otpGenerationDto) {
-        MerchantUser merchantUser = merchantUserRepository.findByUserNameOrEmailOrMobilePhone(otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), otpGenerationDto.getUserName());
-        OtpManagement otpManagement = otpManagementMapper.mapOtpGenerationDtoToOtpManagement(otpGenerationDto);
-        otpManagement.setUserId(merchantUser.getId());
-        otpManagement = otpManagementRepository.save(otpManagement);
-        return otpManagement.getId();
-    }
-
-    public void saveNotification(OtpGenerationDto otpGenerationDto, String content, int status, NotificationType notificationType) {
-        notificationDao.saveOtpGenerationNotification(otpGenerationDto, content, status, notificationType);
-    }
-}
-
-
-
-
-package com.epay.merchant.validator;
-
-import com.epay.merchant.dao.OtpManagementDao;
-import com.epay.merchant.model.request.OtpGenerationRequest;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.RequestType;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-
-@Component
-@RequiredArgsConstructor
-public class OtpValidator extends BaseValidator {
-
-    private final OtpManagementDao otpManagementDao;
-
-    public void validateOtpGeneration(OtpGenerationRequest otpGenerationRequest) {
-        errorDtoList = new ArrayList<>();
-        validateMandatoryFields(otpGenerationRequest);
-        //validateEnumFieldValue(otpGenerationRequest.getRequestType());
-        validateMerchantUser(otpGenerationRequest);
-        validateRequestId(otpGenerationRequest);
-        checkRequestInProgress(otpGenerationRequest);
-    }
-
-    void checkRequestInProgress(OtpGenerationRequest otpGenerationRequest) {
-        boolean requestAlreadyInProcess = otpManagementDao.isRequestAlreadyInProcess(otpGenerationRequest.getUserName(),
-                RequestType.getRequestType(otpGenerationRequest.getRequestType()));
-        if (requestAlreadyInProcess) {
-            addError("Request", ErrorConstants.ALREADY_EXIST_ERROR_CODE, ErrorConstants.ALREADY_IN_PROCESS_ERROR_MESSAGE);
-        }
-        throwIfErrors();
-    }
-
-    void validateRequestId(OtpGenerationRequest otpGenerationRequest) {
-        boolean requestIdExists = otpManagementDao.isRequestIdExists(otpGenerationRequest.getRequestId());
-        if (requestIdExists) {
-            addError("Request Id", ErrorConstants.ALREADY_EXIST_ERROR_CODE, ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE);
-        }
-        throwIfErrors();
-    }
-
-    void validateMerchantUser(OtpGenerationRequest otpGenerationRequest) {
-        boolean merchantUserExists = otpManagementDao.isValidMerchantUserExists(otpGenerationRequest.getUserName());
-        if (!merchantUserExists) {
-            addError("User Name", ErrorConstants.NOT_FOUND_ERROR_CODE, ErrorConstants.NOT_FOUND_ERROR_MESSAGE);
-        }
-        throwIfErrors();
-    }
-
-    void validateMandatoryFields(OtpGenerationRequest otpGenerationRequest) {
-        checkMandatoryField(String.valueOf(otpGenerationRequest.getRequestId()), "Request Id");
-       // checkMandatoryField(otpGenerationRequest.getRequestType(), "Request Type");
-        checkMandatoryField(otpGenerationRequest.getUserName(), "User Name");
-        throwIfErrors();
-    }
-
-}
-
-
-
-
-@Repository
-public interface MerchantUserRepository extends JpaRepository<MerchantUser, UUID> {
-
-    @Query("select m FROM MerchantUser m, MerchantEntityUser meu, MerchantEntityGroup meg " +
-            "WHERE m.id = meu.userId and ((meu.mId = :mid and meu.entityId is null) or (meg.entityId = meu.entityId and meg.mId = :mid ))")
-    Page<MerchantUser> findBymId(@Param("mid") String mId, Pageable pageable);
-
-    boolean existsByUserNameOrEmailOrMobilePhoneAndStatus(String userName, String email, String mobilePhone, String status);
-
-    boolean existsByUserNameOrEmailOrMobilePhone(String userName, String email, String mobilePhone);
-
-    MerchantUser findByUserNameOrEmailOrMobilePhone(String userName, String email, String mobilePhone);
-
-    @Query("select count(m) > 0 FROM MerchantUser m WHERE (m.userName = :userName OR m.email = :userName OR m.mobilePhone = :userName) AND m.password = :password")
-    boolean isMerchantUserExistsByUserNameOrEmailOrMobilePhoneAndPassword(@Param("userName") String userName, @Param("password") String password);
-
-}
-
-@EqualsAndHashCode(callSuper = true)
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-@Entity
-@Table(name = "OTP_MANAGEMENT")
-public class OtpManagement extends AuditEntityByDate {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
-
-    @Enumerated(EnumType.STRING)
-    private RequestType requestType;
-    private UUID userId;
-    private UUID requestId;
-    private String otpCode;
-    private Long expiryTime;
-    private boolean isVerified;
-
-}
-
-
-
-
-
-
-package com.epay.merchant.validator;
-
-import com.epay.merchant.dao.OtpManagementDao;
-import com.epay.merchant.model.request.OtpGenerationRequest;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.dao.MerchantInfoDao;
+import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.entity.MerchantInfo;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.response.MerchantInfoResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.repository.MerchantInfoRepository;
+import com.epay.merchant.util.MerchantConstant;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
-import java.util.UUID;
+import java.util.Collections;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.*;
 
-class OtpValidatorTest {
-
-    @Mock
-    private OtpManagementDao otpManagementDao;
+@ExtendWith(MockitoExtension.class)
+class MerchantUserServiceTest {
 
     @InjectMocks
-    private OtpValidator otpValidator;
+    private MerchantUserService merchantUserService;
 
+    @Mock
+    private MerchantInfoDao merchantInfoDao;
+
+    @Mock
+    private MerchantMapper merchantMapper;
+
+    @Mock
+    private MerchantInfoRepository merchantInfoRepository;
+
+    @Mock
+    MerchantInfo merchantInfo;
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+       
     }
 
     @Test
-    void testValidateMandatoryFields_success() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setRequestId(UUID.randomUUID());
-        request.setUserName("testUser");
+    void testGetAllAccessMerchantInfo() {
+        Pageable pageable = PageRequest.of(0, 10);
+        MerchantInfoDto dto1 = new MerchantInfoDto("1", "Merchant1", "ACTIVE");
+        MerchantInfoDto dto2 = new MerchantInfoDto("2", "Merchant2", "INACTIVE");
 
-        // Act
-        otpValidator.validateMandatoryFields(request);
+        MerchantInfo merchantInfo= new MerchantInfo();
+        merchantInfo.setChargebackAllowed(true);
 
-        // Assert
-        // No exception is expected, so no assertion is required for a successful test.
+        List<MerchantInfoDto> dtoList = List.of(dto1, dto2);
+        Page<MerchantInfoDto> page = new PageImpl<>(dtoList, pageable, dtoList.size());
+
+        MerchantInfoResponse response1 = new MerchantInfoResponse("1", "Merchant1", "ACTIVE");
+        MerchantInfoResponse response2 = new MerchantInfoResponse("2", "Merchant2", "INACTIVE");
+
+        List<MerchantInfoResponse> responseList = List.of(response1, response2);
+
+        when(merchantInfoDao.getALl(pageable)).thenReturn(page);
+        when(merchantMapper.mapMerchantInfoDTOListToResponseList(dtoList)).thenReturn(responseList);
+        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser("userName",pageable)).thenReturn(page);
+        MerchantResponse<MerchantInfoResponse> result = merchantUserService.getAllAccessMerchantInfo(pageable);
+
+
+        assertNotNull(result);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, result.getStatus());
+        assertEquals(2, result.getCount());
+        assertEquals(2, result.getTotal());
+        assertEquals(responseList, result.getData());
+
+        verify(merchantInfoDao, times(1)).getALl(pageable);
+        verify(merchantMapper, times(1)).mapMerchantInfoDTOListToResponseList(dtoList);
     }
 
     @Test
-    void testValidateMandatoryFields_missingFields() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
+    void testGetAllAccessMerchantInfoEmptyResult() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<MerchantInfoDto> emptyPage = Page.empty();
 
-        // Act & Assert
-        assertThrows(Exception.class, () -> otpValidator.validateMandatoryFields(request));
-    }
+        when(merchantInfoDao.getALl(pageable)).thenReturn(emptyPage);
+        when(merchantMapper.mapMerchantInfoDTOListToResponseList(Collections.emptyList())).thenReturn(Collections.emptyList());
 
-    @Test
-    void testValidateMerchantUser_success() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setUserName("testUser");
+        MerchantResponse<MerchantInfoResponse> result = merchantUserService.getAllAccessMerchantInfo(pageable);
 
-        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(true);
+        assertNotNull(result);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, result.getStatus());
+        assertEquals(0, result.getCount());
+        assertEquals(0, result.getTotal());
+        assertEquals(Collections.emptyList(), result.getData());
 
-        // Act
-        otpValidator.validateMerchantUser(request);
-
-        // Assert
-        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
-    }
-
-    @Test
-    void testValidateMerchantUser_userNotFound() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setUserName("invalidUser");
-
-        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(false);
-
-        // Act & Assert
-        assertThrows(Exception.class, () -> otpValidator.validateMerchantUser(request));
-        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
-    }
-
-    @Test
-    void testValidateRequestId_success() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setRequestId(UUID.randomUUID());
-
-        when(otpManagementDao.isRequestIdExists(request.getRequestId())).thenReturn(false);
-
-        // Act
-        otpValidator.validateRequestId(request);
-
-        // Assert
-        verify(otpManagementDao, times(1)).isRequestIdExists(request.getRequestId());
-    }
-
-    @Test
-    void testValidateRequestId_requestIdExists() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setRequestId(UUID.randomUUID());
-
-        when(otpManagementDao.isRequestIdExists(request.getRequestId())).thenReturn(true);
-
-        // Act & Assert
-        assertThrows(Exception.class, () -> otpValidator.validateRequestId(request));
-        verify(otpManagementDao, times(1)).isRequestIdExists(request.getRequestId());
-    }
-
-    @Test
-    void testCheckRequestInProgress_success() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setUserName("testUser");
-        request.setRequestType(RequestType.LOGIN.name());
-
-        when(otpManagementDao.isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN)).thenReturn(false);
-
-        // Act
-        otpValidator.checkRequestInProgress(request);
-
-        // Assert
-        verify(otpManagementDao, times(1))
-                .isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN);
-    }
-
-    @Test
-    void testCheckRequestInProgress_requestInProgress() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setUserName("testUser");
-        request.setRequestType(RequestType.LOGIN.name());
-
-        when(otpManagementDao.isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN)).thenReturn(true);
-
-        // Act & Assert
-        assertThrows(Exception.class, () -> otpValidator.checkRequestInProgress(request));
-        verify(otpManagementDao, times(1))
-                .isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN);
-    }
-
-    @Test
-    void testValidateOtpGeneration_success() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setRequestId(UUID.randomUUID());
-        request.setUserName("testUser");
-        request.setRequestType(RequestType.LOGIN.name());
-
-        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(true);
-        when(otpManagementDao.isRequestIdExists(request.getRequestId())).thenReturn(false);
-        when(otpManagementDao.isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN)).thenReturn(false);
-
-        // Act
-        otpValidator.validateOtpGeneration(request);
-
-        // Assert
-        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
-        verify(otpManagementDao, times(1)).isRequestIdExists(request.getRequestId());
-        verify(otpManagementDao, times(1))
-                .isRequestAlreadyInProcess(request.getUserName(), RequestType.LOGIN);
-    }
-
-    @Test
-    void testValidateOtpGeneration_failure() {
-        // Arrange
-        OtpGenerationRequest request = new OtpGenerationRequest();
-        request.setRequestId(UUID.randomUUID());
-        request.setUserName("testUser");
-        request.setRequestType(RequestType.LOGIN.name());
-
-        when(otpManagementDao.isValidMerchantUserExists(request.getUserName())).thenReturn(false);
-
-        // Act & Assert
-        assertThrows(Exception.class, () -> otpValidator.validateOtpGeneration(request));
-        verify(otpManagementDao, times(1)).isValidMerchantUserExists(request.getUserName());
-        verify(otpManagementDao, never()).isRequestIdExists(any());
-        verify(otpManagementDao, never()).isRequestAlreadyInProcess(any(), any());
+        verify(merchantInfoDao, times(1)).getALl(pageable);
+        verify(merchantMapper, times(1)).mapMerchantInfoDTOListToResponseList(Collections.emptyList());
     }
 }
+
+
+  public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable) {
+        log.info("Fetching all merchant information");
+        String userName = "Ranu"; // TODO Need to get from SecurityContext
+
+        Page<MerchantInfoDto> merchantInfo = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName, pageable);
+        log.info("Fetched MerchantInfoDto page");
+        //Mapping DTO to Response Object
+        List<MerchantInfoResponse> merchantInfoResponseList = merchantMapper.mapMerchantInfoDTOListToResponseList(merchantInfo.getContent());
+        //Building the response
+        return MerchantResponse.<MerchantInfoResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantInfoResponseList).count(merchantInfo.stream().count()).total(merchantInfo.getTotalElements()).build();
+    }
+
+
+
+Cannot invoke "org.springframework.data.domain.Page.getContent()" because "merchantInfo" is null
+java.lang.NullPointerException: Cannot invoke "org.springframework.data.domain.Page.getContent()" because "merchantInfo" is null
+	at com.epay.merchant.service.MerchantUserService.getAllAccessMerchantInfo(MerchantUserService.java:50)
+	at com.epay.merchant.service.MerchantUserServiceTest.testGetAllAccessMerchantInfo(MerchantUserServiceTest.java:72)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+Disconnected from the target VM, address: 'localhost:58860', transport: 'socket'
