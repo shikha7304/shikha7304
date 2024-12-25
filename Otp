@@ -1,133 +1,140 @@
 package com.epay.merchant.service;
 
-import com.epay.merchant.dao.MerchantInfoDao;
-import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.dao.AdminDao;
+import com.epay.merchant.dto.MerchantDto;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.dto.OnboardingDto;
 import com.epay.merchant.entity.MerchantInfo;
+import com.epay.merchant.entity.MerchantUser;
+import com.epay.merchant.entity.MerchantUserRole;
 import com.epay.merchant.mapper.MerchantMapper;
-import com.epay.merchant.model.response.MerchantInfoResponse;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.repository.MerchantInfoRepository;
-import com.epay.merchant.util.MerchantConstant;
-import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.epay.merchant.model.request.OnboardingRequest;
+import com.epay.merchant.model.response.MerchantUserResponse;
+import com.epay.merchant.model.response.OnboardingResponse;
+import com.epay.merchant.repository.MerchantUserRoleRepository;
+import com.epay.merchant.util.PasswordGenerator;
+import com.epay.merchant.validator.OnboardingValidator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
 
 @ExtendWith(MockitoExtension.class)
-class MerchantUserServiceTest {
+public class AdminServiceTest {
+
+
+    @Mock
+    private AdminDao adminDao;
+    @Mock
+    private OnboardingValidator validator;
+
+    @Mock
+    private MerchantMapper mapper;
+    @Mock
+    private PasswordGenerator passwordGenerator;
+    @Mock
+    MerchantUserRoleRepository merchantUserRoleRepository ;
 
     @InjectMocks
-    private MerchantUserService merchantUserService;
+    private AdminService adminService;
+    private AutoCloseable closeable;
+    private OnboardingRequest onboardingRequest;
 
-    @Mock
-    private MerchantInfoDao merchantInfoDao;
 
-    @Mock
-    private MerchantMapper merchantMapper;
+    private MerchantUser merchantUser;
+    private MerchantUserResponse merchantUserResponse;
 
-    @Mock
-    private MerchantInfoRepository merchantInfoRepository;
-
-    @Mock
-    MerchantInfo merchantInfo;
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
-       
+        closeable = MockitoAnnotations.openMocks(this);
+        onboardingRequest = OnboardingRequest.builder().merchant(MerchantDto.builder().build()).user(MerchantUserDto.builder().build()).build();
+    }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        closeable.close();
     }
 
     @Test
-    void testGetAllAccessMerchantInfo() {
-        Pageable pageable = PageRequest.of(0, 10);
-        MerchantInfoDto dto1 = new MerchantInfoDto("1", "Merchant1", "ACTIVE");
-        MerchantInfoDto dto2 = new MerchantInfoDto("2", "Merchant2", "INACTIVE");
-
-        MerchantInfo merchantInfo= new MerchantInfo();
-        merchantInfo.setChargebackAllowed(true);
-
-        List<MerchantInfoDto> dtoList = List.of(dto1, dto2);
-        Page<MerchantInfoDto> page = new PageImpl<>(dtoList, pageable, dtoList.size());
-
-        MerchantInfoResponse response1 = new MerchantInfoResponse("1", "Merchant1", "ACTIVE");
-        MerchantInfoResponse response2 = new MerchantInfoResponse("2", "Merchant2", "INACTIVE");
-
-        List<MerchantInfoResponse> responseList = List.of(response1, response2);
-
-        when(merchantInfoDao.getALl(pageable)).thenReturn(page);
-        when(merchantMapper.mapMerchantInfoDTOListToResponseList(dtoList)).thenReturn(responseList);
-        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser("userName",pageable)).thenReturn(page);
-        MerchantResponse<MerchantInfoResponse> result = merchantUserService.getAllAccessMerchantInfo(pageable);
-
-
-        assertNotNull(result);
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, result.getStatus());
-        assertEquals(2, result.getCount());
-        assertEquals(2, result.getTotal());
-        assertEquals(responseList, result.getData());
-
-        verify(merchantInfoDao, times(1)).getALl(pageable);
-        verify(merchantMapper, times(1)).mapMerchantInfoDTOListToResponseList(dtoList);
-    }
-
-    @Test
-    void testGetAllAccessMerchantInfoEmptyResult() {
-        Pageable pageable = PageRequest.of(0, 10);
-        Page<MerchantInfoDto> emptyPage = Page.empty();
-
-        when(merchantInfoDao.getALl(pageable)).thenReturn(emptyPage);
-        when(merchantMapper.mapMerchantInfoDTOListToResponseList(Collections.emptyList())).thenReturn(Collections.emptyList());
-
-        MerchantResponse<MerchantInfoResponse> result = merchantUserService.getAllAccessMerchantInfo(pageable);
-
-        assertNotNull(result);
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, result.getStatus());
-        assertEquals(0, result.getCount());
-        assertEquals(0, result.getTotal());
-        assertEquals(Collections.emptyList(), result.getData());
-
-        verify(merchantInfoDao, times(1)).getALl(pageable);
-        verify(merchantMapper, times(1)).mapMerchantInfoDTOListToResponseList(Collections.emptyList());
+    public void onboardingTest() {
+        OnboardingDto onboardingRequestDB = OnboardingDto.builder()
+                .merchant(MerchantDto.builder().mId("100011").build())
+                .build();
+        MerchantDto merchantDto = new MerchantDto();
+        MerchantInfo merchantInfo = new MerchantInfo();
+        MerchantUserRole merchantUserRole = new MerchantUserRole();
+        merchantUserRole.setRole("admin");
+        merchantUserRole.setId(UUID.randomUUID());
+        merchantInfo.setMId("mid");
+        Mockito.when(mapper.mapMerchantDtoToEntity(merchantDto)).thenReturn(merchantInfo);
+        Mockito.when(adminDao.onboardingMerchantAndMerchantUser(onboardingRequest)).thenReturn(onboardingRequestDB);
+        Mockito.when(passwordGenerator.generatePassword()).thenReturn("test");
+        Mockito.when(adminDao.getAdminRoleId()).thenReturn(merchantUserRole);
+        List<OnboardingResponse> onboardingRequestRes = adminService.onboardingMerchant(onboardingRequest).getData();
+        assertNotNull(onboardingRequestRes);
+        assertNotNull(onboardingRequestRes.getFirst().getMerchant().getMId());
     }
 }
 
 
-  public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable) {
-        log.info("Fetching all merchant information");
-        String userName = "Ranu"; // TODO Need to get from SecurityContext
+  public MerchantResponse<OnboardingResponse> onboardingMerchant(OnboardingRequest onboardingRequest) {
+        //Step 1 : OnboardingRequest validation
+        onboardingValidator.validateOnboardingRequest(onboardingRequest);
+        //Step 2 : Set up the default value for Merchant and Merchant User
+        String password = passwordGenerator.generatePassword();
+        setMerchantDefaultValues(onboardingRequest, password);
+        //Step 3 : Save the Merchant and Merchant User Data in DB
+        OnboardingDto onboardingDto = adminDao.onboardingMerchantAndMerchantUser(onboardingRequest);
+        //Step 4 : Send Notification to Merchant User
+        sendNotification(onboardingDto);
+        //Step 5 : Build MerchantResponse and return to caller
+        return MerchantResponse.<OnboardingResponse>builder().data(List.of(OnboardingResponse.builder().merchant(onboardingDto.getMerchant()).user(onboardingDto.getUser()).build())).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
 
-        Page<MerchantInfoDto> merchantInfo = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName, pageable);
-        log.info("Fetched MerchantInfoDto page");
-        //Mapping DTO to Response Object
-        List<MerchantInfoResponse> merchantInfoResponseList = merchantMapper.mapMerchantInfoDTOListToResponseList(merchantInfo.getContent());
-        //Building the response
-        return MerchantResponse.<MerchantInfoResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantInfoResponseList).count(merchantInfo.stream().count()).total(merchantInfo.getTotalElements()).build();
+
+onboardingMerchantAndMerchantUser(OnboardingRequest onboardingRequest) {
+        MerchantInfo merchantInfo = mapper.mapMerchantDtoToEntity(onboardingRequest.getMerchant());
+        merchantInfo = merchantRepository.save(merchantInfo);
+
+        MerchantUser merchantUser = mapper.mapMerchantUserDtoToEntity(onboardingRequest.getUser());
+        merchantUser = merchantUserRepository.save(merchantUser);
+
+        assignMerchantToUser(merchantUser.getId(), merchantInfo.getMId());
+
+        createMerchantUserMenuPermissions(merchantUser.getId(), merchantUser.getRole());
+
+        return OnboardingDto.builder().merchant(mapper.mapMerchantInfoEntityToDto(merchantInfo)).user(mapper.mapMerchantUserEntityToDto(merchantUser)).build();
     }
 
 
 
-Cannot invoke "org.springframework.data.domain.Page.getContent()" because "merchantInfo" is null
-java.lang.NullPointerException: Cannot invoke "org.springframework.data.domain.Page.getContent()" because "merchantInfo" is null
-	at com.epay.merchant.service.MerchantUserService.getAllAccessMerchantInfo(MerchantUserService.java:50)
-	at com.epay.merchant.service.MerchantUserServiceTest.testGetAllAccessMerchantInfo(MerchantUserServiceTest.java:72)
+Cannot invoke "com.epay.merchant.entity.MerchantUserRole.getId()" because the return value of "com.epay.merchant.dao.AdminDao.getAdminRoleId()" is null
+java.lang.NullPointerException: Cannot invoke "com.epay.merchant.entity.MerchantUserRole.getId()" because the return value of "com.epay.merchant.dao.AdminDao.getAdminRoleId()" is null
+	at com.epay.merchant.service.AdminService.setMerchantUserDefaultValues(AdminService.java:140)
+	at com.epay.merchant.service.AdminService.setMerchantDefaultValues(AdminService.java:114)
+	at com.epay.merchant.service.AdminService.onboardingMerchant(AdminService.java:77)
+	at com.epay.merchant.service.AdminServiceTest.onboardingTest(AdminServiceTest.java:85)
 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 
 
 OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
-Disconnected from the target VM, address: 'localhost:58860', transport: 'socket'
+
+> Task :test
+AdminServiceTest > onboardingTest() FAILED
+    java.lang.NullPointerException at AdminServiceTest.java:85
+1 test completed, 1 failed
+
