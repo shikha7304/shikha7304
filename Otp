@@ -315,3 +315,19 @@ void testOnboardingMerchant() {
     assertEquals(onboardingDto.getMerchant(), response.getData().get(0).getMerchant());
     assertEquals(onboardingDto.getUser(), response.getData().get(0).getUser());
 }
+
+
+
+
+
+INSERT INTO MERCHANT_USER (
+    ID, PARENT_USERID, USER_NAME, FIRST_NAME, MIDDLE_NAME, LAST_NAME, EMAIL, PRIMARY_PHONE, SECONDARY_PHONE,
+    MOBILE_PHONE, OFFICE_PHONE, COUNTRY_CODE, STATE_CODE, PIN_CODE, CITY, ROLE, STATUS, PASSWORD,
+    LAST_PASSWORD_CHANGE, PASSWORD_EXPIRY_TIME, LOGIN_FAIL_ATTEMPT, LAST_SUCCESS_LOGIN, LAST_FAIL_LOGIN,
+    CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT
+) VALUES (
+    SYS_GUID(), NULL, 'user1', 'John', 'M.', 'Doe', 'user1@example.com', '1234567890', NULL,
+    '9876543210', '0123456789', '+91', 'ST123', '123456', 'City X', 'Admin', 'Active', 'hashedPassword123',
+    NULL, 1704067200, 0, NULL, NULL, 'Admin', 1672531200, 'Admin', 1672531200
+);
+
