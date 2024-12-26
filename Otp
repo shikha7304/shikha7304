@@ -282,3 +282,36 @@ java.lang.NullPointerException: Cannot invoke "com.epay.merchant.entity.Merchant
 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+
+
+
+
+@Test
+void testOnboardingMerchant() {
+    // Mock dependencies
+    String generatedPassword = "testPassword123!";
+    when(passwordGenerator.generatePassword()).thenReturn(generatedPassword);
+    when(adminDao.onboardingMerchantAndMerchantUser(onboardingRequest)).thenReturn(onboardingDto);
+    when(merchantConfig.getPasswordExpiryMonths()).thenReturn(6);
+
+    // Execute method
+    MerchantResponse<OnboardingResponse> response = onboardingService.onboardingMerchant(onboardingRequest);
+
+    // Verify interactions
+    verify(onboardingValidator).validateOnboardingRequest(onboardingRequest);
+    verify(passwordGenerator).generatePassword();
+    verify(adminDao).onboardingMerchantAndMerchantUser(onboardingRequest);
+    verify(adminDao).getAdminRoleId();
+    verify(merchantConfig).getPasswordExpiryMonths();
+
+    // Validate response
+    assertNotNull(response);
+    assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+    assertEquals(1, response.getCount());
+    assertNotNull(response.getData());
+    assertEquals(1, response.getData().size());
+    assertEquals(onboardingDto.getMerchant(), response.getData().get(0).getMerchant());
+    assertEquals(onboardingDto.getUser(), response.getData().get(0).getUser());
+}
