@@ -276,4 +276,9 @@ class OnboardingServiceTest {
     }
 }
 
-
+Cannot invoke "com.epay.merchant.entity.MerchantUserRole.getId()" because the return value of "com.epay.merchant.dao.AdminDao.getAdminRoleId()" is null
+java.lang.NullPointerException: Cannot invoke "com.epay.merchant.entity.MerchantUserRole.getId()" because the return value of "com.epay.merchant.dao.AdminDao.getAdminRoleId()" is null
+	at com.epay.merchant.service.AdminServiceTest.testOnboardingMerchant(AdminServiceTest.java:146)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
