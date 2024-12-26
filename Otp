@@ -137,4 +137,55 @@ OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader clas
 AdminServiceTest > onboardingTest() FAILED
     java.lang.NullPointerException at AdminServiceTest.java:85
 1 test completed, 1 failed
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+import com.epay.merchant.mapper.MerchantMapper;
+private final MerchantMapper mapper;
+
+   public MerchantResponse<OnboardingResponse> onboardingMerchant(OnboardingRequest onboardingRequest) {
+        //Step 1 : OnboardingRequest validation
+        onboardingValidator.validateOnboardingRequest(onboardingRequest);
+        //Step 2 : Set up the default value for Merchant and Merchant User
+        String password = passwordGenerator.generatePassword();
+        setMerchantDefaultValues(onboardingRequest, password);
+        //Step 3 : Save the Merchant and Merchant User Data in DB
+        OnboardingDto onboardingDto = adminDao.onboardingMerchantAndMerchantUser(onboardingRequest);
+        //Step 4 : Send Notification to Merchant User
+        sendNotification(onboardingDto);
+        //Step 5 : Build MerchantResponse and return to caller
+        return MerchantResponse.<OnboardingResponse>builder().data(List.of(OnboardingResponse.builder().merchant(onboardingDto.getMerchant()).user(onboardingDto.getUser()).build())).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
+    private void setMerchantDefaultValues(OnboardingRequest onboardingRequest, String password) {
+        setMerchantDefaultValues(onboardingRequest.getMerchant());
+        setMerchantUserDefaultValues(onboardingRequest.getUser(), password);
+    }
+    private void setMerchantDefaultValues(MerchantDto merchant) {
+        if (Arrays.stream(NotificationType.values()).noneMatch(nt -> StringUtils.equalsAnyIgnoreCase(merchant.getNotification(), nt.name()))) {
+            merchant.setNotification(NotificationType.BOTH.name());
+        }
+        if (StringUtils.isEmpty(merchant.getEncryptedAlgo())) {
+            merchant.setEncryptedAlgo(HashAlgorithm.SHA_512.toString());
+        }
+        if (ObjectUtils.isEmpty(merchant.getStatus())) {
+            merchant.setStatus(MerchantStatus.ACTIVE);
+        }
+    }
+    private void setMerchantUserDefaultValues(MerchantUserDto user, String password) {
+        user.setRole(adminDao.getAdminRoleId().getId());
+        if (ObjectUtils.isEmpty(user.getStatus())) {
+            user.setStatus(UserStatus.ACTIVE);
+        }
+        user.setPassword(EncryptionDecryptionUtil.hashValue(password));
+        user.setPasswordExpiryTime(DateTimeUtils.getFutureDateByMonth(merchantConfig.getPasswordExpiryMonths()));
+    }
+    private void sendNotification(OnboardingDto onboardingDto) {
+        switch (NotificationType.getType(onboardingDto.getMerchant().getNotification())) {
+            case NotificationType.EMAIL -> sendEmail();
+            case NotificationType.SMS -> sendSMS();
+            default -> {//BOTH
+                sendEmail();
+                sendSMS();
+            }
+        }
+    }
+
 
