@@ -1,0 +1,34 @@
+ public MerchantResponse<UserProfileResponse> getProfileResponse(String userName) {
+
+        // Step 1 : Get User Name from Security Context
+        // TODO UserName Need to get from SecurityContext jwtService
+        //String userName = jwtService.getUsernameFromToken(authHeader);
+
+        // Step 2 : Get Merchant User Info of Logged in Merchant User
+        MerchantUserDto merchantUserDto = merchantUserDao.findByUserNameOrEmailOrMobilePhone(userName, userName, userName);
+        if (ObjectUtils.isEmpty(merchantUserDto)) {
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName"));
+        }
+
+        UserProfileResponse userProfileResponse = merchantMapper.mapMerchantUserDtoToResponse(merchantUserDto);
+
+        // Step 4 : Building the response
+        return MerchantResponse.<UserProfileResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(userProfileResponse)).count(1L).total(1L).build();
+    }
+
+
+public class MerchantUserDao {
+
+    private final MerchantUserRepository merchantUserRepository;
+    private final UserMenuPermissionRepository userMenuPermissionRepository;
+    private final MerchantMapper merchantMapper;
+
+    public MerchantUserDto findByUserNameOrEmailOrMobilePhone(String userName, String email, String phone) {
+        MerchantUser merchantUser = merchantUserRepository.findByUserNameOrEmailOrMobilePhone(userName, email, phone);
+        return merchantMapper.mapMerchantUserEntityToDto(merchantUser);
+    }
+
+
+@Mapper(builder = @Builder(disableBuilder = true), componentModel = "spring")
+public interface MerchantMapper {
+UserProfileResponse mapMerchantUserDtoToResponse(MerchantUserDto merchantUserDto);
