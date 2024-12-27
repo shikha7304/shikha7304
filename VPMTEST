@@ -193,3 +193,41 @@ public class MerchantUserServiceTest {
         verifyNoInteractions(merchantMapper);
     }
 }
+
+
+
+
+public UUID save(OtpGenerationDto otpGenerationDto) {
+        MerchantUserDto merchantUser = merchantUserDao.findByUserNameOrEmailOrMobilePhoneAndStatus(otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), UserStatus.ACTIVE);
+        OtpManagement otpManagement = otpManagementMapper.mapOtpGenerationDtoToOtpManagement(otpGenerationDto);
+        otpManagement.setUserId(merchantUser.getId());
+        otpManagement = otpManagementRepository.save(otpManagement);
+        return otpManagement.getId();
+    }
+
+
+@Test
+    void TestSave() {
+
+        MerchantUser merchantUserDto = MerchantUser.builder()
+                .id(UUID.randomUUID())
+                .city("mumbai")
+                .build();
+        OtpManagement otpManagement = new OtpManagement();
+        MerchantUser merchantUser = new MerchantUser();
+        merchantUser.setUserName("userName");
+        otpManagement.setId(UUID.fromString("d149657e-0af5-497a-a70e-289a8cb2f46d"));
+        otpManagement.setUserId(UUID.randomUUID());
+        OtpGenerationDto otpGenerationDto = OtpGenerationDto.builder()
+                        .otpCode("1234")
+
+                                .build();
+
+        when(merchantUserRepository.findByUserNameOrEmailOrMobilePhoneAndStatus(otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), UserStatus.ACTIVE)).thenReturn(Optional.of(merchantUser));
+        when(otpManagementMapper.mapOtpGenerationDtoToOtpManagement(otpGenerationDto)).thenReturn(otpManagement);
+        when(otpManagementRepository.save(otpManagement)).thenReturn(otpManagement);
+        when(merchantUserDao.findByUserNameOrEmailOrMobilePhoneAndStatus("userName", "userName", "userName",UserStatus.ACTIVE)).thenReturn(merchantUserDto);
+        UUID result= otpManagementDao.save(otpGenerationDto);
+        assertEquals(result, otpManagement.getId());
+
+    }
