@@ -1,86 +1,92 @@
+  @GetMapping("/profile/{UserName}")
+    @Operation(summary = "Get Merchant User Profile details.", description = "Get Logged in user profile and view details ")
+    public MerchantResponse<UserProfileResponse> getProfileResponse(@PathVariable String UserName) {
+        // TODO UserName Need to get from SecurityContext
+        return merchantUserService.getProfileResponse(UserName);
+    }
+
+public class MerchantUserService {
+
+    private final MerchantInfoDao merchantInfoDao;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantMapper merchantMapper;
+
+    LoggerUtility log = LoggerFactoryUtility.getLogger(ValidationController.class);
+
+    /**
  public MerchantResponse<UserProfileResponse> getProfileResponse(String userName) {
 
         // Step 1 : Get User Name from Security Context
         // TODO UserName Need to get from SecurityContext jwtService
-        //String userName = jwtService.getUsernameFromToken(authHeader);
 
         // Step 2 : Get Merchant User Info of Logged in Merchant User
-        MerchantUserDto merchantUserDto = merchantUserDao.findByUserNameOrEmailOrMobilePhone(userName, userName, userName);
-        if (ObjectUtils.isEmpty(merchantUserDto)) {
-            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName"));
-        }
+        MerchantUserDto merchantUserDto = merchantUserDao.findByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName);
 
-        UserProfileResponse userProfileResponse = merchantMapper.mapMerchantUserDtoToResponse(merchantUserDto);
+        // Step 3 : convert DTO to UserProfileResponse
+        UserProfileResponse userProfileResponse = merchantUserDao.mapMerchantUserDtoToResponse(merchantUserDto);
 
         // Step 4 : Building the response
         return MerchantResponse.<UserProfileResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(userProfileResponse)).count(1L).total(1L).build();
     }
 
 
-public class MerchantUserDao {
+@Test
+    void testGetAllAccessMerchantInfoEmptyResult() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<MerchantInfoDto> emptyPage = Page.empty();
 
-    private final MerchantUserRepository merchantUserRepository;
-    private final UserMenuPermissionRepository userMenuPermissionRepository;
-    private final MerchantMapper merchantMapper;
+        when(merchantInfoDao.getALl(pageable)).thenReturn(emptyPage);
+        when(merchantMapper.mapMerchantInfoDTOListToResponseList(Collections.emptyList())).thenReturn(Collections.emptyList());
 
-    public MerchantUserDto findByUserNameOrEmailOrMobilePhone(String userName, String email, String phone) {
-        MerchantUser merchantUser = merchantUserRepository.findByUserNameOrEmailOrMobilePhone(userName, email, phone);
+        MerchantResponse<MerchantInfoResponse> result = merchantUserService.getAllAccessMerchantInfo("userName", pageable);
+
+        assertNotNull(result);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, result.getStatus());
+        assertEquals(0, result.getCount());
+        assertEquals(0, result.getTotal());
+        assertEquals(Collections.emptyList(), result.getData());
+
+        verify(merchantInfoDao, times(1)).getALl(pageable);
+        verify(merchantMapper, times(1)).mapMerchantInfoDTOListToResponseList(Collections.emptyList());
+    }
+
+ public MerchantUserDto findByUserNameOrEmailOrMobilePhoneAndStatus(String userName, String email, String phone) {
+        MerchantUser merchantUser = merchantUserRepository.findByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, phone, UserStatus.ACTIVE.name()).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName")));
         return merchantMapper.mapMerchantUserEntityToDto(merchantUser);
     }
 
 
-@Mapper(builder = @Builder(disableBuilder = true), componentModel = "spring")
-public interface MerchantMapper {
-UserProfileResponse mapMerchantUserDtoToResponse(MerchantUserDto merchantUserDto);
-
-
-
-
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.util.ObjectUtils;
-
-public class MerchantServiceTest {
-
-    @Mock
-    private MerchantUserDao merchantUserDao;
-
-    @Mock
-    private MerchantMapper merchantMapper;
-
-    @InjectMocks
-    private MerchantService merchantService; // Replace with the actual service class containing getProfileResponse
-
-    private final String userName = "testUser";
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
+ public UserProfileResponse mapMerchantUserDtoToResponse(MerchantUserDto merchantUserDto){
+        UserProfileResponse userProfileResponse = merchantMapper.mapMerchantUserDtoToResponse(merchantUserDto);
+        userProfileResponse.setRoleName(merchantUserRepository.findUserRoleByUserId(merchantUserDto.getId()));
+        return userProfileResponse;
     }
 
+
+public class UserProfileResponse {
+
+    private String userName;
+    private String firstName;
+    private String middleName;
+    private String lastName;
+    private String email;
+    private String mobilePhone;
+    private String roleName;
+    private Long createdAt;
+    private UserStatus status;
+
+}
+
     @Test
-    void testGetProfileResponse_Success() {
-        // Mock data
+    void testGetProfileResponse_Success(){
+        String userName = "testUser";
         MerchantUserDto mockMerchantUserDto = new MerchantUserDto();
         UserProfileResponse mockUserProfileResponse = new UserProfileResponse();
 
-        // Mock behavior
-        when(merchantUserDao.findByUserNameOrEmailOrMobilePhone(userName, userName, userName))
-            .thenReturn(mockMerchantUserDto);
-        when(merchantMapper.mapMerchantUserDtoToResponse(mockMerchantUserDto))
-            .thenReturn(mockUserProfileResponse);
+        when(merchantUserDao.findByUserNameOrEmailOrMobilePhone(userName, userName, userName)).thenReturn(mockMerchantUserDto);
+        when(merchantMapper.mapMerchantUserDtoToResponse(mockMerchantUserDto)).thenReturn(mockUserProfileResponse);
+        MerchantResponse<UserProfileResponse> response = merchantUserService.getProfileResponse(userName);
 
-        // Call method
-        MerchantResponse<UserProfileResponse> response = merchantService.getProfileResponse(userName);
-
-        // Assertions
         assertNotNull(response);
         assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
         assertEquals(1L, response.getCount());
@@ -88,26 +94,22 @@ public class MerchantServiceTest {
         assertFalse(ObjectUtils.isEmpty(response.getData()));
         assertEquals(mockUserProfileResponse, response.getData().get(0));
 
-        // Verify interactions
         verify(merchantUserDao, times(1)).findByUserNameOrEmailOrMobilePhone(userName, userName, userName);
         verify(merchantMapper, times(1)).mapMerchantUserDtoToResponse(mockMerchantUserDto);
+
     }
 
     @Test
     void testGetProfileResponse_UserNotFound() {
-        // Mock behavior
-        when(merchantUserDao.findByUserNameOrEmailOrMobilePhone(userName, userName, userName))
-            .thenReturn(null);
+        String userName = "";
 
-        // Assertions
-        MerchantException exception = assertThrows(MerchantException.class, 
-            () -> merchantService.getProfileResponse(userName));
+        when(merchantUserDao.findByUserNameOrEmailOrMobilePhone(userName, userName, userName)).thenReturn(null);
+        when(merchantUserDao.mapMerchantUserDtoToResponse(merchantUserDto)).thenReturn(any());
+        MerchantException exception = assertThrows(MerchantException.class, () -> merchantUserService.getProfileResponse(userName));
 
         assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
         assertTrue(exception.getMessage().contains("UserName"));
 
-        // Verify interactions
         verify(merchantUserDao, times(1)).findByUserNameOrEmailOrMobilePhone(userName, userName, userName);
         verifyNoInteractions(merchantMapper);
     }
-}
