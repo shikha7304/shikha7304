@@ -231,3 +231,123 @@ public UUID save(OtpGenerationDto otpGenerationDto) {
         assertEquals(result, otpManagement.getId());
 
     }
+
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+import java.util.Optional;
+import java.util.UUID;
+
+class OtpManagementDaoTest {
+
+    @Mock
+    private MerchantUserRepository merchantUserRepository;
+
+    @Mock
+    private OtpManagementRepository otpManagementRepository;
+
+    @Mock
+    private OtpManagementMapper otpManagementMapper;
+
+    @InjectMocks
+    private OtpManagementDao otpManagementDao;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testSave_Success() {
+        // Arrange
+        UUID userId = UUID.randomUUID();
+        UUID otpId = UUID.randomUUID();
+
+        MerchantUser merchantUser = MerchantUser.builder()
+                .id(userId)
+                .userName("userName")
+                .city("mumbai")
+                .build();
+
+        OtpGenerationDto otpGenerationDto = OtpGenerationDto.builder()
+                .userName("userName")
+                .otpCode("1234")
+                .build();
+
+        OtpManagement otpManagement = new OtpManagement();
+        otpManagement.setId(otpId);
+        otpManagement.setUserId(userId);
+
+        when(merchantUserRepository.findByUserNameOrEmailOrMobilePhoneAndStatus(
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                UserStatus.ACTIVE
+        )).thenReturn(Optional.of(merchantUser));
+
+        when(otpManagementMapper.mapOtpGenerationDtoToOtpManagement(otpGenerationDto))
+                .thenReturn(otpManagement);
+
+        when(otpManagementRepository.save(otpManagement))
+                .thenReturn(otpManagement);
+
+        // Act
+        UUID result = otpManagementDao.save(otpGenerationDto);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(otpId, result);
+
+        // Verify interactions
+        verify(merchantUserRepository, times(1)).findByUserNameOrEmailOrMobilePhoneAndStatus(
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                UserStatus.ACTIVE
+        );
+        verify(otpManagementMapper, times(1)).mapOtpGenerationDtoToOtpManagement(otpGenerationDto);
+        verify(otpManagementRepository, times(1)).save(otpManagement);
+    }
+
+    @Test
+    void testSave_UserNotFound() {
+        // Arrange
+        OtpGenerationDto otpGenerationDto = OtpGenerationDto.builder()
+                .userName("nonExistentUser")
+                .otpCode("1234")
+                .build();
+
+        when(merchantUserRepository.findByUserNameOrEmailOrMobilePhoneAndStatus(
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                UserStatus.ACTIVE
+        )).thenReturn(Optional.empty());
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, 
+                () -> otpManagementDao.save(otpGenerationDto));
+
+        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("UserName"));
+
+        // Verify interactions
+        verify(merchantUserRepository, times(1)).findByUserNameOrEmailOrMobilePhoneAndStatus(
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                otpGenerationDto.getUserName(),
+                UserStatus.ACTIVE
+        );
+        verifyNoInteractions(otpManagementMapper);
+        verifyNoInteractions(otpManagementRepository);
+    }
+}
+
+
