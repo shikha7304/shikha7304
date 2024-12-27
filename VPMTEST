@@ -113,3 +113,83 @@ public class UserProfileResponse {
         verify(merchantUserDao, times(1)).findByUserNameOrEmailOrMobilePhone(userName, userName, userName);
         verifyNoInteractions(merchantMapper);
     }
+
+
+
+
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.util.ObjectUtils;
+
+public class MerchantUserServiceTest {
+
+    @Mock
+    private MerchantUserDao merchantUserDao;
+
+    @Mock
+    private MerchantMapper merchantMapper;
+
+    @InjectMocks
+    private MerchantUserService merchantUserService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testGetProfileResponse_Success() {
+        // Arrange
+        String userName = "testUser";
+        MerchantUserDto mockMerchantUserDto = new MerchantUserDto();
+        UserProfileResponse mockUserProfileResponse = new UserProfileResponse();
+
+        when(merchantUserDao.findByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName))
+            .thenReturn(mockMerchantUserDto);
+        when(merchantUserDao.mapMerchantUserDtoToResponse(mockMerchantUserDto))
+            .thenReturn(mockUserProfileResponse);
+
+        // Act
+        MerchantResponse<UserProfileResponse> response = merchantUserService.getProfileResponse(userName);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(1L, response.getCount());
+        assertEquals(1L, response.getTotal());
+        assertFalse(ObjectUtils.isEmpty(response.getData()));
+        assertEquals(mockUserProfileResponse, response.getData().get(0));
+
+        // Verify
+        verify(merchantUserDao, times(1)).findByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName);
+        verify(merchantUserDao, times(1)).mapMerchantUserDtoToResponse(mockMerchantUserDto);
+    }
+
+    @Test
+    void testGetProfileResponse_UserNotFound() {
+        // Arrange
+        String userName = "nonExistentUser";
+
+        when(merchantUserDao.findByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName))
+            .thenThrow(new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE,
+                MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName")));
+
+        // Act & Assert
+        MerchantException exception = assertThrows(MerchantException.class, 
+            () -> merchantUserService.getProfileResponse(userName));
+
+        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("UserName"));
+
+        // Verify
+        verify(merchantUserDao, times(1)).findByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName);
+        verifyNoInteractions(merchantMapper);
+    }
+}
