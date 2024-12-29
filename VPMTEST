@@ -1,42 +1,147 @@
- @Test
-    void TestSave() {
+package com.epay.merchant.service;
 
-        MerchantUserDto merchantUserDto = MerchantUserDto.builder()
-                .id(UUID.randomUUID())
-                .city("mumbai")
-                .userName("testUser")
-                .build();
-        OtpManagement otpManagement = new OtpManagement();
-        MerchantUser merchantUser = new MerchantUser();
-        merchantUser.setUserName("userName");
-        merchantUser.setId(UUID.randomUUID());
-        otpManagement.setId(UUID.fromString("d149657e-0af5-497a-a70e-289a8cb2f46d"));
-        otpManagement.setUserId(merchantUser.getId());
-        OtpGenerationDto otpGenerationDto = OtpGenerationDto.builder()
-                        .otpCode("1234").build();
+import com.epay.merchant.dao.HelpSupportDao;
+import com.epay.merchant.dto.HelpSupportTeamDto;
+import com.epay.merchant.model.response.HelpSupportResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.validator.HelpSupportValidator;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
-        when(merchantUserRepository.findByUserNameOrEmailOrMobilePhoneAndStatus(otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), UserStatus.ACTIVE)).thenReturn(Optional.of(merchantUser));
-        when(otpManagementMapper.mapOtpGenerationDtoToOtpManagement(otpGenerationDto)).thenReturn(otpManagement);
-        when(otpManagementRepository.save(otpManagement)).thenReturn(otpManagement);
-        when(merchantUserDao.findByUserNameOrEmailOrMobilePhoneAndStatus(merchantUserDto.getUserName(),merchantUserDto.getEmail(),merchantUserDto.getMobilePhone(),merchantUserDto.getStatus())).thenReturn(merchantUserDto);
-        UUID result= otpManagementDao.save(otpGenerationDto);
-        assertEquals(result, otpManagement.getId());
+import java.util.List;
 
+/**
+ * Class Name: HelpSupportService
+ * *
+ * Description:
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Service
+@RequiredArgsConstructor
+public class HelpSupportService {
+
+    private final HelpSupportValidator helpSupportValidator;
+    private final HelpSupportDao helpSupportDao;
+
+    /**
+     * Get Team information.
+     * @return OnboardingDto
+     */
+    public MerchantResponse<HelpSupportResponse> getTeamsInfo(String mId) {
+        //Step 1 : Get Active teams from DB.
+        helpSupportValidator.validateCreateHelpSupportRequest(mId);
+        List<HelpSupportResponse> teams = helpSupportDao.getTeam(mId);
+        //Step 2 : Build MerchantResponse and return to caller
+        return MerchantResponse.<HelpSupportResponse>builder().data(teams).status(MerchantConstant.RESPONSE_SUCCESS).count((long) teams.size()).build();
+    }
+    /**
+     * Update Team information.
+     * @param mId String
+     * @param helpSupportTeamDto HelpSupportTeamDto
+     * @return MerchantResponse
+     */
+    public MerchantResponse<HelpSupportResponse> updateTeam(String mId, HelpSupportTeamDto helpSupportTeamDto) {
+        helpSupportTeamDto.setMId(mId);
+        //Step 1 : HelpSupportValidator validation
+        helpSupportValidator.validateUpdateHelpSupportRequest(helpSupportTeamDto);
+        //Step 2 : Save the Merchant and Merchant User Data in DB
+        HelpSupportResponse helpSupportResponses = helpSupportDao.updateTeam(helpSupportTeamDto);
+        //Step 3 : Build MerchantResponse and return to caller
+        return MerchantResponse.<HelpSupportResponse>builder().data(List.of(helpSupportResponses)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
+}
+
+
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.HelpSupportDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.dto.HelpSupportTeamDto;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.HelpSupportType;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+
+/**
+ * Class Name: HelpSupportValidator
+ * *
+ * Description: A validator class for user validation requests.
+ * Extends the BaseValidator to provide common validation functionality.
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
+@Component
+@RequiredArgsConstructor
+public class HelpSupportValidator extends BaseValidator {
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(HelpSupportValidator.class);
+    private final HelpSupportDao helpSupportDao;
+    /**
+     * Validates the user validation request.
+     * * @param helpSupportTeamDto the request object containing user details to be validated.
+     */
+    public void validateCreateHelpSupportRequest(String mId) {
+        logger.debug("HelpSupport validation start for mId: {}", mId);
+        errorDtoList = new ArrayList<>();
+        checkMandatoryField(mId, "mId");
+        validatedAlreadyPresent(mId);
+        logger.debug("HelpSupport field validation completed for {}", mId);
+    }
+    public void validateUpdateHelpSupportRequest(HelpSupportTeamDto helpSupportTeamDto) {
+        logger.debug("HelpSupport validation start for HelpSupportTeamDto: {}", helpSupportTeamDto);
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(helpSupportTeamDto);
+        validateFieldsValue(helpSupportTeamDto);
+        validatedAlreadyPresent(helpSupportTeamDto.getMId());
+    }
+    /**
+     * Validates that all mandatory fields in the request are present.
+     * * @param helpSupportTeamDto the request object containing user details to be validated.
+     */
+    private void validateMandatoryFields(HelpSupportTeamDto helpSupportTeamDto) {
+        checkMandatoryField(helpSupportTeamDto.getMId(), "MId");
+        checkMandatoryField(helpSupportTeamDto.getValue(), "Value");
+        throwIfErrors();
+    }
+    /**
+     * Validates the values of fields in the request object.
+     * * @param helpSupportTeamDto the request object containing user details to be validated.
+     */
+    private void validateFieldsValue(HelpSupportTeamDto helpSupportTeamDto) {
+        if(helpSupportTeamDto.getType() == HelpSupportType.EMAIL)
+            validateFieldWithRegex(helpSupportTeamDto.getValue(), MerchantConstant.EMAIL_LENGTH, MerchantConstant.EMAIL_REGEX, "Email", "Please check {0} Format or Max length");
+        if(helpSupportTeamDto.getType() == HelpSupportType.PHONE_NUMBER)
+            validateFieldWithRegex(helpSupportTeamDto.getValue(), MerchantConstant.PHONE_REGEX, "Phone Number", "Please check Phone Number Format for {0}");
+        throwIfErrors();
     }
 
-public UUID save(OtpGenerationDto otpGenerationDto) {
-        MerchantUserDto merchantUser = merchantUserDao.findByUserNameOrEmailOrMobilePhoneAndStatus(otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), otpGenerationDto.getUserName(), UserStatus.ACTIVE);
-        OtpManagement otpManagement = otpManagementMapper.mapOtpGenerationDtoToOtpManagement(otpGenerationDto);
-        otpManagement.setUserId(merchantUser.getId());
-        otpManagement = otpManagementRepository.save(otpManagement);
-        return otpManagement.getId();
+    /**
+     * validatedAlreadyPresent
+     * @param mId String
+     */
+    void validatedAlreadyPresent(String mId) {
+        if (!helpSupportDao.isExistsByMId(mId)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.NOT_FOUND_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "MId")).build());
+        }
+        throwIfErrors();
     }
+}
 
-
-Cannot invoke "com.epay.merchant.dto.MerchantUserDto.getId()" because "merchantUser" is null
-java.lang.NullPointerException: Cannot invoke "com.epay.merchant.dto.MerchantUserDto.getId()" because "merchantUser" is null
-	at com.epay.merchant.dao.OtpManagementDao.save(OtpManagementDao.java:43)
-	at com.epay.merchant.dao.OtpManagementDaoTest.TestSave(OtpManagementDaoTest.java:93)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
