@@ -522,3 +522,86 @@ class HelpSupportServiceTest {
         verify(helpSupportDao).getTeam(mId);
     }
 }
+
+
+
+#####DAO####
+
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.HelpSupportTeamDto;
+import com.epay.merchant.entity.*;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.response.HelpSupportResponse;
+import com.epay.merchant.repository.*;
+import com.epay.merchant.util.DateTimeUtils;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.reactivestreams.Publisher;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+/**
+ * Class Name: HelpSupportDao
+ * *
+ * Description: DB layer logic for Help and Support
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class HelpSupportDao {
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(HelpSupportDao.class);
+    private final HelpSupportTeamRepository helpSupportTeamRepository;
+    private final MerchantInfoRepository merchantInfoRepository;
+    private final MerchantMapper mapper;
+
+    /**
+     * Creating Help and Support team records in database.
+     *
+     * @return HelpSupportResponse
+     */
+    public List<HelpSupportResponse> getTeam(String mId) {
+        List<HelpSupportTeam> helpSupportTeams = helpSupportTeamRepository.findByMid(mId);
+        return helpSupportTeams.stream().map(mapper::mapHelpSupportTeamEntityToResponse).toList();
+    }
+
+    /**
+     * Updating Help and Support team record in database.
+     * @param helpSupportDto HelpSupportDto
+     * @return HelpSupportResponse
+     */
+    @Transactional
+    public HelpSupportResponse updateTeam(HelpSupportTeamDto helpSupportDto) {
+        HelpSupportTeam helpSupportTeam = helpSupportTeamRepository.findByMidAndType(helpSupportDto.getMId(), helpSupportDto.getType())
+                .orElse(new HelpSupportTeam());//TODO: do we need this to create if it is not present.
+        helpSupportTeam.setValue(helpSupportDto.getValue());
+        helpSupportTeam.setUpdatedAt(DateTimeUtils.getCurrentTimeInMills());
+//        helpSupportTeam.setStatus(STATUS_ACTIVE);
+//        EPayPrincipal ePayPrincipal = EPayIdentityUtil.getUserPrincipal();
+//        helpSupportTeam.getUpdatedBy(ePayPrincipal.getUserId());
+        helpSupportTeam = helpSupportTeamRepository.save(helpSupportTeam);
+        log.info("Updated Help&Support: {}", helpSupportTeam);
+        return mapper.mapHelpSupportTeamEntityToResponse(helpSupportTeam);
+    }
+
+    /**
+     * Is MId exist in the system.
+     * @param mId String
+     * @return boolean
+     */
+    public boolean isExistsByMId(String mId) {
+        return merchantInfoRepository.existsBymId(mId);
+    }
+}
+
