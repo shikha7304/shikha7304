@@ -267,3 +267,26 @@ public interface HelpSupportTeamRepository extends JpaRepository<HelpSupportTeam
     Optional<HelpSupportTeam> findByMidAndType(@Param("mId")String mId, @PathVariable("type") HelpSupportType type);
 
 }
+
+
+package com.epay.merchant.util.enums;
+
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.util.ErrorConstants;
+
+import java.text.MessageFormat;
+import java.util.Arrays;
+
+public enum HelpSupportType {
+    PHONE_NUMBER, EMAIL;
+    public static HelpSupportType getType(String type) {
+        return Arrays.stream(values()).filter(r -> r.name().equalsIgnoreCase(type)).findFirst().orElseThrow(() -> new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Type", "Valid HelpSupportType are " + Arrays.toString(HelpSupportType.values()))));
+    }
+}
+public class MerchantConstant {
+    public static final String ERROR_NEW_PASSWORD_SAME_AS_OLD = "The new password must be different from the old password.";
+    public static final String ERROR_NEW_AND_CONFIRM_PASSWORD_MISMATCH = "The new password and confirmation password do not match.";
+    public static final String ERROR_NEW_PASSWORD_REUSED = "The new password cannot be the same as any of the last five passwords.";
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String PAGE_ACTIVE = "ACTIVE";
+}
