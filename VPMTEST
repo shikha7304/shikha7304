@@ -463,3 +463,62 @@ public class HelpSupportValidatorTest {
         verify(helpSupportDao).isExistsByMId(teamDto.getMId());
     }
 }
+
+
+
+
+
+
+
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+ 
+import java.util.List;
+ 
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+ 
+class HelpSupportServiceTest {
+ 
+    @Mock
+    private HelpSupportValidator helpSupportValidator;
+ 
+    @Mock
+    private HelpSupportDao helpSupportDao;
+ 
+    @InjectMocks
+    private HelpSupportService helpSupportService;
+ 
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+ 
+    @Test
+    void testGetTeamsInfo() {
+        // Arrange
+        String mId = "merchant123";
+        List<HelpSupportResponse> mockTeams = List.of(
+                new HelpSupportResponse("Team1"),
+                new HelpSupportResponse("Team2")
+        );
+        when(helpSupportDao.getTeam(mId)).thenReturn(mockTeams);
+ 
+        // Act
+        MerchantResponse<HelpSupportResponse> response = helpSupportService.getTeamsInfo(mId);
+ 
+        // Assert
+        assertNotNull(response);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(2, response.getCount());
+        assertEquals(mockTeams, response.getData());
+ 
+        // Verify
+        verify(helpSupportValidator).validateCreateHelpSupportRequest(mId);
+        verify(helpSupportDao).getTeam(mId);
+    }
+}
