@@ -58,6 +58,83 @@ public class HelpSupportService {
     }
 }
 
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.HelpSupportTeamDto;
+import com.epay.merchant.entity.*;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.response.HelpSupportResponse;
+import com.epay.merchant.repository.*;
+import com.epay.merchant.util.DateTimeUtils;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+import static com.epay.merchant.util.MerchantConstant.STATUS_ACTIVE;
+
+/**
+ * Class Name: HelpSupportDao
+ * *
+ * Description: DB layer logic for Help and Support
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class HelpSupportDao {
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(HelpSupportDao.class);
+    private final HelpSupportTeamRepository helpSupportTeamRepository;
+    private final MerchantInfoRepository merchantInfoRepository;
+    private final MerchantMapper mapper;
+
+    /**
+     * Creating Help and Support team records in database.
+     * @return HelpSupportResponse
+     */
+    public List<HelpSupportResponse> getTeam(String mId) {
+        List<HelpSupportTeam> helpSupportTeams = helpSupportTeamRepository.findByMid(mId);
+        return helpSupportTeams.stream().map(mapper::mapHelpSupportTeamEntityToResponse).toList();
+    }
+
+    /**
+     * Updating Help and Support team record in database.
+     * @param helpSupportDto HelpSupportDto
+     * @return HelpSupportResponse
+     */
+    @Transactional
+    public HelpSupportResponse updateTeam(HelpSupportTeamDto helpSupportDto) {
+        HelpSupportTeam helpSupportTeam = helpSupportTeamRepository.findByMidAndType(helpSupportDto.getMId(), helpSupportDto.getType())
+                .orElse(new HelpSupportTeam());//TODO: do we need this to create if it is not present.
+        helpSupportTeam.setValue(helpSupportDto.getValue());
+        helpSupportTeam.setUpdatedAt(DateTimeUtils.getCurrentTimeInMills());
+//        helpSupportTeam.setStatus(STATUS_ACTIVE);
+//        EPayPrincipal ePayPrincipal = EPayIdentityUtil.getUserPrincipal();
+//        helpSupportTeam.getUpdatedBy(ePayPrincipal.getUserId());
+        helpSupportTeam = helpSupportTeamRepository.save(helpSupportTeam);
+        log.info("Updated Help&Support: {}", helpSupportTeam);
+        return mapper.mapHelpSupportTeamEntityToResponse(helpSupportTeam);
+    }
+
+    /**
+     * Is MId exist in the system.
+     * @param mId String
+     * @return boolean
+     */
+    public boolean isExistsByMId(String mId) {
+        return merchantInfoRepository.existsBymId(mId);
+    }
+}
+
 
 package com.epay.merchant.validator;
 
@@ -146,189 +223,47 @@ public class HelpSupportValidator extends BaseValidator {
 }
 
 
+package com.epay.merchant.repository;
 
-#########################
-
-
-package com.epay.merchant.service;
-
-import com.epay.merchant.dao.HelpSupportDao;
-import com.epay.merchant.dto.HelpSupportTeamDto;
-import com.epay.merchant.model.response.HelpSupportResponse;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.entity.HelpSupportTeam;
 import com.epay.merchant.util.enums.HelpSupportType;
-import com.epay.merchant.validator.HelpSupportValidator;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
+/**
+ * Class Name: HelpSupportTeamRepository
+ * *
+ * Description:
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+public interface HelpSupportTeamRepository extends JpaRepository<HelpSupportTeam, UUID> {
 
-class HelpSupportServiceTest {
+    @Query("""
+            SELECT hs
+            FROM HelpSupportTeam hs
+            LEFT JOIN MerchantInfo m
+            ON hs.aggregatorId = m.aggregator WHERE m.mId = :mId
+            """)
+    List<HelpSupportTeam> findByMid(@Param("mId")String mId);
 
-    @Mock
-    private HelpSupportValidator helpSupportValidator;
+    @Query("""
+            SELECT hs 
+            FROM HelpSupportTeam hs 
+            LEFT JOIN MerchantInfo m 
+            ON hs.aggregatorId = m.aggregator WHERE m.mId = :mId AND hs.type = :type
+            """)
+    Optional<HelpSupportTeam> findByMidAndType(@Param("mId")String mId, @PathVariable("type") HelpSupportType type);
 
-    @Mock
-    private HelpSupportDao helpSupportDao;
-
-    @InjectMocks
-    private HelpSupportService helpSupportService;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    void testGetTeamsInfo_Success() {
-        String mId = "123";
-        List<HelpSupportResponse> mockTeams = List.of(new HelpSupportResponse(HelpSupportType.EMAIL,"Test","ACTIVE"));
-
-        when(helpSupportDao.getTeam(mId)).thenReturn(mockTeams);
-
-        MerchantResponse<HelpSupportResponse> response = helpSupportService.getTeamsInfo(mId);
-
-        verify(helpSupportValidator, times(1)).validateCreateHelpSupportRequest(mId);
-        verify(helpSupportDao, times(1)).getTeam(mId);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        assertEquals(mockTeams, response.getData());
-        assertEquals(1L, response.getCount());
-    }
-
-    @Test
-    void testUpdateTeam_Success() {
-        String mId = "123";
-        HelpSupportTeamDto helpSupportTeamDto = new HelpSupportTeamDto();
-        HelpSupportResponse mockResponse = new HelpSupportResponse(HelpSupportType.EMAIL,"Test","ACTIVE");
-
-        when(helpSupportDao.updateTeam(helpSupportTeamDto)).thenReturn(mockResponse);
-
-        MerchantResponse<HelpSupportResponse> response = helpSupportService.updateTeam(mId, helpSupportTeamDto);
-
-        verify(helpSupportValidator, times(1)).validateUpdateHelpSupportRequest(helpSupportTeamDto);
-        verify(helpSupportDao, times(1)).updateTeam(helpSupportTeamDto);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        assertEquals(1L, response.getCount());
-        assertEquals(mockResponse, response.getData().get(0));
-    }
 }
-
-
-package com.epay.merchant.validator;
-
-import com.epay.merchant.dao.HelpSupportDao;
-import com.epay.merchant.dto.HelpSupportTeamDto;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.HelpSupportType;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-
-import static org.mockito.Mockito.*;
-
-class HelpSupportValidatorTest {
-
-    @Mock
-    private HelpSupportDao helpSupportDao;
-
-    @InjectMocks
-    private HelpSupportValidator helpSupportValidator;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    void testValidateCreateHelpSupportRequest_Success() {
-        String mId = "123";
-        when(helpSupportDao.isExistsByMId(mId)).thenReturn(true);
-
-        helpSupportValidator.validateCreateHelpSupportRequest(mId);
-
-        verify(helpSupportDao, times(1)).isExistsByMId(mId);
-    }
-
-    @Test
-    void testValidateUpdateHelpSupportRequest_Success() {
-        HelpSupportTeamDto helpSupportTeamDto = new HelpSupportTeamDto();
-        helpSupportTeamDto.setMId("123");
-        helpSupportTeamDto.setType(HelpSupportType.EMAIL);
-        helpSupportTeamDto.setValue("test@example.com");
-
-        when(helpSupportDao.isExistsByMId(helpSupportTeamDto.getMId())).thenReturn(true);
-
-        helpSupportValidator.validateUpdateHelpSupportRequest(helpSupportTeamDto);
-
-        verify(helpSupportDao, times(1)).isExistsByMId(helpSupportTeamDto.getMId());
-    }
-
-    @Test
-    void testValidateMandatoryFields_ThrowsError() {
-        HelpSupportTeamDto helpSupportTeamDto = new HelpSupportTeamDto();
-        helpSupportTeamDto.setMId(null);
-        helpSupportTeamDto.setValue(null);
-
-        try {
-            helpSupportValidator.validateUpdateHelpSupportRequest(helpSupportTeamDto);
-        } catch (Exception e) {
-            assertEquals(ErrorConstants.MANDATORY_FIELD_ERROR_CODE, e.getMessage());
-        }
-    }
-
-    @Test
-    void testValidateFieldsValue_InvalidEmail() {
-        HelpSupportTeamDto helpSupportTeamDto = new HelpSupportTeamDto();
-        helpSupportTeamDto.setType(HelpSupportType.EMAIL);
-        helpSupportTeamDto.setValue("invalid-email");
-
-        try {
-            helpSupportValidator.validateUpdateHelpSupportRequest(helpSupportTeamDto);
-        } catch (Exception e) {
-            assertEquals("Please check Email Format or Max length", e.getMessage());
-        }
-    }
-}
-@Test
-void testValidatedAlreadyPresent_NotFound() {
-    // Arrange
-    String mId = "invalidMId";
-    when(helpSupportDao.isExistsByMId(mId)).thenReturn(false);
-
-    // Act & Assert
-    Exception exception = assertThrows(Exception.class, () -> helpSupportValidator.validatedAlreadyPresent(mId));
-    verify(helpSupportDao, times(1)).isExistsByMId(mId);
-
-    // Assert the error message
-    String expectedMessage = ErrorConstants.NOT_FOUND_ERROR_MESSAGE.replace("{0}", "MId");
-    assertTrue(exception.getMessage().contains(expectedMessage));
-}
-
-
-
-@Test
-void testValidatedAlreadyPresent_Success() {
-    // Arrange
-    String mId = "validMId";
-    when(helpSupportDao.isExistsByMId(mId)).thenReturn(true);
-
-    // Act
-    helpSupportValidator.validatedAlreadyPresent(mId);
-
-    // Assert
-    verify(helpSupportDao, times(1)).isExistsByMId(mId);
-    // No exceptions should be thrown
-}
-
