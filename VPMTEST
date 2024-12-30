@@ -605,3 +605,129 @@ public class HelpSupportDao {
     }
 }
 
+
+
+
+@ExtendWith(MockitoExtension.class)
+class HelpSupportDaoTest {
+
+    @Mock
+    private HelpSupportTeamRepository helpSupportTeamRepository;
+
+    @Mock
+    private MerchantInfoRepository merchantInfoRepository;
+
+    @Mock
+    private MerchantMapper mapper;
+
+    @InjectMocks
+    private HelpSupportDao helpSupportDao;
+
+    @Test
+    void testGetTeam_Success() {
+        // Arrange
+        String mId = "test-mId";
+
+        // Mock data
+        HelpSupportTeam mockTeam1 = new HelpSupportTeam();
+        mockTeam1.setId(1L);
+        mockTeam1.setValue("test@example.com");
+
+        HelpSupportTeam mockTeam2 = new HelpSupportTeam();
+        mockTeam2.setId(2L);
+        mockTeam2.setValue("1234567890");
+
+        List<HelpSupportTeam> mockTeams = List.of(mockTeam1, mockTeam2);
+
+        HelpSupportResponse response1 = new HelpSupportResponse();
+        response1.setValue("test@example.com");
+
+        HelpSupportResponse response2 = new HelpSupportResponse();
+        response2.setValue("1234567890");
+
+        when(helpSupportTeamRepository.findByMid(mId)).thenReturn(mockTeams);
+        when(mapper.mapHelpSupportTeamEntityToResponse(mockTeam1)).thenReturn(response1);
+        when(mapper.mapHelpSupportTeamEntityToResponse(mockTeam2)).thenReturn(response2);
+
+        // Act
+        List<HelpSupportResponse> result = helpSupportDao.getTeam(mId);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals("test@example.com", result.get(0).getValue());
+        assertEquals("1234567890", result.get(1).getValue());
+
+        // Verify
+        verify(helpSupportTeamRepository).findByMid(mId);
+        verify(mapper).mapHelpSupportTeamEntityToResponse(mockTeam1);
+        verify(mapper).mapHelpSupportTeamEntityToResponse(mockTeam2);
+    }
+
+    @Test
+    void testUpdateTeam_Success() {
+        // Arrange
+        HelpSupportTeamDto dto = new HelpSupportTeamDto();
+        dto.setMId("test-mId");
+        dto.setValue("updatedValue");
+        dto.setType(HelpSupportType.EMAIL);
+
+        HelpSupportTeam mockTeam = new HelpSupportTeam();
+        mockTeam.setValue("oldValue");
+
+        HelpSupportResponse mockResponse = new HelpSupportResponse();
+        mockResponse.setValue("updatedValue");
+
+        when(helpSupportTeamRepository.findByMidAndType(dto.getMId(), dto.getType()))
+                .thenReturn(java.util.Optional.of(mockTeam));
+        when(helpSupportTeamRepository.save(mockTeam)).thenReturn(mockTeam);
+        when(mapper.mapHelpSupportTeamEntityToResponse(mockTeam)).thenReturn(mockResponse);
+
+        // Act
+        HelpSupportResponse result = helpSupportDao.updateTeam(dto);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals("updatedValue", result.getValue());
+
+        // Verify
+        verify(helpSupportTeamRepository).findByMidAndType(dto.getMId(), dto.getType());
+        verify(helpSupportTeamRepository).save(mockTeam);
+        verify(mapper).mapHelpSupportTeamEntityToResponse(mockTeam);
+    }
+
+    @Test
+    void testIsExistsByMId_Success() {
+        // Arrange
+        String mId = "test-mId";
+
+        when(merchantInfoRepository.existsBymId(mId)).thenReturn(true);
+
+        // Act
+        boolean exists = helpSupportDao.isExistsByMId(mId);
+
+        // Assert
+        assertTrue(exists);
+
+        // Verify
+        verify(merchantInfoRepository).existsBymId(mId);
+    }
+
+    @Test
+    void testIsExistsByMId_NotExists() {
+        // Arrange
+        String mId = "test-mId";
+
+        when(merchantInfoRepository.existsBymId(mId)).thenReturn(false);
+
+        // Act
+        boolean exists = helpSupportDao.isExistsByMId(mId);
+
+        // Assert
+        assertFalse(exists);
+
+        // Verify
+        verify(merchantInfoRepository).existsBymId(mId);
+    }
+}
+
