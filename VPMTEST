@@ -290,3 +290,176 @@ public class MerchantConstant {
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String PAGE_ACTIVE = "ACTIVE";
 }
+
+
+
+
+
+
+
+########
+
+@ExtendWith(MockitoExtension.class)
+public class HelpSupportServiceTest {
+
+    @Mock
+    private HelpSupportValidator helpSupportValidator;
+
+    @Mock
+    private HelpSupportDao helpSupportDao;
+
+    @InjectMocks
+    private HelpSupportService helpSupportService;
+
+    @Test
+    void testGetTeamsInfo_Success() {
+        String mId = "test-mId";
+
+        // Mock Data
+        HelpSupportResponse team1 = new HelpSupportResponse();
+        HelpSupportResponse team2 = new HelpSupportResponse();
+        List<HelpSupportResponse> teams = List.of(team1, team2);
+
+        // Mock behavior
+        doNothing().when(helpSupportValidator).validateCreateHelpSupportRequest(mId);
+        when(helpSupportDao.getTeam(mId)).thenReturn(teams);
+
+        // Call service method
+        MerchantResponse<HelpSupportResponse> response = helpSupportService.getTeamsInfo(mId);
+
+        // Assertions
+        assertNotNull(response);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(2, response.getCount());
+        assertEquals(teams, response.getData());
+
+        // Verify interactions
+        verify(helpSupportValidator).validateCreateHelpSupportRequest(mId);
+        verify(helpSupportDao).getTeam(mId);
+    }
+
+    @Test
+    void testUpdateTeam_Success() {
+        String mId = "test-mId";
+        HelpSupportTeamDto teamDto = new HelpSupportTeamDto();
+        teamDto.setMId(mId);
+        teamDto.setType(HelpSupportType.EMAIL);
+        teamDto.setValue("test@example.com");
+
+        HelpSupportResponse updatedTeam = new HelpSupportResponse();
+
+        // Mock behavior
+        doNothing().when(helpSupportValidator).validateUpdateHelpSupportRequest(teamDto);
+        when(helpSupportDao.updateTeam(teamDto)).thenReturn(updatedTeam);
+
+        // Call service method
+        MerchantResponse<HelpSupportResponse> response = helpSupportService.updateTeam(mId, teamDto);
+
+        // Assertions
+        assertNotNull(response);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(1, response.getCount());
+        assertEquals(List.of(updatedTeam), response.getData());
+
+        // Verify interactions
+        verify(helpSupportValidator).validateUpdateHelpSupportRequest(teamDto);
+        verify(helpSupportDao).updateTeam(teamDto);
+    }
+
+    @Test
+    void testUpdateTeam_ValidationFailure() {
+        String mId = "test-mId";
+        HelpSupportTeamDto teamDto = new HelpSupportTeamDto();
+
+        // Mock behavior
+        doThrow(new IllegalArgumentException("Validation failed")).when(helpSupportValidator).validateUpdateHelpSupportRequest(teamDto);
+
+        // Call service method and assert exception
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> helpSupportService.updateTeam(mId, teamDto));
+        assertEquals("Validation failed", exception.getMessage());
+
+        // Verify interactions
+        verify(helpSupportValidator).validateUpdateHelpSupportRequest(teamDto);
+        verifyNoInteractions(helpSupportDao);
+    }
+}
+
+
+
+
+
+
+
+@ExtendWith(MockitoExtension.class)
+public class HelpSupportValidatorTest {
+
+    @Mock
+    private HelpSupportDao helpSupportDao;
+
+    @InjectMocks
+    private HelpSupportValidator helpSupportValidator;
+
+    @Test
+    void testValidateCreateHelpSupportRequest_Success() {
+        String mId = "valid-mId";
+
+        // Mock behavior
+        when(helpSupportDao.isExistsByMId(mId)).thenReturn(true);
+
+        // Call validation method
+        assertDoesNotThrow(() -> helpSupportValidator.validateCreateHelpSupportRequest(mId));
+
+        // Verify interactions
+        verify(helpSupportDao).isExistsByMId(mId);
+    }
+
+    @Test
+    void testValidateCreateHelpSupportRequest_MIdNotFound() {
+        String mId = "invalid-mId";
+
+        // Mock behavior
+        when(helpSupportDao.isExistsByMId(mId)).thenReturn(false);
+
+        // Call validation method and assert exception
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> helpSupportValidator.validateCreateHelpSupportRequest(mId));
+        assertTrue(exception.getMessage().contains("MId"));
+
+        // Verify interactions
+        verify(helpSupportDao).isExistsByMId(mId);
+    }
+
+    @Test
+    void testValidateUpdateHelpSupportRequest_Success() {
+        HelpSupportTeamDto teamDto = new HelpSupportTeamDto();
+        teamDto.setMId("valid-mId");
+        teamDto.setType(HelpSupportType.EMAIL);
+        teamDto.setValue("test@example.com");
+
+        // Mock behavior
+        when(helpSupportDao.isExistsByMId(teamDto.getMId())).thenReturn(true);
+
+        // Call validation method
+        assertDoesNotThrow(() -> helpSupportValidator.validateUpdateHelpSupportRequest(teamDto));
+
+        // Verify interactions
+        verify(helpSupportDao).isExistsByMId(teamDto.getMId());
+    }
+
+    @Test
+    void testValidateUpdateHelpSupportRequest_InvalidEmailFormat() {
+        HelpSupportTeamDto teamDto = new HelpSupportTeamDto();
+        teamDto.setMId("valid-mId");
+        teamDto.setType(HelpSupportType.EMAIL);
+        teamDto.setValue("invalid-email");
+
+        // Mock behavior
+        when(helpSupportDao.isExistsByMId(teamDto.getMId())).thenReturn(true);
+
+        // Call validation method and assert exception
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> helpSupportValidator.validateUpdateHelpSupportRequest(teamDto));
+        assertTrue(exception.getMessage().contains("Email"));
+
+        // Verify interactions
+        verify(helpSupportDao).isExistsByMId(teamDto.getMId());
+    }
+}
