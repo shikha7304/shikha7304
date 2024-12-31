@@ -1,3 +1,26 @@
+
+{
+  "userName": "john_doe",
+  "firstName": "John",
+  "middleName": "A.",
+  "lastName": "Doe",
+  "email": "john.doe@example.com",
+  "primaryPhone": "+1234567890",
+  "secondaryPhone": "+0987654321",
+  "mobilePhone": "+1122334455",
+  "officePhone": "+9988776655",
+  "country": "US",
+  "state": "CA",
+  "pincode": "90001",
+  "city": "Los Angeles",
+  "role": "123e4567-e89b-12d3-a456-426614174000",
+  "assignedMids": ["MID12345", "MID67890"]
+}
+
+
+
+
+
 INSERT INTO MERCHANT_ENTITY_USER (ID, USER_ID, ENTITY_ID, MID, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT) VALUES (SYS_GUID(), '2A78A3B856F58A1FE0637C86B10AD165', NULL, 'MID12346', 'Admin', 1672501234, 'Admin', 1672501234);
 
 
