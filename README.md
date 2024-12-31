@@ -1,8 +1,14 @@
+INSERT INTO MERCHANT_ENTITY_USER (ID, USER_ID, ENTITY_ID, MID, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT) VALUES (SYS_GUID(), '2A78A3B856F58A1FE0637C86B10AD165', NULL, 'MID12346', 'Admin', 1672501234, 'Admin', 1672501234);
+
+
+
+
+
 Method: Post
 
 API Definition: /v1/merchant/generate/otp
 
-Access Type: Open API
+Access Type: Open API in
 
 Request Body:
 
