@@ -960,3 +960,148 @@ public class HelpSupportDao {
         return merchantInfoRepository.existsBymId(mId);
     }
 }
+
+
+
+
+
+
+@RunWith(MockitoJUnitRunner.class)
+public class HelpSupportServiceTest {
+
+    @InjectMocks
+    private HelpSupportService helpSupportService;
+
+    @Mock
+    private HelpSupportValidator helpSupportValidator;
+
+    @Mock
+    private HelpSupportDao helpSupportDao;
+
+    @Test
+    public void testGetTeamsInfo_Success() {
+        // Arrange
+        String mId = "testMId";
+        List<HelpSupportTeamDto> mockTeams = new ArrayList<>();
+        mockTeams.add(HelpSupportTeamDto.builder().mId(mId).type(HelpSupportType.EMAIL).value("test@example.com").build());
+
+        Mockito.doNothing().when(helpSupportValidator).validateCreateHelpSupportRequest(mId);
+        Mockito.when(helpSupportDao.getTeam(mId)).thenReturn(mockTeams);
+
+        // Act
+        MerchantResponse<HelpSupportTeamDto> response = helpSupportService.getTeamsInfo(mId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(mockTeams.size(), response.getCount());
+        assertEquals(mockTeams, response.getData());
+    }
+
+    @Test
+    public void testGetTeamsInfo_ValidationError() {
+        // Arrange
+        String mId = "invalidMId";
+        Mockito.doThrow(new IllegalArgumentException("Validation failed")).when(helpSupportValidator).validateCreateHelpSupportRequest(mId);
+
+        // Act & Assert
+        assertThrows(IllegalArgumentException.class, () -> helpSupportService.getTeamsInfo(mId));
+    }
+
+    @Test
+    public void testGetTeamsInfo_NoTeamsFound() {
+        // Arrange
+        String mId = "testMId";
+        List<HelpSupportTeamDto> emptyTeams = new ArrayList<>();
+
+        Mockito.doNothing().when(helpSupportValidator).validateCreateHelpSupportRequest(mId);
+        Mockito.when(helpSupportDao.getTeam(mId)).thenReturn(emptyTeams);
+
+        // Act
+        MerchantResponse<HelpSupportTeamDto> response = helpSupportService.getTeamsInfo(mId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(0, response.getCount());
+        assertTrue(response.getData().isEmpty());
+    }
+}
+
+
+
+
+@RunWith(MockitoJUnitRunner.class)
+public class HelpSupportDaoTest {
+
+    @InjectMocks
+    private HelpSupportDao helpSupportDao;
+
+    @Mock
+    private HelpSupportTeamRepository helpSupportTeamRepository;
+
+    @Mock
+    private MerchantMapper merchantMapper;
+
+    @Test
+    public void testGetTeam_Success() {
+        // Arrange
+        String mId = "testMId";
+        List<HelpSupportTeam> mockEntities = new ArrayList<>();
+        mockEntities.add(HelpSupportTeam.builder().mId(mId).type(HelpSupportType.EMAIL).value("test@example.com").build());
+
+        List<HelpSupportTeamDto> mockDtos = new ArrayList<>();
+        mockDtos.add(HelpSupportTeamDto.builder().mId(mId).type(HelpSupportType.EMAIL).value("test@example.com").build());
+
+        Mockito.when(helpSupportTeamRepository.findBymId(mId)).thenReturn(mockEntities);
+        Mockito.when(merchantMapper.mapListHelpSupportTeamEntityToResponse(mockEntities)).thenReturn(mockDtos);
+
+        // Act
+        List<HelpSupportTeamDto> result = helpSupportDao.getTeam(mId);
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals(mockDtos, result);
+    }
+
+    @Test
+    public void testGetTeam_NoTeamsFound() {
+        // Arrange
+        String mId = "testMId";
+        Mockito.when(helpSupportTeamRepository.findBymId(mId)).thenReturn(new ArrayList<>());
+        Mockito.when(helpSupportTeamRepository.findBymIdIsNull()).thenReturn(new ArrayList<>());
+
+        // Act
+        List<HelpSupportTeamDto> result = helpSupportDao.getTeam(mId);
+
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testIsExistsByMId_Exists() {
+        // Arrange
+        String mId = "testMId";
+        Mockito.when(helpSupportTeamRepository.existsBymId(mId)).thenReturn(true);
+
+        // Act
+        boolean result = helpSupportDao.isExistsByMId(mId);
+
+        // Assert
+        assertTrue(result);
+    }
+
+    @Test
+    public void testIsExistsByMId_NotExists() {
+        // Arrange
+        String mId = "nonexistentMId";
+        Mockito.when(helpSupportTeamRepository.existsBymId(mId)).thenReturn(false);
+
+        // Act
+        boolean result = helpSupportDao.isExistsByMId(mId);
+
+        // Assert
+        assertFalse(result);
+    }
+}
