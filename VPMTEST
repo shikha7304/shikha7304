@@ -731,3 +731,232 @@ class HelpSupportDaoTest {
     }
 }
 
+############################################################################
+
+
+@Service
+@RequiredArgsConstructor
+public class HelpSupportService {
+
+    private final HelpSupportValidator helpSupportValidator;
+    private final HelpSupportDao helpSupportDao;
+
+    /**
+     * Get Team information.
+     * @return OnboardingDto
+     */
+    public MerchantResponse<HelpSupportTeamDto> getTeamsInfo(String mId) {
+        //Step 1 : Get Active teams from DB.
+        helpSupportValidator.validateCreateHelpSupportRequest(mId);
+        List<HelpSupportTeamDto> teams = helpSupportDao.getTeam(mId);
+        //Step 2 : Build MerchantResponse and return to caller
+        return MerchantResponse.<HelpSupportTeamDto>builder().data(helpSupportDao.getTeam(mId)).status(MerchantConstant.RESPONSE_SUCCESS).count((long) teams.size()).build();
+    }
+
+
+####
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.HelpSupportDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.dto.HelpSupportTeamDto;
+import com.epay.merchant.model.request.HelpSupportRequest;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.HelpSupportType;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.ObjectUtils;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+
+/**
+ * Class Name: HelpSupportValidator
+ * *
+ * Description: A validator class for user validation requests.
+ * Extends the BaseValidator to provide common validation functionality.
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
+@Component
+@RequiredArgsConstructor
+public class HelpSupportValidator extends BaseValidator {
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(HelpSupportValidator.class);
+    private final HelpSupportDao helpSupportDao;
+    /**
+     * Validates the user validation request.
+     * * @param helpSupportTeamDto the request object containing user details to be validated.
+     */
+    public void validateCreateHelpSupportRequest(String mId) {
+        logger.debug("HelpSupport validation start for mId: {}", mId);
+        errorDtoList = new ArrayList<>();
+        checkMandatoryField(mId, "mId");
+        validatedAlreadyPresent(mId);
+        logger.debug("HelpSupport field validation completed for {}", mId);
+    }
+    public void validateUpdateHelpSupportRequest(String mId, HelpSupportRequest helpSupportRequest) {
+        logger.debug("HelpSupport validation start for helpSupportRequest: {}", helpSupportRequest);
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(mId, helpSupportRequest);
+        validateFieldsValue(helpSupportRequest);
+        validatedAlreadyPresent(mId);
+    }
+    /**
+     * Validates that all mandatory fields in the request are present.
+     * * @param helpSupportTeamDto the request object containing user details to be validated.
+     */
+    private void validateMandatoryFields(String mId, HelpSupportRequest helpSupportRequest) {
+        checkMandatoryField(mId, "MId");
+        if(ObjectUtils.isEmpty(helpSupportRequest.getSupportTeams())) {
+            addError(ErrorConstants.MANDATORY_FOUND_ERROR_CODE, ErrorConstants.MANDATORY_ERROR_MESSAGE,"SupportTeams");
+            throwIfErrors();
+        }
+        for(HelpSupportTeamDto helpSupportTeamDto : helpSupportRequest.getSupportTeams()) {
+            if(helpSupportTeamDto.getType() == null)
+                addError(ErrorConstants.MANDATORY_FOUND_ERROR_CODE, ErrorConstants.MANDATORY_ERROR_MESSAGE,"Type");
+            checkMandatoryField(helpSupportTeamDto.getValue(), "Value");
+        }
+        throwIfErrors();
+    }
+    /**
+     * Validates the values of fields in the request object.
+     * * @param helpSupportTeamDto the request object containing user details to be validated.
+     */
+    private void validateFieldsValue(HelpSupportRequest helpSupportRequest) {
+        helpSupportRequest.getSupportTeams().forEach(helpSupportTeamDto -> {
+            if (helpSupportTeamDto.getType() == HelpSupportType.EMAIL)
+                validateFieldWithRegex(helpSupportTeamDto.getValue(), MerchantConstant.EMAIL_LENGTH, MerchantConstant.EMAIL_REGEX, "Email", "Please check {0} Format or Max length");
+            if (helpSupportTeamDto.getType() == HelpSupportType.PHONE_NUMBER)
+                validateFieldWithRegex(helpSupportTeamDto.getValue(), MerchantConstant.LANDLINE_PHONE_REGEX, "Phone Number", "Please check Phone Number Format for {0}");
+        });
+        throwIfErrors();
+    }
+
+    /**
+     * validatedAlreadyPresent
+     * @param mId String
+     */
+    void validatedAlreadyPresent(String mId) {
+        if (!helpSupportDao.isExistsByMId(mId)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.NOT_FOUND_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "MId")).build());
+        }
+        throwIfErrors();
+    }
+}
+
+
+@Data
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class HelpSupportTeamDto implements Serializable {
+    @Transient
+    private String mId;
+    private String aggregatorId;
+    private HelpSupportType type;
+    private String value;
+    private String status;
+}
+
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.HelpSupportTeamDto;
+import com.epay.merchant.entity.HelpSupportTeam;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.request.HelpSupportRequest;
+import com.epay.merchant.model.response.HelpSupportResponse;
+import com.epay.merchant.repository.HelpSupportTeamRepository;
+import com.epay.merchant.repository.MerchantInfoRepository;
+import com.epay.merchant.util.EPayIdentityUtil;
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+import org.springframework.util.CollectionUtils;
+
+import java.util.List;
+import java.util.Objects;
+
+import static com.epay.merchant.util.MerchantConstant.STATUS_ACTIVE;
+
+/**
+ * Class Name: HelpSupportDao
+ * *
+ * Description: DB layer logic for Help and Support
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class HelpSupportDao {
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(HelpSupportDao.class);
+    private final HelpSupportTeamRepository helpSupportTeamRepository;
+    private final MerchantInfoRepository merchantInfoRepository;
+    private final MerchantMapper mapper;
+
+    /**
+     * Creating Help and Support team records in database.
+     * @return HelpSupportResponse
+     */
+    public List<HelpSupportTeamDto> getTeam(String mId) {
+        List<HelpSupportTeam> helpSupportTeams = helpSupportTeamRepository.findBymId(mId);
+        if(CollectionUtils.isEmpty(helpSupportTeams)) {
+            helpSupportTeams = helpSupportTeamRepository.findBymIdIsNull();
+        }
+        return mapper.mapListHelpSupportTeamEntityToResponse(helpSupportTeams);
+    }
+
+    /**
+     * Updating Help and Support team record in database.
+     * @param mId String
+     * @param helpSupportRequest HelpSupportRequest
+     * @return HelpSupportResponse
+     */
+    @Transactional
+    public HelpSupportResponse updateTeam(String mId, HelpSupportRequest helpSupportRequest) {
+        HelpSupportResponse helpSupportResponse = new HelpSupportResponse();
+        for(HelpSupportTeamDto helpSupportDto : helpSupportRequest.getSupportTeams()) {
+            HelpSupportTeam helpSupportTeam = helpSupportTeamRepository.findByMidAndType(mId, helpSupportDto.getType())
+                    .orElse(HelpSupportTeam.builder().mId(mId).type(helpSupportDto.getType()).build());
+            helpSupportTeam.setValue(helpSupportDto.getValue());
+            if (Objects.isNull(helpSupportTeam.getId()))
+                helpSupportTeam.setStatus(STATUS_ACTIVE);
+            if (!Objects.isNull(helpSupportTeam.getCreatedBy())) {
+                EPayPrincipal ePayPrincipal = EPayIdentityUtil.getUserPrincipal();
+                helpSupportTeam.setUpdatedBy(ePayPrincipal.getUsername());
+            }
+            helpSupportTeam = helpSupportTeamRepository.save(helpSupportTeam);
+            log.info("Updated Help&Support: {}", helpSupportTeam);
+            helpSupportResponse.getSupportTeams().add(mapper.mapHelpSupportTeamEntityToDto(helpSupportTeam));
+        }
+        return helpSupportResponse;
+    }
+
+    /**
+     * Is MId exist in the system.
+     * @param mId String
+     * @return boolean
+     */
+    public boolean isExistsByMId(String mId) {
+        return merchantInfoRepository.existsBymId(mId);
+    }
+}
