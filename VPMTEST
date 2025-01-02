@@ -183,3 +183,174 @@ public class HelpSupportResponse {
 
     private List<HelpSupportDto> helpSupports;
 }
+
+
+
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.HelpSupportDao;
+import com.epay.merchant.dto.HelpSupportDto;
+import com.epay.merchant.model.request.HelpSupportRequest;
+import com.epay.merchant.model.response.HelpSupportResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.validator.HelpSupportValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+class HelpSupportServiceTest {
+
+    private HelpSupportValidator validator;
+    private HelpSupportDao dao;
+    private HelpSupportService service;
+
+    @BeforeEach
+    void setUp() {
+        validator = mock(HelpSupportValidator.class);
+        dao = mock(HelpSupportDao.class);
+        service = new HelpSupportService(validator, dao);
+    }
+
+    @Test
+    void testGetHelpSupports() {
+        String mId = "testMId";
+        List<HelpSupportDto> helpSupports = List.of(new HelpSupportDto());
+        when(dao.getHelpSupports(mId)).thenReturn(helpSupports);
+
+        MerchantResponse<HelpSupportResponse> response = service.getHelpSupports(mId);
+
+        verify(validator).validatedHelpSupportMId(mId);
+        verify(dao).getHelpSupports(mId);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(1, response.getCount());
+    }
+
+    @Test
+    void testSaveHelpSupport() {
+        String mId = "testMId";
+        HelpSupportRequest request = new HelpSupportRequest();
+        List<HelpSupportDto> helpSupports = List.of(new HelpSupportDto());
+        when(dao.saveHelpSupport(mId, request)).thenReturn(helpSupports);
+
+        MerchantResponse<HelpSupportResponse> response = service.saveHelpSupport(mId, request);
+
+        verify(validator).validateHelpSupportRequest(mId, request);
+        verify(dao).saveHelpSupport(mId, request);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(1, response.getCount());
+    }
+}
+
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.HelpSupportDto;
+import com.epay.merchant.entity.HelpSupport;
+import com.epay.merchant.mapper.HelpSupportMapper;
+import com.epay.merchant.model.request.HelpSupportRequest;
+import com.epay.merchant.repository.HelpSupportRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+class HelpSupportDaoTest {
+
+    private HelpSupportRepository repository;
+    private HelpSupportMapper mapper;
+    private HelpSupportDao dao;
+
+    @BeforeEach
+    void setUp() {
+        repository = mock(HelpSupportRepository.class);
+        mapper = mock(HelpSupportMapper.class);
+        dao = new HelpSupportDao(repository, null, mapper);
+    }
+
+    @Test
+    void testGetHelpSupports() {
+        String mId = "testMId";
+        List<HelpSupport> entities = List.of(new HelpSupport());
+        List<HelpSupportDto> dtos = List.of(new HelpSupportDto());
+
+        when(repository.findBymIdAndStatus(mId, "ACTIVE")).thenReturn(entities);
+        when(mapper.mapEntityListToDtoList(entities)).thenReturn(dtos);
+
+        List<HelpSupportDto> result = dao.getHelpSupports(mId);
+
+        verify(repository).findBymIdAndStatus(mId, "ACTIVE");
+        verify(mapper).mapEntityListToDtoList(entities);
+        assertEquals(dtos, result);
+    }
+
+    @Test
+    void testSaveHelpSupport() {
+        String mId = "testMId";
+        HelpSupportRequest request = new HelpSupportRequest();
+        HelpSupport entity = new HelpSupport();
+        List<HelpSupport> entities = List.of(entity);
+        List<HelpSupportDto> dtos = List.of(new HelpSupportDto());
+
+        when(repository.saveAll(any())).thenReturn(entities);
+        when(mapper.mapEntityListToDtoList(entities)).thenReturn(dtos);
+
+        List<HelpSupportDto> result = dao.saveHelpSupport(mId, request);
+
+        verify(repository).saveAll(any());
+        verify(mapper).mapEntityListToDtoList(entities);
+        assertEquals(dtos, result);
+    }
+}
+
+package com.epay.merchant.validator;
+
+import com.epay.merchant.model.request.HelpSupportRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+class HelpSupportValidatorTest {
+
+    private HelpSupportValidator validator;
+
+    @BeforeEach
+    void setUp() {
+        validator = new HelpSupportValidator();
+    }
+
+    @Test
+    void testValidatedHelpSupportMId() {
+        String validMId = "validMId";
+        String invalidMId = null;
+
+        assertDoesNotThrow(() -> validator.validatedHelpSupportMId(validMId));
+        assertThrows(IllegalArgumentException.class, () -> validator.validatedHelpSupportMId(invalidMId));
+    }
+
+    @Test
+    void testValidateHelpSupportRequest() {
+        String mId = "testMId";
+        HelpSupportRequest request = new HelpSupportRequest();
+
+        assertDoesNotThrow(() -> validator.validateHelpSupportRequest(mId, request));
+    }
+}
+
+
+
