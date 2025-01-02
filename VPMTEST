@@ -352,5 +352,23 @@ class HelpSupportValidatorTest {
     }
 }
 
+ public List<HelpSupportDto> getHelpSupports(String mId) {
+        List<HelpSupport> helpSupports = helpSupportRepository.findBymIdAndStatus(mId, STATUS_ACTIVE);
+        addMissingDefaultHelpSupport(helpSupports);
+        return helpSupportMapper.mapEntityListToDtoList(helpSupports);
+    }
 
+    /**
+     *  Add missing HelpSupport from default
+     * @param helpSupports List
+     */
+    private void addMissingDefaultHelpSupport(final List<HelpSupport> helpSupports) {
+        List<HelpSupportType> presentTypesMid= helpSupports.stream().map(HelpSupport::getType).toList();
+        Stream.of(HelpSupportType.values())
+                .filter(hpt -> presentTypesMid.stream().noneMatch(eptPresent -> eptPresent.equals(hpt)))
+                .forEach(typeToBeAdded -> {
+                    Optional<HelpSupport> helpSupport = helpSupportRepository.findBymIdIsNullAndType(typeToBeAdded);
+                    helpSupport.ifPresent(helpSupports::add);
+                });
+    }
 
