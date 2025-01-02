@@ -35,3 +35,27 @@ public class EPayIdentityUtil {
  public String getUsername() {
         return this.authenticationKey;
     }
+
+
+@Test
+void testGetMerchantUserProfile_UserNotFound() {
+    // Mocking EPayIdentityUtil to return a username from the Security Context
+    EPayPrincipal mockPrincipal = mock(EPayPrincipal.class);
+    when(mockPrincipal.getUsername()).thenReturn("testUser");
+    SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
+    when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
+
+    // Mocking merchantUserDao to throw an exception
+    when(merchantUserDao.getMerchantUserProfile("testUser", UserStatus.ACTIVE))
+            .thenThrow(new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, 
+                    MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "testUser")));
+
+    // Verifying the exception is thrown
+    MerchantException exception = assertThrows(MerchantException.class, () -> merchantUserService.getMerchantUserProfile());
+    assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
+    assertTrue(exception.getMessage().contains("testUser"));
+
+    // Verifying interactions
+    verify(merchantUserDao, times(1)).getMerchantUserProfile("testUser", UserStatus.ACTIVE);
+    verifyNoInteractions(merchantMapper);
+}
