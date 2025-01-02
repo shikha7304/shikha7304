@@ -372,3 +372,81 @@ class HelpSupportValidatorTest {
                 });
     }
 
+
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.HelpSupportDto;
+import com.epay.merchant.entity.HelpSupport;
+import com.epay.merchant.mapper.HelpSupportMapper;
+import com.epay.merchant.repository.HelpSupportRepository;
+import com.epay.merchant.util.enums.HelpSupportType;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
+
+import static com.epay.merchant.util.MerchantConstant.STATUS_ACTIVE;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+class HelpSupportDaoTest {
+
+    private HelpSupportRepository helpSupportRepository;
+    private HelpSupportMapper helpSupportMapper;
+    private HelpSupportDao helpSupportDao;
+
+    @BeforeEach
+    void setUp() {
+        helpSupportRepository = mock(HelpSupportRepository.class);
+        helpSupportMapper = mock(HelpSupportMapper.class);
+        helpSupportDao = new HelpSupportDao(helpSupportRepository, null, helpSupportMapper);
+    }
+
+    @Test
+    void testGetHelpSupports() {
+        String mId = "testMId";
+
+        // Mock repository data
+        HelpSupport activeSupport = new HelpSupport();
+        activeSupport.setMId(mId);
+        activeSupport.setType(HelpSupportType.TYPE1);
+        activeSupport.setStatus(STATUS_ACTIVE);
+
+        HelpSupport defaultSupport = new HelpSupport();
+        defaultSupport.setMId(null);
+        defaultSupport.setType(HelpSupportType.TYPE2);
+
+        List<HelpSupport> activeSupports = List.of(activeSupport);
+        Optional<HelpSupport> missingDefaultSupport = Optional.of(defaultSupport);
+
+        // Mock mapper data
+        HelpSupportDto activeDto = new HelpSupportDto();
+        activeDto.setType(HelpSupportType.TYPE1);
+        HelpSupportDto defaultDto = new HelpSupportDto();
+        defaultDto.setType(HelpSupportType.TYPE2);
+
+        // Mock behavior
+        when(helpSupportRepository.findBymIdAndStatus(mId, STATUS_ACTIVE)).thenReturn(activeSupports);
+        when(helpSupportRepository.findBymIdIsNullAndType(HelpSupportType.TYPE2)).thenReturn(missingDefaultSupport);
+        when(helpSupportMapper.mapEntityListToDtoList(any())).thenReturn(List.of(activeDto, defaultDto));
+
+        // Call the method
+        List<HelpSupportDto> result = helpSupportDao.getHelpSupports(mId);
+
+        // Verify behavior
+        verify(helpSupportRepository, times(1)).findBymIdAndStatus(mId, STATUS_ACTIVE);
+        verify(helpSupportRepository, times(1)).findBymIdIsNullAndType(HelpSupportType.TYPE2);
+        verify(helpSupportMapper, times(1)).mapEntityListToDtoList(any());
+
+        // Assert the result
+        assertEquals(2, result.size());
+        assertEquals(HelpSupportType.TYPE1, result.get(0).getType());
+        assertEquals(HelpSupportType.TYPE2, result.get(1).getType());
+    }
+}
