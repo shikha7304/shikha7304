@@ -47,3 +47,44 @@ public MerchantResponse<HelpSupportResponse> saveHelpSupport(String mId, HelpSup
         verify(helpSupportValidator).validateHelpSupportRequest(mId, helpSupportRequest);
         verify(helpSupportDao).saveHelpSupport(mId, helpSupportRequest);
     }
+
+
+
+@Test
+void testSaveHelpSupport_Success() {
+    // Given
+    String mId = "test-mId";
+    HelpSupportDto helpSupportDto = new HelpSupportDto();
+    helpSupportDto.setType(HelpSupportType.EMAIL);
+    helpSupportDto.setValue("test@example.com");
+    helpSupportDto.setStatus(true);
+
+    List<HelpSupportDto> helpSupportDtos = List.of(helpSupportDto);
+    HelpSupportRequest helpSupportRequest = HelpSupportRequest.builder()
+            .helpSupports(helpSupportDtos)
+            .build();
+
+    HelpSupportResponse helpSupportResponse = HelpSupportResponse.builder()
+            .helpSupports(helpSupportDtos)
+            .build();
+
+    MerchantResponse<HelpSupportResponse> expectedResponse = MerchantResponse.<HelpSupportResponse>builder()
+            .data(List.of(helpSupportResponse))
+            .status(MerchantConstant.RESPONSE_SUCCESS)
+            .count(1L)
+            .build();
+
+    // When
+    doNothing().when(helpSupportValidator).validateHelpSupportRequest(mId, helpSupportRequest);
+    when(helpSupportDao.saveHelpSupport(mId, helpSupportRequest)).thenReturn(helpSupportDtos);
+
+    MerchantResponse<HelpSupportResponse> response = adminService.saveHelpSupport(mId, helpSupportRequest);
+
+    // Then
+    assertNotNull(response, "Response should not be null");
+    assertEquals(expectedResponse.getStatus(), response.getStatus(), "Status should be 'SUCCESS'");
+    assertEquals(expectedResponse.getCount(), response.getCount(), "Count should match");
+    assertEquals(expectedResponse.getData().size(), response.getData().size(), "Data size should match");
+    verify(helpSupportValidator).validateHelpSupportRequest(mId, helpSupportRequest);
+    verify(helpSupportDao).saveHelpSupport(mId, helpSupportRequest);
+}
