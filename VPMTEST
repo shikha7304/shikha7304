@@ -130,3 +130,64 @@ public interface MerchantMapper {
         OnboardingDto onboardingRequestRes = adminDao.onboardingMerchantAndMerchantUser(onboardingRequest);
         assertNotNull(onboardingRequestRes.getMerchant().getMId());
     }
+
+
+
+
+
+@Test
+void onboardingMerchantAndMerchantUserTest_Success() {
+    // Given: Mock Merchant Info setup
+    MerchantInfo merchantInfo = new MerchantInfo();
+    merchantInfo.setMId("test-mId");
+    merchantInfo.setStatus(MerchantStatus.ACTIVE.name());
+    Mockito.when(mapper.mapMerchantDtoToEntity(onboardingRequest.getMerchant())).thenReturn(merchantInfo);
+    Mockito.when(merchantRepo.save(Mockito.any())).thenAnswer(invocation -> {
+        MerchantInfo savedMerchant = invocation.getArgument(0);
+        savedMerchant.setId(UUID.randomUUID());
+        return savedMerchant;
+    });
+
+    MerchantDto merchantDto = new MerchantDto();
+    merchantDto.setMId("test-mId");
+    Mockito.when(mapper.mapMerchantInfoEntityToDto(Mockito.any())).thenReturn(merchantDto);
+
+    // Given: Mock Merchant User setup
+    MerchantUser merchantUser = new MerchantUser();
+    merchantUser.setId(UUID.randomUUID());
+    Mockito.when(mapper.mapMerchantUserDtoToEntity(onboardingRequest.getUser())).thenReturn(merchantUser);
+    Mockito.when(merchantUserRepo.save(Mockito.any())).thenReturn(merchantUser);
+
+    MerchantUserDto merchantUserDto = new MerchantUserDto();
+    merchantUserDto.setId(UUID.randomUUID());
+    Mockito.when(mapper.mapMerchantUserEntityToDto(merchantUser)).thenReturn(merchantUserDto);
+
+    // Given: Mock Role Setup
+    MerchantUserRole role = new MerchantUserRole();
+    role.setId(UUID.randomUUID());
+    role.setRole(MerchantUserRoles.ADMIN.name());
+    Mockito.when(userRoleRepo.findByRole(MerchantUserRoles.ADMIN.name())).thenReturn(Optional.of(role));
+
+    // Given: Mock Menu Permissions
+    MenuInfo menu = new MenuInfo();
+    menu.setId(UUID.randomUUID());
+    Mockito.when(menuInfoRepo.findAll()).thenReturn(List.of(menu));
+
+    DefaultUserPermission defaultPermission = new DefaultUserPermission();
+    defaultPermission.setMenuId(menu.getId());
+    Mockito.when(defaultUserPermissionRepo.findByRoleId(role.getId())).thenReturn(List.of(defaultPermission));
+
+    // When: Execute Onboarding
+    OnboardingDto onboardingResponse = adminDao.onboardingMerchantAndMerchantUser(onboardingRequest);
+
+    // Then: Assertions
+    assertNotNull(onboardingResponse, "Onboarding response should not be null");
+    assertNotNull(onboardingResponse.getMerchant(), "Merchant information should not be null");
+    assertNotNull(onboardingResponse.getMerchant().getMId(), "Merchant ID should not be null");
+    assertNotNull(onboardingResponse.getUser(), "Merchant User should not be null");
+    verify(merchantRepo).save(Mockito.any());
+    verify(merchantUserRepo).save(Mockito.any());
+    verify(userRoleRepo).findByRole(MerchantUserRoles.ADMIN.name());
+    verify(menuInfoRepo).findAll();
+    verify(defaultUserPermissionRepo).findByRoleId(role.getId());
+}
