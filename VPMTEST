@@ -25,3 +25,25 @@ public MerchantResponse<HelpSupportResponse> saveHelpSupport(String mId, HelpSup
         helpSupports = helpSupportRepository.saveAll(helpSupports);
         return helpSupportMapper.mapEntityListToDtoList(helpSupports);
     }
+ @Test
+    void testSaveHelpSupport_Success() {
+        String mId = "test-mId";
+        HelpSupportDto teamDto = new HelpSupportDto();
+        teamDto.setMId(mId);
+        teamDto.setType(HelpSupportType.EMAIL);
+        teamDto.setValue("test@example.com");
+
+        List<HelpSupportDto> teams = List.of(teamDto);
+        HelpSupportRequest helpSupportRequest = HelpSupportRequest.builder().helpSupports(teams).build();
+
+        doNothing().when(helpSupportValidator).validateHelpSupportRequest(mId, helpSupportRequest);
+        when(helpSupportDao.saveHelpSupport(mId, helpSupportRequest)).thenReturn(teams);
+
+        MerchantResponse<HelpSupportResponse> response = adminService.saveHelpSupport(mId, helpSupportRequest);
+
+        assertNotNull(response);
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertEquals(1, response.getCount());
+        verify(helpSupportValidator).validateHelpSupportRequest(mId, helpSupportRequest);
+        verify(helpSupportDao).saveHelpSupport(mId, helpSupportRequest);
+    }
