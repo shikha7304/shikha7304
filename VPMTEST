@@ -1,61 +1,27 @@
-@Test
-    void testGetMerchantUserProfile_UserNotFound() {
-        when(merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(any(), any(), any(), any())).thenThrow(new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName")));
-
-        MerchantException exception = assertThrows(MerchantException.class, () -> merchantUserService.getMerchantUserProfile());
-        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
-        assertTrue(exception.getMessage().contains("UserName"));
-
-        verify(merchantUserDao, times(1)).getByUserNameOrEmailOrMobilePhoneAndStatus(any(), any(), any(), any());
-        verifyNoInteractions(merchantMapper);
+public MerchantResponse<HelpSupportResponse> saveHelpSupport(String mId, HelpSupportRequest helpSupportRequest) {
+        return helpSupportService.saveHelpSupport(mId, helpSupportRequest);
     }
 
 
-public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
-
-        // Step 1 : Get UserName from Security Context
-        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
-
-        // Step 2 : Get Merchant User Info of Logged in Merchant User
-        UserProfileResponse userProfileResponse = merchantUserDao.getMerchantUserProfile(userName, UserStatus.ACTIVE);
-
-        // Step 3 : Building the response
-        return MerchantResponse.<UserProfileResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(userProfileResponse)).count(1L).total(1L).build();
+ public MerchantResponse<HelpSupportResponse> saveHelpSupport(String mId, HelpSupportRequest helpSupportRequest) {
+        //Step 1 : HelpSupportValidator validation
+        helpSupportValidator.validateHelpSupportRequest(mId, helpSupportRequest);
+        //Step 2 : Save the Merchant and Merchant User Data in DB
+        List<HelpSupportDto> helpSupport = helpSupportDao.saveHelpSupport(mId, helpSupportRequest);
+        HelpSupportResponse helpSupportResponse = HelpSupportResponse.builder().helpSupports(helpSupport).build();
+        //Step 3 : Build MerchantResponse and return to caller
+        return MerchantResponse.<HelpSupportResponse>builder().data(List.of(helpSupportResponse)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
     }
 
-
-public class EPayIdentityUtil {
-
-    public static EPayPrincipal getUserPrincipal() {
-       return (EPayPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+ @Transactional
+    public List<HelpSupportDto> saveHelpSupport(String mId, HelpSupportRequest helpSupportRequest) {
+        List<HelpSupport> helpSupports = new ArrayList<>();
+        for (HelpSupportDto helpSupportDto : helpSupportRequest.getHelpSupports()) {
+            HelpSupport helpSupport = helpSupportRepository.findByMidAndType(mId, helpSupportDto.getType()).orElse(HelpSupport.builder().mId(mId).type(helpSupportDto.getType()).build());
+            helpSupport.setValue(helpSupportDto.getValue());
+            helpSupport.setStatus(helpSupportDto.isStatus() ? STATUS_ACTIVE : STATUS_IN_ACTIVE);
+            helpSupports.add(helpSupport);
+        }
+        helpSupports = helpSupportRepository.saveAll(helpSupports);
+        return helpSupportMapper.mapEntityListToDtoList(helpSupports);
     }
-}
-
-
- public String getUsername() {
-        return this.authenticationKey;
-    }
-
-
-@Test
-void testGetMerchantUserProfile_UserNotFound() {
-    // Mocking EPayIdentityUtil to return a username from the Security Context
-    EPayPrincipal mockPrincipal = mock(EPayPrincipal.class);
-    when(mockPrincipal.getUsername()).thenReturn("testUser");
-    SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
-    when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
-
-    // Mocking merchantUserDao to throw an exception
-    when(merchantUserDao.getMerchantUserProfile("testUser", UserStatus.ACTIVE))
-            .thenThrow(new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, 
-                    MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "testUser")));
-
-    // Verifying the exception is thrown
-    MerchantException exception = assertThrows(MerchantException.class, () -> merchantUserService.getMerchantUserProfile());
-    assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
-    assertTrue(exception.getMessage().contains("testUser"));
-
-    // Verifying interactions
-    verify(merchantUserDao, times(1)).getMerchantUserProfile("testUser", UserStatus.ACTIVE);
-    verifyNoInteractions(merchantMapper);
-}
