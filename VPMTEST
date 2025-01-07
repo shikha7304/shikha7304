@@ -1,3 +1,98 @@
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.MerchantUserRoleDto;
+import com.epay.merchant.entity.MerchantUserRole;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.mapper.MerchantUserRoleMapper;
+import com.epay.merchant.repository.MerchantUserRoleRepository;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.MerchantUserRoles;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Component
+@RequiredArgsConstructor
+public class MerchantUserRoleDao {
+
+    private final MerchantUserRoleRepository merchantUserRoleRepository;
+    private final MerchantUserRoleMapper mapper;
+
+    /**
+     * Fetches the ADMIN merchant user role.
+     *
+     * @return The {@link MerchantUserRole} entity for the ADMIN role.
+     * @throws MerchantException If the ADMIN role is not found.
+     */
+    public MerchantUserRole getAdminRoleId() {
+        return merchantUserRoleRepository.findByRole(MerchantUserRoles.ADMIN.name())
+                .orElseThrow(() -> new MerchantException(
+                        ErrorConstants.INVALID_ERROR_CODE,
+                        MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Admin Role", "Unable to fetch ADMIN MerchantUserRole.")
+                ));
+    }
+
+    /**
+     * Retrieves all merchant user roles as a list of DTOs.
+     *
+     * @return A list of {@link MerchantUserRoleDto}.
+     */
+    public List<MerchantUserRoleDto> getMerchantUserRoles() {
+        List<MerchantUserRole> merchantUserRoles = merchantUserRoleRepository.findAll();
+        return mapper.mapMerchantUserRoleListEntityToListDto(merchantUserRoles);
+    }
+
+    /**
+     * Retrieves the merchant user role entity by its ID.
+     *
+     * @param roleId The UUID of the role to fetch.
+     * @return The {@link MerchantUserRole} entity.
+     * @throws MerchantException If the role is not found.
+     */
+    public MerchantUserRole getRoleNameById(UUID roleId) {
+        return merchantUserRoleRepository.findById(roleId)
+                .orElseThrow(() -> new MerchantException(
+                        ErrorConstants.NOT_FOUND_ERROR_CODE,
+                        MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "User Role")
+                ));
+    }
+
+    /**
+     * Creates a map of user roles where the key is the role ID and the value is the role DTO.
+     *
+     * @return A map of {@link MerchantUserRoleDto} with role IDs as keys.
+     */
+    public Map<UUID, MerchantUserRoleDto> getUserRoleDtoMap() {
+        return getMerchantUserRoles().stream()
+                .collect(Collectors.toMap(MerchantUserRoleDto::getId, role -> role));
+    }
+
+    /**
+     * Fetches the UUID of the SUPER_ADMIN role from the user roles.
+     *
+     * @return The UUID of the SUPER_ADMIN role.
+     * @throws MerchantException If the SUPER_ADMIN role is not found.
+     */
+    public UUID getSuperAdminRoleId() {
+        Map<UUID, MerchantUserRoleDto> roleMap = getUserRoleDtoMap();
+        return roleMap.keySet().stream()
+                .filter(id -> MerchantUserRoles.SUPER_ADMIN.name().equalsIgnoreCase(roleMap.get(id).getRole()))
+                .findFirst()
+                .orElseThrow(() -> new MerchantException(
+                        ErrorConstants.NOT_FOUND_ERROR_CODE,
+                        MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Super Admin Role")
+                ));
+    }
+}
+
+
+
 package com.epay.merchant.dao;
 
 import com.epay.merchant.dto.MerchantUserRoleDto;
