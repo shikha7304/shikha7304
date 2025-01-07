@@ -2,7 +2,7 @@ package com.epay.merchant.dao;
 
 import com.epay.merchant.dto.OtpGenerationDto;
 import com.epay.merchant.entity.NotificationManagement;
-import com.epay.merchant.repository.NotificationManagementRepository;
+import com.epaymerchant.repository.NotificationManagementRepository;
 import com.epay.merchant.util.enums.KeyType;
 import com.epay.merchant.util.enums.NotificationEntityType;
 import com.epay.merchant.util.enums.NotificationType;
