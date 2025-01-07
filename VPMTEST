@@ -1,3 +1,104 @@
+@Component
+@RequiredArgsConstructor
+public class CaptchaValidator extends BaseValidator {
+
+    private final CaptchaDao captchaDao;
+
+    /**
+     * Validates all mandatory fields and checks for duplicate Request IDs in the CAPTCHA request.
+     *
+     * @param captchaRequest the incoming CAPTCHA request to validate
+     * @throws ValidationException if any validation errors are found
+     */
+    public void requestValidator(CaptchaRequest captchaRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(captchaRequest);
+        checkForDuplicateRequestId(captchaRequest);
+    }
+
+    /**
+     * Validates the CAPTCHA text and checks if it is expired.
+     *
+     * @param requestId    the unique request ID for the CAPTCHA
+     * @param captchaText  the provided CAPTCHA text for validation
+     * @throws ValidationException if the CAPTCHA is expired or the text does not match
+     */
+    public void captchaValueValidation(UUID requestId, String captchaText) {
+        errorDtoList = new ArrayList<>();
+        Captcha captchaDetails = captchaDao.getCaptchaByRequestId(requestId);
+        validateCaptchaExpiry(DateTimeUtils.isPastDate(captchaDetails.getExpiryTime()));
+        validateCaptchaText(captchaText, captchaDetails.getCaptchaText());
+    }
+
+    /**
+     * Validates the mandatory fields in the CAPTCHA request.
+     *
+     * @param captchaRequest the CAPTCHA request to validate
+     */
+    private void validateMandatoryFields(CaptchaRequest captchaRequest) {
+        checkMandatoryField(captchaRequest.getRequestId(), "RequestId");
+        checkMandatoryField(captchaRequest.getRequestType(), "Request Type");
+        throwIfErrors(); // Throws exception if validation errors exist
+    }
+
+    /**
+     * Checks if the Request ID is a duplicate in the database.
+     *
+     * @param captchaRequest the CAPTCHA request to check
+     */
+    private void checkForDuplicateRequestId(CaptchaRequest captchaRequest) {
+        if (captchaDao.existsByRequestId(captchaRequest.getRequestId())) {
+            errorDtoList.add(ErrorDto.builder()
+                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                    .errorMessage(MessageFormat.format(
+                            ErrorConstants.INVALID_ERROR_MESSAGE,
+                            "RequestId",
+                            "Reason: Duplicate RequestId"))
+                    .build());
+        }
+        throwIfErrors();
+    }
+
+    /**
+     * Checks if the CAPTCHA has expired.
+     *
+     * @param isExpired a boolean indicating if the CAPTCHA is expired
+     */
+    private void validateCaptchaExpiry(boolean isExpired) {
+        if (isExpired) {
+            errorDtoList.add(ErrorDto.builder()
+                    .errorCode(ErrorConstants.EXPIRY_TIME_ERROR_CODE)
+                    .errorMessage(MessageFormat.format(
+                            ErrorConstants.EXPIRY_TIME_ERROR_MESSAGE,
+                            "Captcha"))
+                    .build());
+        }
+        throwIfErrors();
+    }
+
+    /**
+     * Validates the provided CAPTCHA text against the text stored in the database.
+     *
+     * @param providedCaptchaText the CAPTCHA text provided by the user
+     * @param storedCaptchaText   the CAPTCHA text stored in the database
+     */
+    private void validateCaptchaText(String providedCaptchaText, String storedCaptchaText) {
+        if (!StringUtils.equals(providedCaptchaText, storedCaptchaText)) {
+            errorDtoList.add(ErrorDto.builder()
+                    .errorCode(ErrorConstants.NOT_FOUND_ERROR_CODE)
+                    .errorMessage(MessageFormat.format(
+                            ErrorConstants.NOT_FOUND_ERROR_MESSAGE,
+                            "Captcha"))
+                    .build());
+        }
+        throwIfErrors();
+    }
+
+}
+
+
+
+
 package com.epay.merchant.validator;
 
 import com.epay.merchant.dao.CaptchaDao;
