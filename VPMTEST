@@ -1,3 +1,82 @@
+
+Here are the method definitions for the methods in the MerchantUserController class:
+
+1. Get All Access Merchant Info
+
+/**
+ * Retrieves the merchant info details of the logged-in user with access permissions.
+ *
+ * @param pageable Pagination information for the request
+ * @return MerchantResponse containing MerchantInfoResponse
+ */
+@GetMapping("/access/mids/info")
+@Operation(summary = "Get access merchant info details of logged in merchantUser.", 
+           description = "Get access merchant info details of logged in merchantUser.")
+public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(@PageableDefault(size = 50, page = 0) Pageable pageable) {
+    log.info("Received request to fetch merchant info");
+    return merchantUserService.getAllAccessMerchantInfo(pageable);
+}
+
+2. Get Merchant User Access
+
+/**
+ * Retrieves the profile and menu access permissions of the logged-in merchant user.
+ *
+ * @return MerchantResponse containing MerchantUserAccessResponse
+ */
+@GetMapping("/access")
+@Operation(summary = "Get Merchant User Profile and Menu with permissions.", 
+           description = "Get Logged in user profile and access permissions.")
+public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
+    return merchantUserService.getMerchantUserAccess();
+}
+
+3. Get Merchant User Profile
+
+/**
+ * Retrieves the profile details of the logged-in merchant user.
+ *
+ * @return MerchantResponse containing UserProfileResponse
+ */
+@GetMapping("/profile")
+@Operation(summary = "Get Merchant User Profile details.", 
+           description = "Get Logged in user profile and view details.")
+public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
+    log.info("GetMerchantUserProfile");
+    return merchantUserService.getMerchantUserProfile();
+}
+
+4. Create Merchant User
+
+/**
+ * Creates a new merchant user. Can be used by Merchant Admin or Super Admin.
+ *
+ * @param merchantUserRequest Request object containing details of the user to be created
+ * @return MerchantResponse containing MerchantUserResponse
+ */
+@PostMapping
+@Operation(summary = "User Creation for Merchant by Merchant Admin or Super Admin", 
+           description = "Merchant SuperAdmin/Admin will use this API to create Merchant Users for managing merchant portal.")
+@PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+public MerchantResponse<MerchantUserResponse> createMerchantUser(@RequestBody MerchantUserRequest merchantUserRequest) {
+    log.info("Entity Creation : merchantRequest {}", merchantUserRequest);
+    return merchantUserService.createMerchantUser(merchantUserRequest);
+}
+
+Key Notes:
+	1.	Logging:
+	•	Uses log.info to log incoming requests for traceability.
+	2.	Annotations:
+	•	Uses @Operation for Swagger documentation.
+	•	@PreAuthorize ensures access control for user creation.
+	3.	Response Wrapping:
+	•	All responses are wrapped in MerchantResponse for consistency.
+
+Let me know if you need further clarification or additional modifications!
+
+
+
+
 package com.epay.merchant.controller;
 
 import com.epay.merchant.model.request.MerchantUserRequest;
