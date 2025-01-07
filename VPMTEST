@@ -1,165 +1,78 @@
+package com.epay.merchant.validator;
 
-Here are the method definitions for the methods in the MerchantUserController class:
-
-1. Get All Access Merchant Info
-
-/**
- * Retrieves the merchant info details of the logged-in user with access permissions.
- *
- * @param pageable Pagination information for the request
- * @return MerchantResponse containing MerchantInfoResponse
- */
-@GetMapping("/access/mids/info")
-@Operation(summary = "Get access merchant info details of logged in merchantUser.", 
-           description = "Get access merchant info details of logged in merchantUser.")
-public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(@PageableDefault(size = 50, page = 0) Pageable pageable) {
-    log.info("Received request to fetch merchant info");
-    return merchantUserService.getAllAccessMerchantInfo(pageable);
-}
-
-2. Get Merchant User Access
-
-/**
- * Retrieves the profile and menu access permissions of the logged-in merchant user.
- *
- * @return MerchantResponse containing MerchantUserAccessResponse
- */
-@GetMapping("/access")
-@Operation(summary = "Get Merchant User Profile and Menu with permissions.", 
-           description = "Get Logged in user profile and access permissions.")
-public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
-    return merchantUserService.getMerchantUserAccess();
-}
-
-3. Get Merchant User Profile
-
-/**
- * Retrieves the profile details of the logged-in merchant user.
- *
- * @return MerchantResponse containing UserProfileResponse
- */
-@GetMapping("/profile")
-@Operation(summary = "Get Merchant User Profile details.", 
-           description = "Get Logged in user profile and view details.")
-public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
-    log.info("GetMerchantUserProfile");
-    return merchantUserService.getMerchantUserProfile();
-}
-
-4. Create Merchant User
-
-/**
- * Creates a new merchant user. Can be used by Merchant Admin or Super Admin.
- *
- * @param merchantUserRequest Request object containing details of the user to be created
- * @return MerchantResponse containing MerchantUserResponse
- */
-@PostMapping
-@Operation(summary = "User Creation for Merchant by Merchant Admin or Super Admin", 
-           description = "Merchant SuperAdmin/Admin will use this API to create Merchant Users for managing merchant portal.")
-@PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-public MerchantResponse<MerchantUserResponse> createMerchantUser(@RequestBody MerchantUserRequest merchantUserRequest) {
-    log.info("Entity Creation : merchantRequest {}", merchantUserRequest);
-    return merchantUserService.createMerchantUser(merchantUserRequest);
-}
-
-Key Notes:
-	1.	Logging:
-	•	Uses log.info to log incoming requests for traceability.
-	2.	Annotations:
-	•	Uses @Operation for Swagger documentation.
-	•	@PreAuthorize ensures access control for user creation.
-	3.	Response Wrapping:
-	•	All responses are wrapped in MerchantResponse for consistency.
-
-Let me know if you need further clarification or additional modifications!
-
-
-
-
-package com.epay.merchant.controller;
-
-import com.epay.merchant.model.request.MerchantUserRequest;
-import com.epay.merchant.model.response.*;
-import com.epay.merchant.service.MerchantUserService;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import io.swagger.v3.oas.annotations.Operation;
+import com.epay.merchant.dao.CaptchaDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.entity.Captcha;
+import com.epay.merchant.model.request.CaptchaRequest;
+import com.epay.merchant.util.DateTimeUtils;
+import com.epay.merchant.util.ErrorConstants;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Component;
 
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.UUID;
 
-/**
- * Class Name: MerchantUserController
- * *
- * Description:
- * *
- * Author: Subhra Goswami
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-@RestController
+@Component
 @RequiredArgsConstructor
-@RequestMapping("/user")
-public class MerchantUserController {
+public class CaptchaValidator extends BaseValidator {
 
-    private final MerchantUserService merchantUserService;
-    LoggerUtility log = LoggerFactoryUtility.getLogger(ValidationController.class);
+    private final CaptchaDao captchaDao;
 
     /**
-     * Get All Access Merchant Info
-     *
-     * @param pageable Pageable
-     * @return MerchantInfoResponse
+     * Validates all the mandatory fields present in the request and check for Duplicate RequestId.
+     * @param captchaRequest CaptchaRequest
      */
-    @GetMapping("/access/mids/info")
-    @Operation(summary = "Get access merchant info details of logged in merchantUser.", description = "Get access merchant info details of logged in merchantUser.")
-    public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(@PageableDefault(size = 50, page = 0) Pageable pageable) {
-        log.info("Received request to fetch merchant info");
-        return merchantUserService.getAllAccessMerchantInfo(pageable);
+    public void requestValidator(CaptchaRequest captchaRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(captchaRequest);
+        duplicateCheck(captchaRequest);
     }
 
     /**
-     * Get Merchant User Access
-     *
-     * @return Merchant User Access Response
+     * Validates captcha expiry & text.
+     * @param requestId UUID
+     * @param captchaText Hash String
      */
-    @GetMapping("/access")
-    @Operation(summary = "Get Merchant User Profile and Menu with permissions.", description = "Get Logged in user profile and access permission ")
-    public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
-        return merchantUserService.getMerchantUserAccess();
+    public void captchaValueValidation(UUID requestId, String captchaText) {
+        errorDtoList = new ArrayList<>();
+        Captcha captchaDetails = captchaDao.getCaptchaByRequestId(requestId);
+        isCaptchaExpiry(DateTimeUtils.isPastDate(captchaDetails.getExpiryTime()));
+        matchCaptcha(captchaText, captchaDetails.getCaptchaText());
+    }
+
+    private void validateMandatoryFields(CaptchaRequest captchaRequest) {
+        checkMandatoryField(captchaRequest.getRequestId(), "RequestId");
+        checkMandatoryField(captchaRequest.getRequestType(), "Request Type");
+        throwIfErrors();
+    }
+
+    private void duplicateCheck(CaptchaRequest captchaRequest) {
+        if (captchaDao.existsByRequestId(captchaRequest.getRequestId())) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "RequestId", "Reason : Duplicate RequestId")).build());
+        }
+        throwIfErrors();
+    }
+
+
+    private void isCaptchaExpiry(boolean captchaDetails) {
+        if (captchaDetails) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.EXPIRY_TIME_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.EXPIRY_TIME_ERROR_MESSAGE, "Captcha")).build());
+        }
+        throwIfErrors();
     }
 
     /**
-     * Get Merchant User Profile
-     *
-     * @return UserProfileResponse
+     * Comparing request captchaTextHash with dbCaptchaTextHash
+     * @param loginCaptchaImage String
+     * @param dbCaptchaTextHash String
      */
-    @GetMapping("/profile")
-    @Operation(summary = "Get Merchant User Profile details.", description = "Get Logged in user profile and view details ")
-    public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
-        log.info("GetMerchantUserProfile");
-        return merchantUserService.getMerchantUserProfile();
-    }
-
-    /**
-     * Create Merchant User
-     *
-     * @param merchantUserRequest MerchantUserRequest
-     * @return MerchantUserResponse
-     */
-    @PostMapping
-    @Operation(summary = "User Creation for Merchant by Merchant Admin or Super Admin", description = "Merchant SuperAdmin/Admin will use this API to create Merchant Users for managing merchant portal")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public MerchantResponse<MerchantUserResponse> createMerchantUser(@RequestBody MerchantUserRequest merchantUserRequest) {
-        log.info("Entity Creation : merchantRequest {}", merchantUserRequest);
-        return merchantUserService.createMerchantUser(merchantUserRequest);
+    private void matchCaptcha(String loginCaptchaImage, String dbCaptchaTextHash) {
+        if (!StringUtils.equals(loginCaptchaImage, dbCaptchaTextHash)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.NOT_FOUND_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Captcha")).build());
+        }
+        throwIfErrors();
     }
 
 }
