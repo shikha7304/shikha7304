@@ -1,3 +1,90 @@
+/**
+ * Validates the OTP and captcha for the given request, generates a user token if successful,
+ * updates the OTP and captcha validation status in the database, and returns a success response.
+ *
+ * Steps:
+ * 1. Validate the OTP validation request.
+ * 2. Update OTP and captcha verification status in the database.
+ * 3. Generate a user token for login requests and save the audit log.
+ * 4. Build and return the success response.
+ *
+ * @param otpValidationRequest the OTP validation request containing the OTP, captcha, and request details
+ * @return a {@link MerchantResponse} containing the status and a success message or token
+ * @throws ValidationException if validation fails (e.g., invalid OTP or captcha)
+ * @throws MerchantException   for business-related errors during processing
+ */
+public MerchantResponse<String> validateOtp(OtpValidationRequest otpValidationRequest) {
+    try {
+        // Step 1: Validate the OTP validation request
+        log.info("Started OTP validation for RequestId: {}", otpValidationRequest.getRequestId());
+        otpValidator.validateOtpValidationRequest(otpValidationRequest);
+
+        // Step 2: Update the OTP and captcha verification status
+        log.info("Updating OTP and captcha validation status for RequestId: {}", otpValidationRequest.getRequestId());
+        otpManagementDao.updateOtpAndCaptchaStatus(otpValidationRequest.getRequestId());
+
+        // Step 3: If it's a login request, generate a user token and save the audit log
+        String responseMsg = MessageFormat.format(SUCCESS_MESSAGE, "otp validated");
+        if (RequestType.LOGIN.equals(otpValidationRequest.getRequestType())) {
+            log.info("Generating user token for RequestId: {}", otpValidationRequest.getRequestId());
+            responseMsg = tokenService.generateUserToken(otpValidationRequest.getUserName());
+
+            otpManagementDao.saveAudit(
+                otpValidationRequest.getUserName(),
+                otpValidationRequest.getRequestType(),
+                true,
+                MessageFormat.format(SUCCESS_MESSAGE, "otp validated")
+            );
+        }
+
+        // Step 4: Build and return the success response
+        return MerchantResponse.<String>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .data(List.of(responseMsg))
+                .build();
+    } catch (ValidationException e) {
+        handleOtpValidationFailure(otpValidationRequest.getUserName(), otpValidationRequest.getRequestType(), e.getErrorMessages());
+        log.error("OTP validation failed for RequestId: {}", otpValidationRequest.getRequestId(), e);
+        throw e;
+    } catch (MerchantException e) {
+        handleOtpValidationFailure(otpValidationRequest.getUserName(), otpValidationRequest.getRequestType(), List.of(e.getMessage()));
+        log.error("OTP validation failed for RequestId: {}", otpValidationRequest.getRequestId(), e);
+        throw e;
+    } catch (Exception e) {
+        handleOtpValidationFailure(otpValidationRequest.getUserName(), otpValidationRequest.getRequestType(), List.of(e.getLocalizedMessage()));
+        log.error("OTP validation failed for RequestId: {}", otpValidationRequest.getRequestId(), e);
+        throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, ErrorConstants.GENERATION_ERROR_MESSAGE);
+    }
+}
+
+/**
+ * Handles OTP validation failure.
+ *
+ * This method is invoked whenever OTP validation fails due to any reason.
+ * It performs the following steps:
+ * 1. Updates the merchant user login status to false.
+ * 2. Saves the audit log with the failure details.
+ * 
+ * @param userName the username of the merchant user for whom OTP validation failed
+ * @param requestType the type of request (e.g., LOGIN, TRANSACTION) during which the failure occurred
+ * @param errorMessage the error message or reason for the failure
+ */
+private void handleOtpValidationFailure(String userName, RequestType requestType, String errorMessage) {
+    if (StringUtils.isNotEmpty(userName)) {
+        // Step 1: Update the user's login status to false
+        tokenService.updateMerchantUserForLogin(userName, false);
+
+        // Step 2: Save the failure details to the audit log
+        otpManagementDao.saveAudit(userName, requestType, false, errorMessage);
+
+        log.info("Handled OTP validation failure for userName: {}, requestType: {}, reason: {}", userName, requestType, errorMessage);
+    } else {
+        log.warn("Unable to handle OTP validation failure due to missing userName.");
+    }
+}
+
+
+
 @Transactional
     public OnboardingDto onboardingMerchantAndMerchantUser(OnboardingRequest onboardingRequest) {
         // Step 1 : Onboard Merchant
