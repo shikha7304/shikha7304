@@ -1,3 +1,143 @@
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.OtpGenerationDto;
+import com.epay.merchant.entity.NotificationManagement;
+import com.epaymerchant.repository.NotificationManagementRepository;
+import com.epay.merchant.util.enums.KeyType;
+import com.epay.merchant.util.enums.NotificationEntityType;
+import com.epay.merchant.util.enums.NotificationType;
+import com.epay.merchant.util.enums.RequestType;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.UUID;
+
+@Component
+@RequiredArgsConstructor
+public class NotificationDao {
+
+    private final NotificationManagementRepository notificationManagementRepository;
+
+    /**
+     * Saves OTP generation notification and sends a notification request based on the notification type.
+     *
+     * @param otpGenerationDto The OTP generation details.
+     * @param content          The content of the notification.
+     * @param status           The status of the notification.
+     * @param notificationType The type of notification (SMS, EMAIL, BOTH).
+     */
+    public void saveOtpGenerationNotification(OtpGenerationDto otpGenerationDto, String content, int status, NotificationType notificationType) {
+        NotificationManagement notificationMgmt = NotificationManagement.builder()
+                .notificationType(notificationType)
+                .entityName(NotificationEntityType.OTP_MANAGEMENT)
+                .entityId(otpGenerationDto.getId())
+                .requestType(otpGenerationDto.getRequestType().getName())
+                .content(content)
+                .status(status)
+                .build();
+        sendNotificationRequest(notificationType);
+        notificationManagementRepository.save(notificationMgmt);
+    }
+
+    /**
+     * Saves key generation notification details in the notification management table.
+     *
+     * @param keyType          The type of key generated.
+     * @param entityId         The entity ID related to the key.
+     * @param content          The content of the notification.
+     * @param status           The status of the notification.
+     * @param notificationType The type of notification (SMS, EMAIL, BOTH).
+     */
+    public void saveKeyGenerationNotification(KeyType keyType, UUID entityId, String content, int status, NotificationType notificationType) {
+        NotificationManagement notificationMgmt = NotificationManagement.builder()
+                .notificationType(notificationType)
+                .entityName(NotificationEntityType.KEY_MANAGEMENT)
+                .entityId(entityId)
+                .requestType(keyType.name())
+                .content(content)
+                .status(status)
+                .build();
+        sendNotificationRequest(notificationType);
+        notificationManagementRepository.save(notificationMgmt);
+    }
+
+    /**
+     * Sends a user creation notification.
+     *
+     * @param entityId         The entity ID related to the user.
+     * @param content          The content of the notification.
+     * @param status           The status of the notification.
+     * @param notificationType The type of notification (SMS, EMAIL, BOTH).
+     */
+    public void sendUserCreationNotification(UUID entityId, String content, int status, NotificationType notificationType) {
+        NotificationManagement notificationMgmt = NotificationManagement.builder()
+                .notificationType(notificationType)
+                .entityName(NotificationEntityType.MERCHANT_USER)
+                .entityId(entityId)
+                .requestType("UserCreation")
+                .content(content)
+                .status(status)
+                .build();
+        sendNotificationRequest(notificationType);
+        notificationManagementRepository.save(notificationMgmt);
+    }
+
+    /**
+     * Sends a password notification based on the request type and notification type.
+     *
+     * @param requestType      The type of password request (RESET, CHANGE, etc.).
+     * @param entityId         The entity ID related to the password.
+     * @param content          The content of the notification.
+     * @param status           The status of the notification.
+     * @param notificationType The type of notification (SMS, EMAIL, BOTH).
+     */
+    public void sendPasswordNotification(RequestType requestType, UUID entityId, String content, int status, NotificationType notificationType) {
+        NotificationManagement notificationMgmt = NotificationManagement.builder()
+                .notificationType(notificationType)
+                .entityName(NotificationEntityType.PASSWORD_MANAGEMENT)
+                .entityId(entityId)
+                .requestType(requestType.getName())
+                .content(content)
+                .status(status)
+                .build();
+        sendNotificationRequest(notificationType);
+        notificationManagementRepository.save(notificationMgmt);
+    }
+
+    /**
+     * Sends a notification request based on the specified notification type.
+     *
+     * @param notificationType The type of notification (SMS, EMAIL, BOTH).
+     */
+    private void sendNotificationRequest(NotificationType notificationType) {
+        switch (notificationType) {
+            case SMS -> sendSMS();
+            case EMAIL -> sendEmail();
+            case BOTH -> {
+                sendSMS();
+                sendEmail();
+            }
+        }
+    }
+
+    /**
+     * Sends an email notification. (Implementation pending)
+     */
+    private void sendEmail() {
+        // TODO: Implement email notification logic
+    }
+
+    /**
+     * Sends an SMS notification. (Implementation pending)
+     */
+    private void sendSMS() {
+        // TODO: Implement SMS notification logic
+    }
+}
+
+
+
 package com.epay.merchant.dao;
 
 import com.epay.merchant.dto.OtpGenerationDto;
