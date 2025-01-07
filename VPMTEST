@@ -1,179 +1,246 @@
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.MerchantUserDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.model.request.MerchantUserRequest;
+import com.epay.merchant.model.request.UserValidationRequest;
+import com.epay.merchant.util.EPayIdentityUtil;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.MerchantUserRoles;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import static com.epay.merchant.util.ErrorConstants.*;
+
+/**
+ * Class Name: MerchantUserValidator
+ * *
+ * Description:
+ * *
+ * Author: V1017903(bhushan wadekar)
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
 @Component
 @RequiredArgsConstructor
-public class CaptchaValidator extends BaseValidator {
+public class MerchantUserValidator extends BaseValidator {
 
-    private final CaptchaDao captchaDao;
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(MerchantUserValidator.class);
 
-    /**
-     * Validates all mandatory fields and checks for duplicate Request IDs in the CAPTCHA request.
-     *
-     * @param captchaRequest the incoming CAPTCHA request to validate
-     * @throws ValidationException if any validation errors are found
-     */
-    public void requestValidator(CaptchaRequest captchaRequest) {
+    private final MerchantUserDao merchantUserDao;
+
+    public void validateMerchantUserRequest(UserValidationRequest userValidationRequest) {
         errorDtoList = new ArrayList<>();
-        validateMandatoryFields(captchaRequest);
-        checkForDuplicateRequestId(captchaRequest);
+        logger.debug("Merchant validation start for UserValidationRequest {}", userValidationRequest);
+        validateMandatoryFields(userValidationRequest);
+        logger.debug("Merchant mandatory validation completed for UserValidationRequest {}", userValidationRequest);
+        validateFieldsValue(userValidationRequest);
+        logger.debug("Merchant field validation completed for UserValidationRequest {}", userValidationRequest);
     }
 
-    /**
-     * Validates the CAPTCHA text and checks if it is expired.
-     *
-     * @param requestId    the unique request ID for the CAPTCHA
-     * @param captchaText  the provided CAPTCHA text for validation
-     * @throws ValidationException if the CAPTCHA is expired or the text does not match
-     */
-    public void captchaValueValidation(UUID requestId, String captchaText) {
+    public void validateMerchantUserRequest(MerchantUserRequest merchantUserRequest) {
         errorDtoList = new ArrayList<>();
-        Captcha captchaDetails = captchaDao.getCaptchaByRequestId(requestId);
-        validateCaptchaExpiry(DateTimeUtils.isPastDate(captchaDetails.getExpiryTime()));
-        validateCaptchaText(captchaText, captchaDetails.getCaptchaText());
+        logger.debug("Merchant validation start for MerchantUserRequest {}", merchantUserRequest);
+        validateMandatoryFields(merchantUserRequest);
+        logger.debug("Merchant mandatory validation completed for MerchantUserRequest {}", merchantUserRequest);
+        validateFieldValue(merchantUserRequest);
+        logger.debug("Merchant field value validation completed for MerchantUserRequest {}", merchantUserRequest);
+        validateDuplicateMerchantUser(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
+        logger.debug("Merchant User duplicate validation completed for MerchantUserRequest {}", merchantUserRequest);
+        validatedAssignedRole(merchantUserRequest.getRole());
+        logger.debug("Merchant User role validation completed for MerchantUserRequest {}", merchantUserRequest);
+        validatedAssignedMIds(merchantUserRequest.getAssignedMIds());
+        logger.debug("Merchant User assigned MIDs validation completed for MerchantUserRequest {}", merchantUserRequest);
     }
 
-    /**
-     * Validates the mandatory fields in the CAPTCHA request.
-     *
-     * @param captchaRequest the CAPTCHA request to validate
-     */
-    private void validateMandatoryFields(CaptchaRequest captchaRequest) {
-        checkMandatoryField(captchaRequest.getRequestId(), "RequestId");
-        checkMandatoryField(captchaRequest.getRequestType(), "Request Type");
-        throwIfErrors(); // Throws exception if validation errors exist
+
+    void validateMandatoryFields(UserValidationRequest userValidationRequest) {
+        checkMandatoryField(userValidationRequest.getRequestType(), REQUEST_TYPE);
+        checkMandatoryField(userValidationRequest.getUserName(), USER_NAME);
+        throwIfErrors();
     }
 
-    /**
-     * Checks if the Request ID is a duplicate in the database.
-     *
-     * @param captchaRequest the CAPTCHA request to check
-     */
-    private void checkForDuplicateRequestId(CaptchaRequest captchaRequest) {
-        if (captchaDao.existsByRequestId(captchaRequest.getRequestId())) {
-            errorDtoList.add(ErrorDto.builder()
-                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                    .errorMessage(MessageFormat.format(
-                            ErrorConstants.INVALID_ERROR_MESSAGE,
-                            "RequestId",
-                            "Reason: Duplicate RequestId"))
-                    .build());
-        }
+    void validateFieldsValue(UserValidationRequest userValidationRequest) {
+        validateFieldValue(userValidationRequest.getRequestType(), RequestType.LOGIN.getName(), REQUEST_TYPE);
         throwIfErrors();
     }
 
     /**
-     * Checks if the CAPTCHA has expired.
+     * Validating mandatory fields if it is not null and not empty
      *
-     * @param isExpired a boolean indicating if the CAPTCHA is expired
+     * @param user MerchantUserDto
      */
-    private void validateCaptchaExpiry(boolean isExpired) {
-        if (isExpired) {
-            errorDtoList.add(ErrorDto.builder()
-                    .errorCode(ErrorConstants.EXPIRY_TIME_ERROR_CODE)
-                    .errorMessage(MessageFormat.format(
-                            ErrorConstants.EXPIRY_TIME_ERROR_MESSAGE,
-                            "Captcha"))
-                    .build());
+    void validateMandatoryFields(MerchantUserRequest user) {
+        checkMandatoryField(user.getUserName(), USER_NAME);
+        checkMandatoryField(user.getFirstName(), FIRST_NAME);
+        checkMandatoryField(user.getLastName(), LAST_NAME);
+        checkMandatoryField(user.getRole(), ROLE);
+        checkMandatoryField(user.getEmail(), EMAIL);
+        checkMandatoryField(user.getPrimaryPhone(), PRIMARY_PHONE);
+        checkMandatoryField(user.getMobilePhone(), MOBILE_PHONE);
+        checkMandatoryField(user.getCity(), CITY);
+        checkMandatoryField(user.getStateCode(), STATE);
+        checkMandatoryField(user.getCountryCode(), COUNTRY);
+        checkMandatoryField(user.getPinCode(), PIN);
+        checkMandatoryCollection(user.getAssignedMIds(), ASSIGNED_MID);
+        throwIfErrors();
+    }
+
+    private void validateFieldValue(MerchantUserRequest merchantUserRequest) {
+        validateFieldWithRegex(merchantUserRequest.getEmail(), MerchantConstant.EMAIL_REGEX, EMAIL, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getMobilePhone(), MerchantConstant.PHONE_REGEX, MOBILE_PHONE, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getOfficePhone(), MerchantConstant.LANDLINE_PHONE_REGEX, OFFICE_PHONE, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getPinCode(), MerchantConstant.PIN_REGEX, PINCODE, FORMAT);
+    }
+
+    void validateDuplicateMerchantUser(String userName, String email, String mobilePhone) {
+        boolean isUserExist = merchantUserDao.existsByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, mobilePhone, UserStatus.ACTIVE);
+        if (isUserExist) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, MERCHANT_USER)).build());
         }
         throwIfErrors();
     }
 
-    /**
-     * Validates the provided CAPTCHA text against the text stored in the database.
-     *
-     * @param providedCaptchaText the CAPTCHA text provided by the user
-     * @param storedCaptchaText   the CAPTCHA text stored in the database
-     */
-    private void validateCaptchaText(String providedCaptchaText, String storedCaptchaText) {
-        if (!StringUtils.equals(providedCaptchaText, storedCaptchaText)) {
-            errorDtoList.add(ErrorDto.builder()
-                    .errorCode(ErrorConstants.NOT_FOUND_ERROR_CODE)
-                    .errorMessage(MessageFormat.format(
-                            ErrorConstants.NOT_FOUND_ERROR_MESSAGE,
-                            "Captcha"))
-                    .build());
+    void validatedAssignedRole(UUID role) {
+        MerchantUserRoles loggedInUserRole = MerchantUserRoles.getRole(EPayIdentityUtil.getUserPrincipal().getUserRole().getFirst());
+        MerchantUserRoles userRoleName = MerchantUserRoles.getRole(merchantUserDao.getUserRoleName(role));
+        if (MerchantUserRoles.ADMIN == loggedInUserRole && MerchantUserRoles.SUPER_ADMIN.equals(userRoleName)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, ADMIN_AND_USER)).build());
+        } else if (MerchantUserRoles.USER == loggedInUserRole && !MerchantUserRoles.USER.equals(userRoleName)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, TO_BE_ASSIGNED_ROLE_ARE_USER)).build());
+        }
+        throwIfErrors();
+    }
+
+    void validatedAssignedMIds(List<String> assignedMIds) {
+        String username = EPayIdentityUtil.getUserPrincipal().getUsername();
+        boolean userHaveAccessToMId = merchantUserDao.isUserHaveAccessToMId(username, assignedMIds);
+        if (!userHaveAccessToMId) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ASSIGNED_MID, "User not having the access of assigned MIds " + String.join(", ", assignedMIds))).build());
         }
         throwIfErrors();
     }
 
 }
-
-
-
-
 package com.epay.merchant.validator;
 
-import com.epay.merchant.dao.CaptchaDao;
+import com.epay.merchant.controller.ValidationController;
+import com.epay.merchant.dao.PasswordManagementDao;
 import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.entity.Captcha;
-import com.epay.merchant.model.request.CaptchaRequest;
-import com.epay.merchant.util.DateTimeUtils;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.entity.PasswordManagement;
+import com.epay.merchant.model.request.PasswordChangeRequest;
+import com.epay.merchant.model.request.PasswordResetRequest;
 import com.epay.merchant.util.ErrorConstants;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
 import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.UUID;
+import java.util.List;
+
+import static com.epay.merchant.util.MerchantConstant.*;
 
 @Component
 @RequiredArgsConstructor
-public class CaptchaValidator extends BaseValidator {
+public class PasswordValidator extends BaseValidator {
 
-    private final CaptchaDao captchaDao;
+    private final PasswordManagementDao passwordManagementDao;
+    LoggerUtility log = LoggerFactoryUtility.getLogger(ValidationController.class);
 
     /**
-     * Validates all the mandatory fields present in the request and check for Duplicate RequestId.
-     * @param captchaRequest CaptchaRequest
+     * Validating mandatory fields if it is not null and not empty and validatePasswordValue if it's matching the regex format or not
+     * @param passwordChangeRequest PasswordChangeRequest
      */
-    public void requestValidator(CaptchaRequest captchaRequest) {
+    public void validatePasswordChangeRequest(PasswordChangeRequest passwordChangeRequest) {
+        log.info("Validating password change request");
         errorDtoList = new ArrayList<>();
-        validateMandatoryFields(captchaRequest);
-        duplicateCheck(captchaRequest);
+        validateMandatoryFields(passwordChangeRequest);
+        throwIfErrors();
+        validatePasswordValue(passwordChangeRequest.getNewPassword(), passwordChangeRequest.getConfirmPassword());
+        throwIfErrors();
     }
-
     /**
-     * Validates captcha expiry & text.
-     * @param requestId UUID
-     * @param captchaText Hash String
+     *  Validating mandatory fields if it is not null and not empty and validatePasswordValue if it's matching the regex format or not
+     * @param passwordResetRequest PasswordResetRequest
      */
-    public void captchaValueValidation(UUID requestId, String captchaText) {
+    public void validateResetPasswordRequest(PasswordResetRequest passwordResetRequest) {
+        log.info("Validating password change request");
         errorDtoList = new ArrayList<>();
-        Captcha captchaDetails = captchaDao.getCaptchaByRequestId(requestId);
-        isCaptchaExpiry(DateTimeUtils.isPastDate(captchaDetails.getExpiryTime()));
-        matchCaptcha(captchaText, captchaDetails.getCaptchaText());
+        validateMandatoryFields(passwordResetRequest);
+        validatePasswordValue(passwordResetRequest.getNewPassword(), passwordResetRequest.getConfirmPassword());
     }
-
-    private void validateMandatoryFields(CaptchaRequest captchaRequest) {
-        checkMandatoryField(captchaRequest.getRequestId(), "RequestId");
-        checkMandatoryField(captchaRequest.getRequestType(), "Request Type");
-        throwIfErrors();
-    }
-
-    private void duplicateCheck(CaptchaRequest captchaRequest) {
-        if (captchaDao.existsByRequestId(captchaRequest.getRequestId())) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "RequestId", "Reason : Duplicate RequestId")).build());
-        }
-        throwIfErrors();
-    }
-
-
-    private void isCaptchaExpiry(boolean captchaDetails) {
-        if (captchaDetails) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.EXPIRY_TIME_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.EXPIRY_TIME_ERROR_MESSAGE, "Captcha")).build());
-        }
-        throwIfErrors();
+    /**
+     * Validate password  old with new password.
+     * @param merchantUser MerchantUserDto,newPassword and oldPassword
+     */
+    public void validatePasswordUpdateWithDB(MerchantUserDto merchantUser, String newPassword, String oldPassword) {
+        errorDtoList = new ArrayList<>();
+        passwordCheck(!merchantUser.getPassword().equals(oldPassword), ErrorConstants.OLD_PASSWORD, ErrorConstants.ERROR_OLD_PASSWORD_MISMATCH);
+        passwordCheck(newPassword.equals(oldPassword), ErrorConstants.NEW_PASSWORD, ErrorConstants.ERROR_NEW_PASSWORD_SAME_AS_OLD);
+        passwordWithOldPasswords(merchantUser, newPassword);
     }
 
     /**
-     * Comparing request captchaTextHash with dbCaptchaTextHash
-     * @param loginCaptchaImage String
-     * @param dbCaptchaTextHash String
+     * Validate password and save in DB
+     * @param merchantUser MerchantUserDto,newPassword
      */
-    private void matchCaptcha(String loginCaptchaImage, String dbCaptchaTextHash) {
-        if (!StringUtils.equals(loginCaptchaImage, dbCaptchaTextHash)) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.NOT_FOUND_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Captcha")).build());
+    public void validatePasswordUpdateWithDB(MerchantUserDto merchantUser, String newPassword) {
+        errorDtoList = new ArrayList<>();
+        passwordWithOldPasswords(merchantUser, newPassword);
+    }
+
+    private void validateMandatoryFields(PasswordChangeRequest passwordChangeRequest) {
+        log.info("Validating mandatory fields");
+        checkMandatoryField(passwordChangeRequest.getUserName(), ErrorConstants.USER_NAME);
+        checkMandatoryField(passwordChangeRequest.getOldPassword(), ErrorConstants.OLD_PASSWORD);
+        checkMandatoryField(passwordChangeRequest.getNewPassword(), ErrorConstants.NEW_PASSWORD);
+        checkMandatoryField(passwordChangeRequest.getConfirmPassword(), ErrorConstants.CONFIRM_PASSWORD);
+        throwIfErrors();
+    }
+
+    private void validateMandatoryFields(PasswordResetRequest passwordResetRequest) {
+        log.info("Validating mandatory fields");
+        checkMandatoryField(passwordResetRequest.getUserName(), ErrorConstants.USER_NAME);
+        checkMandatoryField(passwordResetRequest.getNewPassword(), ErrorConstants.NEW_PASSWORD);
+        checkMandatoryField(passwordResetRequest.getConfirmPassword(), ErrorConstants.CONFIRM_PASSWORD);
+        throwIfErrors();
+    }
+
+    private void validatePasswordValue(String newPassword, String confirmPassword) {
+        if (!newPassword.matches(PASSWORD_REGEX)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ErrorConstants.NEW_PASSWORD, "Reason : New password does not meet the acceptance criteria")).build());
+        }
+        passwordCheck(!newPassword.equals(confirmPassword), ErrorConstants.PASSWORD, ErrorConstants.ERROR_NEW_AND_CONFIRM_PASSWORD_MISMATCH);
+        throwIfErrors();
+    }
+
+    private void passwordCheck(boolean isValid, String field, String reason) {
+        if (isValid) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, field, reason)).build());
         }
         throwIfErrors();
     }
 
+    private void passwordWithOldPasswords(MerchantUserDto merchantUser, String newPassword) {
+        List<PasswordManagement> lastFiveRecords = passwordManagementDao.findLastPasswordsByUserId(merchantUser.getId());
+        lastFiveRecords.stream().filter(previousPassword -> previousPassword.getPreviousPassword().equals(newPassword)).forEachOrdered(previousPassword -> errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ErrorConstants.NEW_PASSWORD, ErrorConstants.ERROR_NEW_PASSWORD_REUSED)).build()));
+        throwIfErrors();
+    }
 }
