@@ -1,3 +1,155 @@
+@Component
+@RequiredArgsConstructor
+public class MerchantUserValidator extends BaseValidator {
+
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(MerchantUserValidator.class);
+
+    private final MerchantUserDao merchantUserDao;
+
+    // Validates the MerchantUserRequest
+    public void validateMerchantUserRequest(MerchantUserRequest merchantUserRequest) {
+        errorDtoList = new ArrayList<>();
+        logger.debug("Validation started for MerchantUserRequest: {}", merchantUserRequest);
+        
+        validateMandatoryFields(merchantUserRequest);
+        validateFieldValue(merchantUserRequest);
+        validateDuplicateMerchantUser(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
+        validatedAssignedRole(merchantUserRequest.getRole());
+        validatedAssignedMIds(merchantUserRequest.getAssignedMIds());
+        
+        logger.debug("Validation completed for MerchantUserRequest: {}", merchantUserRequest);
+    }
+
+    // Validates the mandatory fields in MerchantUserRequest
+    void validateMandatoryFields(MerchantUserRequest merchantUserRequest) {
+        checkMandatoryField(merchantUserRequest.getUserName(), USER_NAME);
+        checkMandatoryField(merchantUserRequest.getFirstName(), FIRST_NAME);
+        checkMandatoryField(merchantUserRequest.getLastName(), LAST_NAME);
+        checkMandatoryField(merchantUserRequest.getRole(), ROLE);
+        checkMandatoryField(merchantUserRequest.getEmail(), EMAIL);
+        checkMandatoryField(merchantUserRequest.getPrimaryPhone(), PRIMARY_PHONE);
+        checkMandatoryField(merchantUserRequest.getMobilePhone(), MOBILE_PHONE);
+        checkMandatoryField(merchantUserRequest.getCity(), CITY);
+        checkMandatoryField(merchantUserRequest.getStateCode(), STATE);
+        checkMandatoryField(merchantUserRequest.getCountryCode(), COUNTRY);
+        checkMandatoryField(merchantUserRequest.getPinCode(), PIN);
+        checkMandatoryCollection(merchantUserRequest.getAssignedMIds(), ASSIGNED_MID);
+        throwIfErrors();
+    }
+
+    // Validates field values in MerchantUserRequest
+    private void validateFieldValue(MerchantUserRequest merchantUserRequest) {
+        validateFieldWithRegex(merchantUserRequest.getEmail(), MerchantConstant.EMAIL_REGEX, EMAIL, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getMobilePhone(), MerchantConstant.PHONE_REGEX, MOBILE_PHONE, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getOfficePhone(), MerchantConstant.LANDLINE_PHONE_REGEX, OFFICE_PHONE, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getPinCode(), MerchantConstant.PIN_REGEX, PINCODE, FORMAT);
+        throwIfErrors();
+    }
+
+    // Validates for duplicate Merchant User
+    void validateDuplicateMerchantUser(String userName, String email, String mobilePhone) {
+        boolean isUserExist = merchantUserDao.existsByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, mobilePhone, UserStatus.ACTIVE);
+        if (isUserExist) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(ALREADY_EXIST_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ALREADY_EXIST_ERROR_MESSAGE, MERCHANT_USER))
+                .build());
+        }
+        throwIfErrors();
+    }
+
+    // Validates the assigned role
+    void validatedAssignedRole(UUID role) {
+        MerchantUserRoles loggedInUserRole = MerchantUserRoles.getRole(EPayIdentityUtil.getUserPrincipal().getUserRole().getFirst());
+        MerchantUserRoles userRoleName = MerchantUserRoles.getRole(merchantUserDao.getUserRoleName(role));
+
+        if (MerchantUserRoles.ADMIN == loggedInUserRole && MerchantUserRoles.SUPER_ADMIN.equals(userRoleName)) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(INVALID_ERROR_MESSAGE, ROLE, ADMIN_AND_USER))
+                .build());
+        } else if (MerchantUserRoles.USER == loggedInUserRole && !MerchantUserRoles.USER.equals(userRoleName)) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(INVALID_ERROR_MESSAGE, ROLE, TO_BE_ASSIGNED_ROLE_ARE_USER))
+                .build());
+        }
+        throwIfErrors();
+    }
+
+    // Validates assigned MIDs
+    void validatedAssignedMIds(List<String> assignedMIds) {
+        String username = EPayIdentityUtil.getUserPrincipal().getUsername();
+        boolean userHasAccessToMIds = merchantUserDao.isUserHaveAccessToMId(username, assignedMIds);
+
+        if (!userHasAccessToMIds) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(INVALID_ERROR_MESSAGE, ASSIGNED_MID, "User not having access to MIDs: " + String.join(", ", assignedMIds)))
+                .build());
+        }
+        throwIfErrors();
+    }
+}
+
+@Component
+@RequiredArgsConstructor
+public class PasswordValidator extends BaseValidator {
+
+    private final PasswordManagementDao passwordManagementDao;
+    LoggerUtility log = LoggerFactoryUtility.getLogger(PasswordValidator.class);
+
+    // Validates password change request
+    public void validatePasswordChangeRequest(PasswordChangeRequest passwordChangeRequest) {
+        log.info("Validating password change request");
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(passwordChangeRequest);
+        validatePasswordValue(passwordChangeRequest.getNewPassword(), passwordChangeRequest.getConfirmPassword());
+    }
+
+    // Validates password reset request
+    public void validateResetPasswordRequest(PasswordResetRequest passwordResetRequest) {
+        log.info("Validating password reset request");
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(passwordResetRequest);
+        validatePasswordValue(passwordResetRequest.getNewPassword(), passwordResetRequest.getConfirmPassword());
+    }
+
+    // Validates password against the database records
+    public void validatePasswordUpdateWithDB(MerchantUserDto merchantUser, String newPassword, String oldPassword) {
+        errorDtoList = new ArrayList<>();
+        passwordCheck(!merchantUser.getPassword().equals(oldPassword), OLD_PASSWORD, ERROR_OLD_PASSWORD_MISMATCH);
+        passwordCheck(newPassword.equals(oldPassword), NEW_PASSWORD, ERROR_NEW_PASSWORD_SAME_AS_OLD);
+        passwordWithOldPasswords(merchantUser, newPassword);
+    }
+
+    // Validates password reuse in the database
+    private void passwordWithOldPasswords(MerchantUserDto merchantUser, String newPassword) {
+        List<PasswordManagement> lastFiveRecords = passwordManagementDao.findLastPasswordsByUserId(merchantUser.getId());
+        lastFiveRecords.stream()
+            .filter(record -> record.getPreviousPassword().equals(newPassword))
+            .forEach(record -> errorDtoList.add(ErrorDto.builder()
+                .errorCode(INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(INVALID_ERROR_MESSAGE, NEW_PASSWORD, ERROR_NEW_PASSWORD_REUSED))
+                .build()));
+        throwIfErrors();
+    }
+
+    // Validates password format and match
+    private void validatePasswordValue(String newPassword, String confirmPassword) {
+        if (!newPassword.matches(PASSWORD_REGEX)) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(INVALID_ERROR_MESSAGE, NEW_PASSWORD, "New password does not meet criteria"))
+                .build());
+        }
+        passwordCheck(!newPassword.equals(confirmPassword), PASSWORD, ERROR_NEW_AND_CONFIRM_PASSWORD_MISMATCH);
+        throwIfErrors();
+    }
+}
+
+
+
 package com.epay.merchant.validator;
 
 import com.epay.merchant.dao.MerchantUserDao;
