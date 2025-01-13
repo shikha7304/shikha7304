@@ -1,4 +1,73 @@
-package com.epay.merchant.controller;
+Here’s the updated method definition comments for the provided classes:
+
+DowntimeApiController
+
+getDowntimeApis() Method
+
+/**
+ * Retrieves the list of all downtime APIs available.
+ *
+ * @return MerchantResponse containing a list of DowntimeApiResponse objects with downtime API details.
+ */
+@GetMapping("list")
+@Operation(summary = "Get downtime API details.", description = "Fetches details of all downtime APIs.")
+public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
+
+getDowntimeApis(String mId) Method
+
+/**
+ * Retrieves downtime API details for a specific merchant.
+ *
+ * @param mId The merchant ID for which downtime API details are to be fetched.
+ * @return MerchantResponse containing MerchantDownTimeResponse objects with downtime API details for the specified merchant.
+ */
+@GetMapping("details/{mId}")
+@Operation(summary = "Get downtime API details for a merchant.", description = "Fetches downtime API details for a specific merchant by their MId.")
+public MerchantResponse<MerchantDownTimeResponse> getDowntimeApis(@PathVariable String mId) {
+
+DowntimeApiService
+
+getDowntimeApis() Method
+
+/**
+ * Retrieves details of all downtime APIs by interacting with the DAO layer.
+ *
+ * @return MerchantResponse containing a list of DowntimeApiResponse objects with information about all downtime APIs.
+ */
+public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
+
+getMerchantDowntimeApis(String mId) Method
+
+/**
+ * Retrieves downtime API details for a specific merchant by their ID.
+ *
+ * @param mId The merchant ID for which downtime API details are to be fetched.
+ * @return MerchantResponse containing a list of MerchantDownTimeResponse objects with downtime API details for the specified merchant.
+ */
+public MerchantResponse<MerchantDownTimeResponse> getMerchantDowntimeApis(String mId) {
+
+DowntimeApiDao
+
+getDowntimeAPIs() Method
+
+/**
+ * Fetches records of all downtime APIs from the Admin Services Client.
+ *
+ * @return List of AdminDowntimePayModeInfo objects containing details of all downtime APIs.
+ */
+public List<AdminDowntimePayModeInfo> getDowntimeAPIs() {
+
+getMerchantDowntimeAPIs(String mId) Method
+
+/**
+ * Fetches downtime API details for a specific merchant from the Admin Services Client.
+ *
+ * @param mId The merchant ID for which downtime API details are to be fetched.
+ * @return List of MerchantDownTimeResponse objects containing downtime API details for the specified merchant.
+ */
+public List<MerchantDownTimeResponse> getMerchantDowntimeAPIs(String mId) {
+
+These updated comments improve clarity and provide concise descriptions of the purpose, parameters, and return values of each method. Let me know if you need further adjustments!package com.epay.merchant.controller;
 
 import com.epay.merchant.externalservice.response.MerchantDownTimeResponse;
 import com.epay.merchant.model.response.DowntimeApiResponse;
