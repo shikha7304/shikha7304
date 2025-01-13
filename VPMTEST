@@ -1,358 +1,154 @@
+package com.epay.merchant.controller;
 
-
-Here’s an updated version of the method comments with improved clarity and standard formatting:
-
-Updates for KeyDao Class
-
-generateApiKey Method
-
-/**
- * Generates an API key using the KMS client and saves it in the database.
- *
- * @param mId The merchant ID for which the API key is to be generated.
- * @return KMSAPIKeysResponse containing the generated API key and additional details.
- * @throws ValidationException If the KMS API response contains validation errors.
- * @throws MerchantException If there is an error during key generation.
- */
-public KMSAPIKeysResponse generateApiKey(String mId) {
-
-generateEncryptionKey Method
-
-/**
- * Generates an encryption key using the KMS client and saves it in the database.
- *
- * @param keyGenerationRequest The request object containing details for encryption key generation.
- * @return KMSEncryptionKeysResponse containing the generated encryption key and additional details.
- * @throws ValidationException If the KMS API response contains validation errors.
- * @throws MerchantException If there is an error during key generation.
- */
-public KMSEncryptionKeysResponse generateEncryptionKey(KeyGenerationRequest keyGenerationRequest) {
-
-saveNotification Method
-
-/**
- * Saves a key generation notification in the database.
- *
- * @param keyType         The type of key (e.g., ENCRYPTION, API).
- * @param entityId        The unique ID of the generated key entity.
- * @param content         The content of the notification message.
- * @param status          The status of the notification (e.g., success or failure).
- * @param notificationType The type of notification to be saved.
- */
-public void saveNotification(KeyType keyType, UUID entityId, String content, int status, NotificationType notificationType) {
-
-validatedAPIKey Method
-
-/**
- * Validates the API key for existence and active status using the KMS client.
- *
- * @param apiKeyValidationRequest The request object containing the API key validation details.
- * @return MerchantResponse containing the validation result and related details.
- * @throws MerchantException If the merchant ID is invalid or inactive.
- */
-public MerchantResponse<String> validatedAPIKey(APIKeyValidationRequest apiKeyValidationRequest) {
-
-getMerchantEncryptionKeys Method
-
-/**
- * Retrieves the encryption keys mapped to a merchant ID.
- *
- * @param mId The merchant ID for which the encryption keys are to be fetched.
- * @return MerchantResponse containing the encryption keys for the merchant.
- */
-public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(String mId) {
-
-getKeysByMerchant Method
-
-/**
- * Retrieves the keys mapped to a merchant ID based on the key type and pagination details.
- *
- * @param keyType  The type of key (e.g., ENCRYPTION, API).
- * @param mId      The merchant ID for which the keys are to be fetched.
- * @param pageable The pagination details for the key retrieval.
- * @return MerchantResponse containing the list of keys for the merchant.
- */
-public MerchantResponse<KMSKeyResponse> getKeysByMerchant(KeyType keyType, String mId, Pageable pageable) {
-
-saveKey Method
-
-/**
- * Saves the key details in the database.
- *
- * @param mid     The merchant ID associated with the key.
- * @param keyType The type of key (e.g., ENCRYPTION, API).
- * @param status  The status of the key generation process (success or failure).
- * @param remark  Additional remarks about the key generation process.
- * @return UUID The unique ID of the saved key entity.
- */
-private UUID saveKey(String mid, KeyType keyType, int status, String remark) {
-
-Updates for KeyValidator Class
-
-validateKeyGenerationRequest Method
-
-/**
- * Validates the key generation request by checking mandatory fields and merchant validity.
- *
- * @param keyGenerationRequest The key generation request object to be validated.
- * @throws ValidationException If any mandatory fields are missing or the merchant ID is invalid.
- */
-public void validateKeyGenerationRequest(KeyGenerationRequest keyGenerationRequest) {
-
-validateAPIKeyValidationRequest Method
-
-/**
- * Validates the API key validation request by checking mandatory fields.
- *
- * @param apiKeyValidationRequest The API key validation request object to be validated.
- * @throws ValidationException If any mandatory fields are missing.
- */
-public void validateAPIKeyValidationRequest(APIKeyValidationRequest apiKeyValidationRequest) {
-
-validateMId Method
-
-/**
- * Validates the merchant ID to ensure it exists and is active.
- *
- * @param mId The merchant ID to be validated.
- * @throws MerchantException If the merchant ID is not found or inactive.
- */
-public void validateMId(String mId) {
-
-validatedMandatoryField Method (KeyGenerationRequest)
-
-/**
- * Validates the mandatory fields in the key generation request.
- *
- * @param keyGenerationRequest The request object containing key generation details.
- * @throws ValidationException If any mandatory fields are missing.
- */
-private void validatedMandatoryField(KeyGenerationRequest keyGenerationRequest) {
-
-validatedMandatoryField Method (APIKeyValidationRequest)
-
-/**
- * Validates the mandatory fields in the API key validation request.
- *
- * @param apiKeyValidationRequest The request object containing API key validation details.
- * @throws ValidationException If any mandatory fields are missing.
- */
-private void validatedMandatoryField(APIKeyValidationRequest apiKeyValidationRequest) {
-
-These updated comments provide a clearer explanation of what each method does, its parameters, return value, and potential exceptions. Let me know if you need further refinements!
-
-
-
-
-
-package com.epay.merchant.dao;
-
-import com.epay.merchant.config.MerchantConfig;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.entity.KeyManagement;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.externalservice.KmsClient;
-import com.epay.merchant.externalservice.response.KMSAPIKeysResponse;
-import com.epay.merchant.externalservice.response.KMSEncryptionKeysResponse;
-import com.epay.merchant.externalservice.response.KMSKeyResponse;
-import com.epay.merchant.model.request.APIKeyValidationRequest;
-import com.epay.merchant.model.request.KeyGenerationRequest;
+import com.epay.merchant.externalservice.response.MerchantDownTimeResponse;
+import com.epay.merchant.model.response.DowntimeApiResponse;
 import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.repository.KeyRepository;
-import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.service.DowntimeApiService;
+import io.swagger.v3.oas.annotations.Operation;
+import lombok.AllArgsConstructor;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Objects;
+
+/**
+ * Class Name: DowntimeApiController
+ * *
+ * Description: This class contains apis related to transaction-downtime-api details.
+ * *
+ * Author: V1018217
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
+@RestController
+@AllArgsConstructor
+@RequestMapping("/downtime/api/")
+public class DowntimeApiController {
+    private final DowntimeApiService downtimeApiService;
+
+    /**
+     * Get transaction downtime api details
+     *
+     * @return list of downtime apis.
+     */
+    @GetMapping("list")
+    @Operation(summary = "Get downtime api details.", description = "Get downtime-api details")
+    public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
+        return downtimeApiService.getDowntimeApis();
+    }
+
+    /**
+     * Get transaction downtime api details
+     *
+     * @return list of downtime apis.
+     */
+    @GetMapping("details/{mId}")
+    @Operation(summary = "Get downtime api details for a merchant.", description = "Get downtime-api details by merchant MId")
+    public MerchantResponse<MerchantDownTimeResponse> getDowntimeApis(@PathVariable String mId) {
+        return downtimeApiService.getMerchantDowntimeApis(mId);
+    }
+}
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.DowntimeApiDao;
+import com.epay.merchant.externalservice.response.AdminDowntimePayModeInfo;
+import com.epay.merchant.externalservice.response.MerchantDownTimeResponse;
+import com.epay.merchant.mapper.DowntimeApiMapper;
+import com.epay.merchant.model.response.DowntimeApiResponse;
+import com.epay.merchant.model.response.MerchantResponse;
 import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.KeyType;
-import com.epay.merchant.util.enums.MerchantStatus;
-import com.epay.merchant.util.enums.NotificationType;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.collections4.CollectionUtils;
-import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Component;
+import lombok.AllArgsConstructor;
+import org.springframework.stereotype.Service;
 
-import java.text.MessageFormat;
-import java.util.Arrays;
-import java.util.UUID;
+import java.util.List;
 
-@Component
-@RequiredArgsConstructor
-public class KeyDao {
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(KeyDao.class);
-    private final KmsClient kmsClient;
-    private final KeyRepository keyRepository;
-    private final MerchantConfig merchantConfig;
-    private final NotificationDao notificationDao;
-    private final MerchantInfoDao merchantInfoDao;
+
+/**
+ * Class Name: DowntimeApiService
+ * *
+ * Description: This class contains details of transaction downtime api details.
+ * *
+ * Author: V1018217
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
+@Service
+@AllArgsConstructor
+public class DowntimeApiService {
+    private final DowntimeApiDao downtimeApiDao;
+    private final DowntimeApiMapper downtimeApiMapper;
 
     /**
-     * This method will handle generation API  Key logic
-     * @param mId
-     * @return  kmsapiKeysResponse
+     * This method contains merchant downtime api details.
+     *
+     * @return MerchantResponse containing list of merchant downtime api details.
      */
-    public KMSAPIKeysResponse generateApiKey(String mId) {
-        try {
-            MerchantResponse<KMSAPIKeysResponse> kmsResponse = kmsClient.generateAPIKeys(mId, merchantConfig.getApiKeyExpiryTime());
-            if (kmsResponse.getStatus() == MerchantConstant.RESPONSE_SUCCESS && CollectionUtils.isNotEmpty(kmsResponse.getData())) {
-                UUID keyId = saveKey(mId, KeyType.API, MerchantConstant.RESPONSE_SUCCESS, "API Key Generated");
-                KMSAPIKeysResponse kmsapiKeysResponse = kmsResponse.getData().getFirst();
-                kmsapiKeysResponse.setId(keyId);
-                return kmsapiKeysResponse;
-            } else if (kmsResponse.getStatus() == MerchantConstant.RESPONSE_FAILURE) {
-                saveKey(mId, KeyType.API, MerchantConstant.RESPONSE_FAILURE, Arrays.toString(kmsResponse.getErrors().toArray(new ErrorDto[0])));
-                throw new ValidationException(kmsResponse.getErrors());
-            }
-            saveKey(mId, KeyType.API, MerchantConstant.RESPONSE_FAILURE, "Error in API Key Generated");
-            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "API Key"));
-        } catch (Exception e) {
-            log.error("Error in API Key Generation : ", e);
-            saveKey(mId, KeyType.API, MerchantConstant.RESPONSE_FAILURE, "Error in API Key Generated : " + e.getMessage());
-            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "API Key"));
-        }
-    }
-    /**
-     * This method will handle generation of encryption Key logic
-     * @param keyGenerationRequest
-     * @return  KMSEncryptionKeysResponse
-     */
-    public KMSEncryptionKeysResponse generateEncryptionKey(KeyGenerationRequest keyGenerationRequest) {
-        try {
-            MerchantResponse<String> kmsResponse = kmsClient.generateEncryptionKeys(keyGenerationRequest.getMId(), keyGenerationRequest.getOldKeyExpiryInHr(), merchantConfig.getEncryptionKeyExpiryTime());
-            if (MerchantConstant.RESPONSE_SUCCESS == kmsResponse.getStatus() && CollectionUtils.isNotEmpty(kmsResponse.getData())) {
-                UUID keyId = saveKey(keyGenerationRequest.getMId(), KeyType.ENCRYPTION, MerchantConstant.RESPONSE_SUCCESS, "Encryption Key Generated");
-                return KMSEncryptionKeysResponse.builder().id(keyId).mek(kmsResponse.getData().getFirst()).build();
-            } else if (kmsResponse.getStatus() == MerchantConstant.RESPONSE_FAILURE) {
-                saveKey(keyGenerationRequest.getMId(), KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, Arrays.toString(kmsResponse.getErrors().toArray(new ErrorDto[0])));
-                throw new ValidationException(kmsResponse.getErrors());
-            }
-            saveKey(keyGenerationRequest.getMId(), KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, "Error in Encryption Key Generated");
-            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "API Key"));
-        } catch (Exception e) {
-            log.error("Error in Encryption Key Generation : ", e);
-            saveKey(keyGenerationRequest.getMId(), KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, "Error in Encryption Key Generated : " + e.getMessage());
-            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "API Key"));
-        }
-    }
-    /**
-     * It will save the key generation notification type
-     * @param notificationType
-     * @param status
-     * @param content
-     * @param entityId
-     * @param keyType
-     */
-    public void saveNotification(KeyType keyType, UUID entityId, String content, int status, NotificationType notificationType) {
-        notificationDao.saveKeyGenerationNotification(keyType, entityId, content, status, notificationType);
+
+    public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
+        List<AdminDowntimePayModeInfo> downtimeApiDetails = downtimeApiDao.getDowntimeAPIs();
+        return MerchantResponse.<DowntimeApiResponse>builder().data(downtimeApiMapper.mapDowntimeApiDtoListToDowntimeApiResponseList(downtimeApiDetails)).status(MerchantConstant.RESPONSE_SUCCESS).count((long) downtimeApiDetails.size()).build();
     }
 
     /**
-     * It will validate the API key if its exist and active or not
-     * @param apiKeyValidationRequest
-     * @return kmsResponse
+     * This method contains merchant downtime api details.
+     * @param mId String
+     * @return  MerchantResponse containing list of merchant downtime api details.
      */
-    public MerchantResponse<String> validatedAPIKey(APIKeyValidationRequest apiKeyValidationRequest) {
-        MerchantResponse<String> kmsResponse = kmsClient.validatedMerchantKeys(apiKeyValidationRequest);
-        if (MerchantConstant.RESPONSE_SUCCESS == kmsResponse.getStatus() && CollectionUtils.isNotEmpty(kmsResponse.getData())) {
-            String mId = kmsResponse.getData().getFirst();
-            boolean isMIdExist = merchantInfoDao.isExistsByMIdAndStatus(mId, MerchantStatus.ACTIVE.name());
-            if (isMIdExist) {
-                return kmsResponse;
-            }
-            throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Merchant", "MId : " + mId + " is not active."));
-        }
-        return kmsResponse;
-    }
-    /**
-     * It will fetch the Merchant Encryption keys
-     * @param mId
-     * @return KMSEncryptionKeysResponse
-     */
-    public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(String mId) {
-        return kmsClient.getEncryptionKeys(mId);
-    }
-    /**
-     * It will fetch the keys mapped to MID
-     * @param mId,keyType,pageable
-     * @return KMSKeyResponse
-     */
-    public MerchantResponse<KMSKeyResponse> getKeysByMerchant(KeyType keyType, String mId, Pageable pageable) {
-        return kmsClient.getKeysByMerchant(keyType, mId, pageable);
-    }
-    /**
-     * It will save the key in DB
-     * @param remark,status,keyType,mid
-     */
-    private UUID saveKey(String mid, KeyType keyType, int status, String remark) {
-        KeyManagement keyManagement = KeyManagement.builder().mid(mid).keyType(keyType).status(status == 1).remarks(remark).build();
-        return keyRepository.save(keyManagement).getId();
+
+    public MerchantResponse<MerchantDownTimeResponse> getMerchantDowntimeApis(String mId) {
+        List<MerchantDownTimeResponse> downtimeApiDetails = downtimeApiDao.getMerchantDowntimeAPIs(mId);
+        return MerchantResponse.<MerchantDownTimeResponse>builder().data(downtimeApiDetails).status(MerchantConstant.RESPONSE_SUCCESS).count((long) downtimeApiDetails.size()).build();
     }
 
 }
-package com.epay.merchant.validator;
 
-import com.epay.merchant.dao.MerchantInfoDao;
-import com.epay.merchant.model.request.APIKeyValidationRequest;
-import com.epay.merchant.model.request.KeyGenerationRequest;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.MerchantStatus;
-import lombok.RequiredArgsConstructor;
+package com.epay.merchant.dao;
+
+
+import com.epay.merchant.externalservice.AdminServicesClient;
+import com.epay.merchant.externalservice.response.AdminDowntimePayModeInfo;
+import com.epay.merchant.externalservice.response.MerchantDownTimeResponse;
+import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.text.MessageFormat;
-import java.util.ArrayList;
+import java.util.List;
 
-@RequiredArgsConstructor
+/**
+ * Class Name: DowntimeApiDao
+ * *
+ * Description: This class represents methods related to transaction downtime api details.
+ * *
+ * Author: V1018217
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
 @Component
-public class KeyValidator extends BaseValidator {
+@AllArgsConstructor
+public class DowntimeApiDao {
 
-    private final MerchantInfoDao merchantInfoDao;
+    private final AdminServicesClient adminServicesClient;
 
     /**
-     * It will validate the key generation request.
-     * MerchantResponse failure and save Login Audit details
-     * @param keyGenerationRequest
+     * Fetch record(s) of transaction downtime apis from db table.
+     *
+     * @return list of downtime apis.
      */
-    public void validateKeyGenerationRequest(KeyGenerationRequest keyGenerationRequest) {
-        errorDtoList = new ArrayList<>();
-        validatedMandatoryField(keyGenerationRequest);
-        validateMId(keyGenerationRequest.getMId());
+    public List<AdminDowntimePayModeInfo> getDowntimeAPIs() {
+        return adminServicesClient.getDowntimeAPIs();
     }
-    /**
-     * It will validate API key validation request
-     * @param apiKeyValidationRequest
-     */
-    public void validateAPIKeyValidationRequest(APIKeyValidationRequest apiKeyValidationRequest) {
-        errorDtoList = new ArrayList<>();
-        validatedMandatoryField(apiKeyValidationRequest);
-    }
-    /**
-     * It will validate the MId
-     * @param mId
-     */
-    public void validateMId(String mId) {
-        errorDtoList = new ArrayList<>();
-        boolean existsByMIdAndStatus = merchantInfoDao.isExistsByMIdAndStatus(mId, MerchantStatus.ACTIVE.name());
-        if (!existsByMIdAndStatus) {
-            addError(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Valid MID"));
-        }
-        throwIfErrors();
-    }
-    /**
-     * It will validate all the mandatory fields present in the request
-     * @param keyGenerationRequest
-     */
-    private void validatedMandatoryField(KeyGenerationRequest keyGenerationRequest) {
-        checkMandatoryField(keyGenerationRequest.getMId(), "MId");
-        throwIfErrors();
-    }
-    /**
-     * It will validate all the mandatory fields present in the request
-     * @param apiKeyValidationRequest
-     */
-    private void validatedMandatoryField(APIKeyValidationRequest apiKeyValidationRequest) {
-        checkMandatoryField(apiKeyValidationRequest.getApiKey(), "ApiKey");
-        checkMandatoryField(apiKeyValidationRequest.getApiKeySecret(), "ApiKeySecret");
-        throwIfErrors();
+
+    public List<MerchantDownTimeResponse> getMerchantDowntimeAPIs(String mId) {
+        return adminServicesClient.getMerchantDowntimeAPIs(mId);
     }
 }
