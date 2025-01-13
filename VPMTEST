@@ -1,3 +1,289 @@
+/**
+ * Class Name: AdminController
+ * *
+ * Description:
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@RestController
+@RequestMapping("/admin")
+@RequiredArgsConstructor
+public class AdminController {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(AdminController.class);
+    private final AdminService adminService;
+
+    /**
+     * Onboard a merchant and merchant admin user.
+     * Destination: AdminService.onboardingMerchant
+     *
+     * @param onboardingRequest OnboardingDto
+     * @return MerchantResponse
+     */
+    @PostMapping("/onboarding")
+    @Operation(summary = "Onboarding Merchant and Merchant Admin user creation API for SBI Admin Usages.", description = "Create Merchant and Merchant Admin User, API can be accessed by SBI Admin only.")
+    public MerchantResponse<OnboardingResponse> onboardingMerchant(@RequestBody OnboardingRequest onboardingRequest) {
+        log.info("Onboarding Merchant called : onboardingRequest {}", onboardingRequest);
+        return adminService.onboardingMerchant(onboardingRequest);
+    }
+
+    /**
+     * Create a merchant entity group.
+     * Destination: AdminService.createMerchantEntityGroup
+     *
+     * @param merchantEntityGroupRequest MerchantEntityGroupRequest
+     * @return MerchantResponse
+     */
+    @PostMapping("/entity")
+    @Operation(summary = "Entity Creation for set Of Merchants MIds", description = "SBI Admin will use this API to create Merchant Groups which will be named as Entity.")
+    public MerchantResponse<MerchantEntityGroupResponse> createMerchantEntityGroup(@RequestBody MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        log.info("Entity Creation : merchantRequest {}", merchantEntityGroupRequest);
+        return adminService.createMerchantEntityGroup(merchantEntityGroupRequest);
+    }
+
+    /**
+     * Retrieve all users for a merchant.
+     * Destination: AdminService.getAllMerchantUsers
+     *
+     * @param mid      String
+     * @param pageable Pageable
+     * @return MerchantResponse
+     */
+    @GetMapping("/users/{mid}")
+    @Operation(summary = "Share all users info for the merchant.", description = "Share all users info for the merchant.")
+    public MerchantResponse<MerchantUserResponse> getAllUser(@PathVariable String mid, @PageableDefault(size = 50, page = 0) Pageable pageable) {
+        log.info("Received request to get userList based on mid: {}", mid);
+        return adminService.getAllMerchantUsers(mid, pageable);
+    }
+
+    /**
+     * Update help and support details for a merchant.
+     * Destination: AdminService.saveHelpSupport
+     *
+     * @param mId                  String
+     * @param helpSupportRequest   HelpSupportRequest
+     * @return MerchantResponse
+     */
+    @PutMapping("/help/{mId}")
+    @Operation(summary = "Update help and support details for the merchant.", description = "Update help and support details for the merchant.")
+    public MerchantResponse<HelpSupportResponse> saveHelpSupport(@PathVariable String mId, @RequestBody HelpSupportRequest helpSupportRequest) {
+        log.info("Update Help & Support mId[{}] and helpSupportRequest: {}", mId, helpSupportRequest);
+        return adminService.saveHelpSupport(mId, helpSupportRequest);
+    }
+
+    /**
+     * Map a user to an entity.
+     * Destination: AdminService.userEntityMapping
+     *
+     * @param userEntityMappingRequest UserEntityMappingRequest
+     * @return MerchantResponse
+     */
+    @PostMapping("/entity/mapping")
+    public MerchantResponse<String> userEntityMapping(@RequestBody UserEntityMappingRequest userEntityMappingRequest) {
+        log.info("Received request for mapping with details: {}", userEntityMappingRequest);
+        return adminService.userEntityMapping(userEntityMappingRequest);
+    }
+}
+
+
+/**
+ * Service Class: AdminService
+ * *
+ * Description: Handles business logic related to merchant administration.
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version: 1.0
+ */
+@Service
+@RequiredArgsConstructor
+public class AdminService {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final AdminDao adminDao;
+
+    /**
+     * Onboard a merchant and merchant admin user.
+     * Destination: AdminDao.onboardingMerchantAndMerchantUser
+     *
+     * @param onboardingRequest OnboardingRequest
+     * @return MerchantResponse with OnboardingResponse
+     */
+    public MerchantResponse<OnboardingResponse> onboardingMerchant(OnboardingRequest onboardingRequest) {
+        log.info("Onboarding merchant with request: {}", onboardingRequest);
+        OnboardingDto onboardingDto = adminDao.onboardingMerchantAndMerchantUser(onboardingRequest);
+        return MerchantResponse.success(mapToOnboardingResponse(onboardingDto));
+    }
+
+    /**
+     * Create a merchant entity group.
+     * Destination: AdminDao.saveMerchantEntityGroup
+     *
+     * @param merchantEntityGroupRequest MerchantEntityGroupRequest
+     * @return MerchantResponse with MerchantEntityGroupResponse
+     */
+    public MerchantResponse<MerchantEntityGroupResponse> createMerchantEntityGroup(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        log.info("Creating merchant entity group: {}", merchantEntityGroupRequest);
+        MerchantEntityGroupDto entityGroupDto = adminDao.saveMerchantEntityGroup(mapToMerchantEntityGroupDto(merchantEntityGroupRequest));
+        return MerchantResponse.success(mapToMerchantEntityGroupResponse(entityGroupDto));
+    }
+
+    /**
+     * Get all users for a merchant.
+     * Destination: AdminDao.findAllMerchantUsersByMId
+     *
+     * @param mid String
+     * @param pageable Pageable
+     * @return MerchantResponse with MerchantUserResponse
+     */
+    public MerchantResponse<MerchantUserResponse> getAllMerchantUsers(String mid, Pageable pageable) {
+        log.info("Fetching users for merchant ID: {}", mid);
+        Page<MerchantUserDto> users = adminDao.findAllMerchantUsersByMId(mid, pageable);
+        return MerchantResponse.success(mapToMerchantUserResponse(users));
+    }
+
+    /**
+     * Update help and support details.
+     * Destination: AdminDao.updateHelpSupport
+     *
+     * @param mId String
+     * @param helpSupportRequest HelpSupportRequest
+     * @return MerchantResponse with HelpSupportResponse
+     */
+    public MerchantResponse<HelpSupportResponse> saveHelpSupport(String mId, HelpSupportRequest helpSupportRequest) {
+        log.info("Updating Help & Support for merchant ID: {}", mId);
+        adminDao.updateHelpSupport(mId, mapToHelpSupportEntity(helpSupportRequest));
+        return MerchantResponse.success(null); // Success without specific response body
+    }
+
+    /**
+     * Map a user to an entity.
+     * Destination: AdminDao.updateUserRole
+     *
+     * @param userEntityMappingRequest UserEntityMappingRequest
+     * @return MerchantResponse with mapping status
+     */
+    public MerchantResponse<String> userEntityMapping(UserEntityMappingRequest userEntityMappingRequest) {
+        log.info("Mapping user entity: {}", userEntityMappingRequest);
+        adminDao.updateUserRole(
+                userEntityMappingRequest.getUserId(),
+                userEntityMappingRequest.getUserName(),
+                userEntityMappingRequest.getEntityId()
+        );
+        return MerchantResponse.success("Mapping Successful");
+    }
+}
+
+/**
+ * DAO Class: AdminDao
+ * *
+ * Description: Handles database interactions for merchant administration.
+ * *
+ * Author: Bhushan Wadekar
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version: 1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class AdminDao {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final MerchantRepository merchantRepository;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantEntityGroupRepository merchantEntityGroupRepository;
+    private final MerchantMapper mapper;
+
+    /**
+     * Create onboarding records in the database.
+     * Destination: MerchantRepository.save, MerchantUserDao.saveMerchantUser
+     *
+     * @param onboardingRequest OnboardingRequest
+     * @return OnboardingDto
+     */
+    @Transactional
+    public OnboardingDto onboardingMerchantAndMerchantUser(OnboardingRequest onboardingRequest) {
+        log.info("Onboarding merchant and merchant user: {}", onboardingRequest);
+
+        // Save merchant details
+        MerchantInfo merchantInfo = mapper.mapMerchantDtoToEntity(onboardingRequest.getMerchant());
+        merchantInfo.setStatus(MerchantStatus.ACTIVE.name());
+        merchantInfo = merchantRepository.save(merchantInfo);
+
+        // Save merchant user details
+        MerchantUserDto merchantUserDto = merchantUserDao.saveMerchantUser(onboardingRequest.getUser(), merchantInfo.getMId());
+
+        // Build response DTO
+        return OnboardingDto.builder()
+                .merchant(mapper.mapMerchantInfoEntityToDto(merchantInfo))
+                .user(merchantUserDto)
+                .build();
+    }
+
+    /**
+     * Check if a merchant exists by merchant ID.
+     * Destination: MerchantRepository.existsByMIdAndStatus
+     *
+     * @param mId String
+     * @return boolean
+     */
+    public boolean isMerchantExistByMId(String mId) {
+        log.info("Checking if merchant exists with ID: {}", mId);
+        return merchantRepository.existsBymIdAndStatus(mId, MerchantStatus.ACTIVE.name());
+    }
+
+    /**
+     * Get all merchant users by merchant ID.
+     * Destination: MerchantUserDao.getAllMerchantUsersByMId
+     *
+     * @param mId String
+     * @param pageable Pageable
+     * @return Page<MerchantUserDto>
+     */
+    public Page<MerchantUserDto> findAllMerchantUsersByMId(String mId, Pageable pageable) {
+        log.info("Fetching users for merchant ID: {}", mId);
+        return merchantUserDao.getAllMerchantUsersByMId(mId, pageable);
+    }
+
+    /**
+     * Save a merchant entity group.
+     * Destination: MerchantEntityGroupRepository.saveAll
+     *
+     * @param merchantEntityGroupDto MerchantEntityGroupDto
+     * @return MerchantEntityGroupDto
+     */
+    public MerchantEntityGroupDto saveMerchantEntityGroup(MerchantEntityGroupDto merchantEntityGroupDto) {
+        log.info("Saving merchant entity group: {}", merchantEntityGroupDto);
+        List<MerchantEntityGroup> merchantEntityGroups = merchantEntityGroupDto.getMIds().stream()
+                .map(mId -> MerchantEntityGroup.builder()
+                        .entityId(merchantEntityGroupDto.getEntityId())
+                        .mId(mId)
+                        .build())
+                .collect(Collectors.toList());
+        merchantEntityGroupRepository.saveAll(merchantEntityGroups);
+        return merchantEntityGroupDto;
+    }
+
+    /**
+     * Update user roles for an entity.
+     * Destination: MerchantUserDao.updateMerchantUserRole
+     *
+     * @param userId UUID
+     * @param userName String
+     * @param entityId String
+     */
+    public void updateUserRole(UUID userId, String userName, String entityId) {
+        log.info("Updating user roles for user: {}, entity: {}", userName, entityId);
+        merchantUserDao.updateMerchantUserRole(userId, userName, entityId);
+    }
+}
 package com.epay.merchant.controller;
 
 import com.epay.merchant.model.request.HelpSupportRequest;
