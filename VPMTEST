@@ -1,3 +1,150 @@
+
+
+Here’s an updated version of the method comments with improved clarity and standard formatting:
+
+Updates for KeyDao Class
+
+generateApiKey Method
+
+/**
+ * Generates an API key using the KMS client and saves it in the database.
+ *
+ * @param mId The merchant ID for which the API key is to be generated.
+ * @return KMSAPIKeysResponse containing the generated API key and additional details.
+ * @throws ValidationException If the KMS API response contains validation errors.
+ * @throws MerchantException If there is an error during key generation.
+ */
+public KMSAPIKeysResponse generateApiKey(String mId) {
+
+generateEncryptionKey Method
+
+/**
+ * Generates an encryption key using the KMS client and saves it in the database.
+ *
+ * @param keyGenerationRequest The request object containing details for encryption key generation.
+ * @return KMSEncryptionKeysResponse containing the generated encryption key and additional details.
+ * @throws ValidationException If the KMS API response contains validation errors.
+ * @throws MerchantException If there is an error during key generation.
+ */
+public KMSEncryptionKeysResponse generateEncryptionKey(KeyGenerationRequest keyGenerationRequest) {
+
+saveNotification Method
+
+/**
+ * Saves a key generation notification in the database.
+ *
+ * @param keyType         The type of key (e.g., ENCRYPTION, API).
+ * @param entityId        The unique ID of the generated key entity.
+ * @param content         The content of the notification message.
+ * @param status          The status of the notification (e.g., success or failure).
+ * @param notificationType The type of notification to be saved.
+ */
+public void saveNotification(KeyType keyType, UUID entityId, String content, int status, NotificationType notificationType) {
+
+validatedAPIKey Method
+
+/**
+ * Validates the API key for existence and active status using the KMS client.
+ *
+ * @param apiKeyValidationRequest The request object containing the API key validation details.
+ * @return MerchantResponse containing the validation result and related details.
+ * @throws MerchantException If the merchant ID is invalid or inactive.
+ */
+public MerchantResponse<String> validatedAPIKey(APIKeyValidationRequest apiKeyValidationRequest) {
+
+getMerchantEncryptionKeys Method
+
+/**
+ * Retrieves the encryption keys mapped to a merchant ID.
+ *
+ * @param mId The merchant ID for which the encryption keys are to be fetched.
+ * @return MerchantResponse containing the encryption keys for the merchant.
+ */
+public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(String mId) {
+
+getKeysByMerchant Method
+
+/**
+ * Retrieves the keys mapped to a merchant ID based on the key type and pagination details.
+ *
+ * @param keyType  The type of key (e.g., ENCRYPTION, API).
+ * @param mId      The merchant ID for which the keys are to be fetched.
+ * @param pageable The pagination details for the key retrieval.
+ * @return MerchantResponse containing the list of keys for the merchant.
+ */
+public MerchantResponse<KMSKeyResponse> getKeysByMerchant(KeyType keyType, String mId, Pageable pageable) {
+
+saveKey Method
+
+/**
+ * Saves the key details in the database.
+ *
+ * @param mid     The merchant ID associated with the key.
+ * @param keyType The type of key (e.g., ENCRYPTION, API).
+ * @param status  The status of the key generation process (success or failure).
+ * @param remark  Additional remarks about the key generation process.
+ * @return UUID The unique ID of the saved key entity.
+ */
+private UUID saveKey(String mid, KeyType keyType, int status, String remark) {
+
+Updates for KeyValidator Class
+
+validateKeyGenerationRequest Method
+
+/**
+ * Validates the key generation request by checking mandatory fields and merchant validity.
+ *
+ * @param keyGenerationRequest The key generation request object to be validated.
+ * @throws ValidationException If any mandatory fields are missing or the merchant ID is invalid.
+ */
+public void validateKeyGenerationRequest(KeyGenerationRequest keyGenerationRequest) {
+
+validateAPIKeyValidationRequest Method
+
+/**
+ * Validates the API key validation request by checking mandatory fields.
+ *
+ * @param apiKeyValidationRequest The API key validation request object to be validated.
+ * @throws ValidationException If any mandatory fields are missing.
+ */
+public void validateAPIKeyValidationRequest(APIKeyValidationRequest apiKeyValidationRequest) {
+
+validateMId Method
+
+/**
+ * Validates the merchant ID to ensure it exists and is active.
+ *
+ * @param mId The merchant ID to be validated.
+ * @throws MerchantException If the merchant ID is not found or inactive.
+ */
+public void validateMId(String mId) {
+
+validatedMandatoryField Method (KeyGenerationRequest)
+
+/**
+ * Validates the mandatory fields in the key generation request.
+ *
+ * @param keyGenerationRequest The request object containing key generation details.
+ * @throws ValidationException If any mandatory fields are missing.
+ */
+private void validatedMandatoryField(KeyGenerationRequest keyGenerationRequest) {
+
+validatedMandatoryField Method (APIKeyValidationRequest)
+
+/**
+ * Validates the mandatory fields in the API key validation request.
+ *
+ * @param apiKeyValidationRequest The request object containing API key validation details.
+ * @throws ValidationException If any mandatory fields are missing.
+ */
+private void validatedMandatoryField(APIKeyValidationRequest apiKeyValidationRequest) {
+
+These updated comments provide a clearer explanation of what each method does, its parameters, return value, and potential exceptions. Let me know if you need further refinements!
+
+
+
+
+
 package com.epay.merchant.dao;
 
 import com.epay.merchant.config.MerchantConfig;
