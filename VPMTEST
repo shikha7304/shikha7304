@@ -1,165 +1,298 @@
+package com.epay.merchant.controller;
 
-package com.epay.merchant.dao;
-
-import com.epay.merchant.dto.MerchantUserRoleDto;
-import com.epay.merchant.entity.MerchantUserRole;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.mapper.MerchantUserRoleMapper;
-import com.epay.merchant.repository.MerchantUserRoleRepository;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.MerchantUserRoles;
+import com.epay.merchant.model.request.HelpSupportRequest;
+import com.epay.merchant.model.request.MerchantEntityGroupRequest;
+import com.epay.merchant.model.request.OnboardingRequest;
+import com.epay.merchant.model.response.*;
+import com.epay.merchant.model.request.UserEntityMappingRequest;
+import com.epay.merchant.model.response.MerchantEntityGroupResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.model.response.MerchantUserResponse;
+import com.epay.merchant.model.response.OnboardingResponse;
+import com.epay.merchant.service.AdminService;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.*;
 
-import java.text.MessageFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
-
-@Component
+/**
+ * Class Name: AdminController
+ * *
+ * Description:
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@RestController
+@RequestMapping("/admin")
 @RequiredArgsConstructor
-public class MerchantUserRoleDao {
-
-    private final MerchantUserRoleRepository merchantUserRoleRepository;
-    private final MerchantUserRoleMapper mapper;
+public class AdminController {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(AdminController.class);
+    private final AdminService adminService;
 
     /**
-     * Fetches the ADMIN merchant user role.
-     *
-     * @return The {@link MerchantUserRole} entity for the ADMIN role.
-     * @throws MerchantException If the ADMIN role is not found.
+     * @param onboardingRequest OnboardingDto
+     * @return MerchantResponse
      */
-    public MerchantUserRole getAdminRoleId() {
-        return merchantUserRoleRepository.findByRole(MerchantUserRoles.ADMIN.name())
-                .orElseThrow(() -> new MerchantException(
-                        ErrorConstants.INVALID_ERROR_CODE,
-                        MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Admin Role", "Unable to fetch ADMIN MerchantUserRole.")
-                ));
+    @PostMapping("/onboarding")
+    @Operation(summary = "Onboarding Merchant and Merchant Admin user creation API for SBI Admin Usages.", description = "Create Merchant and Merchant Admin User, API can be access by SBI Admin only.")
+    public MerchantResponse<OnboardingResponse> onboardingMerchant(@RequestBody OnboardingRequest onboardingRequest) {
+        log.info("Onboarding Merchant called : onboardingRequest {}", onboardingRequest);
+        return adminService.onboardingMerchant(onboardingRequest);
+
     }
 
     /**
-     * Retrieves all merchant user roles as a list of DTOs.
-     *
-     * @return A list of {@link MerchantUserRoleDto}.
+     * create Merchant Entity Group
+     * @param merchantEntityGroupRequest MerchantEntityGroupRequest
+     * @return MerchantResponse
      */
-    public List<MerchantUserRoleDto> getMerchantUserRoles() {
-        List<MerchantUserRole> merchantUserRoles = merchantUserRoleRepository.findAll();
-        return mapper.mapMerchantUserRoleListEntityToListDto(merchantUserRoles);
+    @PostMapping("/entity")
+    @Operation(summary = "Entity Creation for set Of Merchants MIds", description = "SBI Admin will use this API to create Merchant Groups which will named as Entity")
+    public MerchantResponse<MerchantEntityGroupResponse> createMerchantEntityGroup(@RequestBody MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        log.info("Entity Creation : merchantRequest {}", merchantEntityGroupRequest);
+        return adminService.createMerchantEntityGroup(merchantEntityGroupRequest);
     }
 
     /**
-     * Retrieves the merchant user role entity by its ID.
-     *
-     * @param roleId The UUID of the role to fetch.
-     * @return The {@link MerchantUserRole} entity.
-     * @throws MerchantException If the role is not found.
+     * Get All User
+     * @param mid String
+     * @param pageable Pageable
+     * @return MerchantResponse
      */
-    public MerchantUserRole getRoleNameById(UUID roleId) {
-        return merchantUserRoleRepository.findById(roleId)
-                .orElseThrow(() -> new MerchantException(
-                        ErrorConstants.NOT_FOUND_ERROR_CODE,
-                        MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "User Role")
-                ));
+    @GetMapping("/users/{mid}")
+    @Operation(summary = "share the all users info for that merchant.", description = "share the all users info for that merchant.")
+    public MerchantResponse<MerchantUserResponse> getAllUser(@PathVariable String mid, @PageableDefault(size = 50, page = 0) Pageable pageable) {
+        log.info("Received request to get userList based on mid: {}", mid);
+        return adminService.getAllMerchantUsers(mid, pageable);
     }
 
-    /**
-     * Creates a map of user roles where the key is the role ID and the value is the role DTO.
-     *
-     * @return A map of {@link MerchantUserRoleDto} with role IDs as keys.
-     */
-    public Map<UUID, MerchantUserRoleDto> getUserRoleDtoMap() {
-        return getMerchantUserRoles().stream()
-                .collect(Collectors.toMap(MerchantUserRoleDto::getId, role -> role));
+    @PutMapping("/help/{mId}")
+    @Operation(summary = "share the all users info for that merchant.", description = "share the all users info for that merchant.")
+    public MerchantResponse<HelpSupportResponse> saveHelpSupport(@PathVariable String mId, @RequestBody HelpSupportRequest helpSupportRequest) {
+        log.info("Update Help & Support mId[{}] and helpSupportRequest: {}", mId, helpSupportRequest);
+        return adminService.saveHelpSupport(mId, helpSupportRequest);
     }
 
-    /**
-     * Fetches the UUID of the SUPER_ADMIN role from the user roles.
-     *
-     * @return The UUID of the SUPER_ADMIN role.
-     * @throws MerchantException If the SUPER_ADMIN role is not found.
-     */
-    public UUID getSuperAdminRoleId() {
-        Map<UUID, MerchantUserRoleDto> roleMap = getUserRoleDtoMap();
-        return roleMap.keySet().stream()
-                .filter(id -> MerchantUserRoles.SUPER_ADMIN.name().equalsIgnoreCase(roleMap.get(id).getRole()))
-                .findFirst()
-                .orElseThrow(() -> new MerchantException(
-                        ErrorConstants.NOT_FOUND_ERROR_CODE,
-                        MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Super Admin Role")
-                ));
+    @PostMapping("/entity/mapping")
+    public MerchantResponse<String> userEntityMapping(@RequestBody UserEntityMappingRequest userEntityMappingRequest) {
+        log.info("Received request for mapping with details: {}", userEntityMappingRequest);
+        return adminService.userEntityMapping(userEntityMappingRequest);
     }
 }
 
 
 
+package com.epay.merchant.controller;
+
+import com.epay.merchant.model.request.HelpSupportRequest;
+import com.epay.merchant.model.request.MerchantEntityGroupRequest;
+import com.epay.merchant.model.request.OnboardingRequest;
+import com.epay.merchant.model.response.*;
+import com.epay.merchant.model.request.UserEntityMappingRequest;
+import com.epay.merchant.model.response.MerchantEntityGroupResponse;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.model.response.MerchantUserResponse;
+import com.epay.merchant.model.response.OnboardingResponse;
+import com.epay.merchant.service.AdminService;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.swagger.v3.oas.annotations.Operation;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Class Name: AdminController
+ * *
+ * Description:
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@RestController
+@RequestMapping("/admin")
+@RequiredArgsConstructor
+public class AdminController {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(AdminController.class);
+    private final AdminService adminService;
+
+    /**
+     * @param onboardingRequest OnboardingDto
+     * @return MerchantResponse
+     */
+    @PostMapping("/onboarding")
+    @Operation(summary = "Onboarding Merchant and Merchant Admin user creation API for SBI Admin Usages.", description = "Create Merchant and Merchant Admin User, API can be access by SBI Admin only.")
+    public MerchantResponse<OnboardingResponse> onboardingMerchant(@RequestBody OnboardingRequest onboardingRequest) {
+        log.info("Onboarding Merchant called : onboardingRequest {}", onboardingRequest);
+        return adminService.onboardingMerchant(onboardingRequest);
+
+    }
+
+    /**
+     * create Merchant Entity Group
+     * @param merchantEntityGroupRequest MerchantEntityGroupRequest
+     * @return MerchantResponse
+     */
+    @PostMapping("/entity")
+    @Operation(summary = "Entity Creation for set Of Merchants MIds", description = "SBI Admin will use this API to create Merchant Groups which will named as Entity")
+    public MerchantResponse<MerchantEntityGroupResponse> createMerchantEntityGroup(@RequestBody MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        log.info("Entity Creation : merchantRequest {}", merchantEntityGroupRequest);
+        return adminService.createMerchantEntityGroup(merchantEntityGroupRequest);
+    }
+
+    /**
+     * Get All User
+     * @param mid String
+     * @param pageable Pageable
+     * @return MerchantResponse
+     */
+    @GetMapping("/users/{mid}")
+    @Operation(summary = "share the all users info for that merchant.", description = "share the all users info for that merchant.")
+    public MerchantResponse<MerchantUserResponse> getAllUser(@PathVariable String mid, @PageableDefault(size = 50, page = 0) Pageable pageable) {
+        log.info("Received request to get userList based on mid: {}", mid);
+        return adminService.getAllMerchantUsers(mid, pageable);
+    }
+
+    @PutMapping("/help/{mId}")
+    @Operation(summary = "share the all users info for that merchant.", description = "share the all users info for that merchant.")
+    public MerchantResponse<HelpSupportResponse> saveHelpSupport(@PathVariable String mId, @RequestBody HelpSupportRequest helpSupportRequest) {
+        log.info("Update Help & Support mId[{}] and helpSupportRequest: {}", mId, helpSupportRequest);
+        return adminService.saveHelpSupport(mId, helpSupportRequest);
+    }
+
+    @PostMapping("/entity/mapping")
+    public MerchantResponse<String> userEntityMapping(@RequestBody UserEntityMappingRequest userEntityMappingRequest) {
+        log.info("Received request for mapping with details: {}", userEntityMappingRequest);
+        return adminService.userEntityMapping(userEntityMappingRequest);
+    }
+}
+
+
 package com.epay.merchant.dao;
 
-import com.epay.merchant.dto.MerchantUserRoleDto;
-import com.epay.merchant.entity.MerchantUserRole;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.mapper.MerchantUserRoleMapper;
-import com.epay.merchant.repository.MerchantUserRoleRepository;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.MerchantUserRoles;
+import com.epay.merchant.dto.MerchantEntityGroupDto;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.dto.OnboardingDto;
+import com.epay.merchant.entity.MerchantEntityGroup;
+import com.epay.merchant.entity.MerchantInfo;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.request.OnboardingRequest;
+import com.epay.merchant.repository.MerchantEntityGroupRepository;
+import com.epay.merchant.repository.MerchantRepository;
+import com.epay.merchant.util.enums.MerchantStatus;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
-import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Class Name: MerchantDAO
+ * *
+ * Description:
+ * *
+ * Author: V1017903(bhushan wadekar)
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
 @Component
 @RequiredArgsConstructor
-public class MerchantUserRoleDao {
+public class AdminDao {
 
-    private final MerchantUserRoleRepository merchantUserRoleRepository;
-    private final MerchantUserRoleMapper mapper;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    private final MerchantRepository merchantRepository;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantEntityGroupRepository merchantEntityGroupRepository;
+    private final MerchantMapper mapper;
 
     /**
-     * It will fetch ADMIN merchant user role
-     * @return MerchantUserRoles
+     * Creating onboarding records in database.
+     *
+     * @param onboardingRequest OnboardingDto
+     * @return OnboardingDto
      */
-    public MerchantUserRole getAdminRoleId() {
-        return merchantUserRoleRepository.findByRole(MerchantUserRoles.ADMIN.name()).orElseThrow(() -> new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Admin Role", "Unable to fetch ADMIN MerchantUserRole.")));
+    @Transactional
+    public OnboardingDto onboardingMerchantAndMerchantUser(OnboardingRequest onboardingRequest) {
+        // Step 1 : Onboard Merchant
+        MerchantInfo merchantInfo = mapper.mapMerchantDtoToEntity(onboardingRequest.getMerchant());
+        merchantInfo.setStatus(MerchantStatus.ACTIVE.name());
+        merchantInfo = merchantRepository.save(merchantInfo);
+        // Step 2 : Onboard Merchant User
+        MerchantUserDto merchantUserDto = merchantUserDao.saveMerchantUser(onboardingRequest.getUser(), merchantInfo.getMId());
+        // Step 3 : Build Onboarding response
+        return OnboardingDto.builder().merchant(mapper.mapMerchantInfoEntityToDto(merchantInfo)).user(merchantUserDto).build();
     }
 
-    /**
-     * It will extract all the user role list
-     * @return MerchantUserRoles
-     */
-    public List<MerchantUserRoleDto> getMerchantUserRoles() {
-        List<MerchantUserRole> merchantUserRoles = merchantUserRoleRepository.findAll();
-        return mapper.mapMerchantUserRoleListEntityToListDto(merchantUserRoles);
+    public boolean isMerchantExistByMId(String mId) {
+        return merchantRepository.existsBymIdAndStatus(mId, MerchantStatus.ACTIVE.name());
     }
 
-    /**
-     * It will extract the user role name based on the role ID
-     * @return MerchantUserRoles
-     */
-    public MerchantUserRole getRoleNameById(UUID roleId) {
-        return merchantUserRoleRepository.findById(roleId).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "User Role")));
+    public boolean isMerchantUserExist(String userName, String email, String mobilePhone) {
+        return merchantUserDao.existsByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, mobilePhone, UserStatus.ACTIVE);
     }
 
-    /**
-     * It will map the role based on the ID
-     * @return MerchantUserRoles
-     */
-    public Map<UUID, MerchantUserRoleDto> getUserRoleDtoMap() {
-        return getMerchantUserRoles().stream().collect(Collectors.toMap(MerchantUserRoleDto::getId, role -> role));
+    public boolean isMerchantUserExistWithRoles(String userName, List<String> roles) {
+        return merchantUserDao.existsByUserNameOrEmailOrMobilePhoneAndRoles(userName, roles);
     }
 
-    /**
-     * It will fetch the super admin role ID from user_roles table
-     * @return UUID
-     */
-    public UUID getSuperAdminRoleId() {
-        Map<UUID, MerchantUserRoleDto> roleMap = getUserRoleDtoMap();
-        return roleMap.keySet().stream().filter(id ->
-                MerchantUserRoles.SUPER_ADMIN.name().equalsIgnoreCase(roleMap.get(id).getRole())).findFirst()
-                .orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE,
-                        MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Super Admin Role")));
+    public boolean isMerchantUserExistWithRoles(UUID userId, List<String> roles) {
+        return merchantUserDao.existsByUserIdAndRoles(userId, roles);
+    }
+
+    public Page<MerchantUserDto> findAllMerchantUsersByMId(String mId, Pageable pageable) {
+        return merchantUserDao.getAllMerchantUsersByMId(mId, pageable);
+    }
+
+    public List<String> findMappedEntityMIds(List<String> mIds) {
+        return merchantEntityGroupRepository.findExistingMIds(mIds);
+    }
+
+    public List<String> findInvalidsMIds(List<String> mIds) {
+        List<String> inActiveMIds = new ArrayList<>(mIds);
+        List<String> activeMIds = merchantRepository.findActiveMIds(mIds);
+        inActiveMIds.removeAll(activeMIds);
+        return inActiveMIds;
+    }
+
+    public boolean isEntityIdPresent(String entityId) {
+        return merchantEntityGroupRepository.existsByEntityId(entityId);
+    }
+
+    public MerchantEntityGroupDto saveMerchantEntityGroup(MerchantEntityGroupDto merchantEntityGroupDto) {
+        List<MerchantEntityGroup> merchantEntityGroups = merchantEntityGroupDto.getMIds().stream().map(mId -> MerchantEntityGroup.builder().entityId(merchantEntityGroupDto.getEntityId()).mId(mId).build()).collect(Collectors.toList());
+        merchantEntityGroupRepository.saveAll(merchantEntityGroups);
+        return merchantEntityGroupDto;
+    }
+
+
+    public void updateUserRole(UUID userId, String userName, String entityId) {
+        merchantUserDao.updateMerchantUserRole(userId, userName, entityId);
     }
 }
+
+
