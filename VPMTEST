@@ -1,3 +1,161 @@
+
+Here are the updated class-level and method-level comments for the MerchantUserService class:
+
+Class-Level Comment
+
+/**
+ * Service class for managing merchant users and their associated operations.
+ * Provides functionality for creating, updating, and managing merchant users,
+ * along with handling their assigned and unassigned MIDs, user roles, and profiles.
+ *
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved.
+ * </p>
+ *
+ * @version 1.0
+ */
+@Service
+@RequiredArgsConstructor
+public class MerchantUserService {
+
+Updated Method-Level Comments
+
+getAllAccessMerchantInfo
+
+/**
+ * Fetches all merchant information accessible to the logged-in user with pagination support.
+ *
+ * @param pageable Pageable object for pagination details.
+ * @return MerchantResponse containing a paginated list of merchant information.
+ */
+public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable) {
+
+getMerchantUserAccess
+
+/**
+ * Retrieves the logged-in user's basic information and access details, 
+ * including menu permissions and roles.
+ *
+ * @return MerchantResponse containing the user's access details.
+ */
+public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
+
+getMerchantUserProfile
+
+/**
+ * Fetches the profile details of the logged-in merchant user.
+ *
+ * @return MerchantResponse containing the user's profile information.
+ */
+public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
+
+createMerchantUser
+
+/**
+ * Creates a new merchant user based on the provided request details.
+ * Validates the request before saving the user data.
+ *
+ * @param merchantUserRequest Request object containing merchant user details.
+ * @return MerchantResponse containing the created user's details.
+ */
+public MerchantResponse<MerchantUserResponse> createMerchantUser(MerchantUserRequest merchantUserRequest) {
+
+updateMerchantUser
+
+/**
+ * Updates an existing merchant user's details based on the provided request.
+ * Validates the request before updating the user data.
+ *
+ * @param merchantUserRequest Request object containing updated user details.
+ * @return MerchantResponse containing the updated user's details.
+ */
+public MerchantResponse<MerchantUserResponse> updateMerchantUser(MerchantUserRequest merchantUserRequest) {
+
+updateMerchantUserProfile
+
+/**
+ * Updates the profile of the logged-in merchant user.
+ * Validates the request before performing the update.
+ *
+ * @param merchantUserRequest Request object containing profile details.
+ * @return MerchantResponse containing the updated profile information.
+ */
+public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
+
+saveMerchantUser
+
+/**
+ * Saves the merchant user details to the database.
+ * Handles both new user creation and user updates.
+ *
+ * @param merchantUserRequest Request object containing user details.
+ * @param isProfileUpdate     Indicates if the update is specific to a profile.
+ * @param isUpdate            Indicates if the operation is an update.
+ * @return MerchantResponse containing the saved user's details.
+ */
+private MerchantResponse<MerchantUserResponse> saveMerchantUser(MerchantUserRequest merchantUserRequest, boolean isProfileUpdate, boolean isUpdate) {
+
+searchMerchantUsers
+
+/**
+ * Searches for merchant users based on the provided search criteria.
+ * Returns a paginated list of matching merchant users.
+ *
+ * @param merchantUserGetRequest Request object containing search criteria.
+ * @return MerchantResponse containing the search results.
+ */
+public MerchantResponse<MerchantUserResponse> searchMerchantUsers(MerchantUserGetRequest merchantUserGetRequest) {
+
+getUserRole
+
+/**
+ * Fetches all user roles available in the system.
+ *
+ * @return MerchantResponse containing a list of user roles.
+ */
+public MerchantResponse<UserRoleResponse> getUserRole() {
+
+getAssignedUnAssignedMIdsOfUser
+
+/**
+ * Retrieves the assigned and unassigned MIDs of a specified user.
+ * Validates if the logged-in user is authorized to perform this operation.
+ *
+ * @param userName Username of the merchant user.
+ * @return MerchantResponse containing lists of assigned and unassigned MIDs.
+ */
+public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(String userName) {
+
+assignedMIdsToUser
+
+/**
+ * Assigns a list of MIDs to the specified user.
+ * Validates the request and updates the database with the new mappings.
+ *
+ * @param userName Username of the merchant user.
+ * @param mIds     List of MIDs to be assigned to the user.
+ * @return MerchantResponse confirming the successful assignment.
+ */
+public MerchantResponse<String> assignedMIdsToUser(String userName, List<String> mIds) {
+
+getParentAssignedMIds
+
+/**
+ * Retrieves the unassigned MIDs for a specified user by comparing the parent's
+ * accessible MIDs with the user's currently assigned MIDs.
+ *
+ * @param merchantUser Merchant user details.
+ * @param assignedMIds List of currently assigned MIDs for the user.
+ * @return List of unassigned MIDs available for the user.
+ */
+private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
+
+Let me know if you need further refinements!
+
+
+
+
 Here are the updated and added method-level comments for all the methods you provided:
 
 Updated Method-Level Comments
