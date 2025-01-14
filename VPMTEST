@@ -1,3 +1,211 @@
+
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.AdminDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.model.request.FotterRequest;
+import com.epay.merchant.model.request.MerchantEntityGroupRequest;
+import com.epay.merchant.model.request.UserEntityMappingRequest;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.MerchantUserRoles;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static com.epay.merchant.util.ErrorConstants.*;
+
+/**
+ * Class Name: AdminDetailsValidator
+ * Description: This class contains methods to validate requests related to admin and entity operations.
+ * Author: V1018344(RahulP)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * Version: 1.0
+ */
+
+@Component
+@RequiredArgsConstructor
+public class AdminValidator extends BaseValidator {
+
+    private final AdminDao adminDao;
+
+    /**
+     * Validates a MerchantEntityGroupRequest object.
+     * @param merchantEntityGroupRequest The request object to validate.
+     */
+    public void entityValidator(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatory(merchantEntityGroupRequest);
+        validatedEntityId(merchantEntityGroupRequest);
+        validatedMId(merchantEntityGroupRequest);
+    }
+
+    /**
+     * Validates a UserEntityMappingRequest object.
+     * @param userEntityMappingRequest The request object to validate.
+     */
+    public void userEntityRequestValidator(UserEntityMappingRequest userEntityMappingRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(userEntityMappingRequest);
+        validateUserData(userEntityMappingRequest);
+        validateEntityId(userEntityMappingRequest.getEntityId());
+    }
+
+    /**
+     * Validates user data in a UserEntityMappingRequest object.
+     * @param userEntityMappingRequest The request object containing user data.
+     */
+    private void validateUserData(UserEntityMappingRequest userEntityMappingRequest) {
+        boolean isUserNamePresent = StringUtils.isNotEmpty(userEntityMappingRequest.getUserName());
+        boolean isUserIdPresent = ObjectUtils.isNotEmpty(userEntityMappingRequest.getUserId());
+        validateValues(isUserNamePresent, isUserIdPresent);
+
+        boolean isMerchantUserExist = false;
+        if (isUserNamePresent) {
+            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserName(), 
+                List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
+        } else if (isUserIdPresent) {
+            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserId(), 
+                List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
+        }
+
+        if (!isMerchantUserExist) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, 
+                "Reason : only ADMIN and SUPER_ADMIN are allowed")).build());
+        }
+    }
+
+    /**
+     * Validates MIds in a MerchantEntityGroupRequest object.
+     * @param merchantEntityGroupRequest The request object containing MIds.
+     */
+    private void validatedMId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        validateMappedEntityMIds(merchantEntityGroupRequest);
+        validateMIds(merchantEntityGroupRequest);
+    }
+
+    /**
+     * Checks for already mapped MIds in a MerchantEntityGroupRequest object.
+     * @param merchantEntityGroupRequest The request object containing MIds.
+     */
+    private void validateMappedEntityMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        List<String> mIdsAlreadyMapped = adminDao.findMappedEntityMIds(merchantEntityGroupRequest.getMIds());
+        if (CollectionUtils.isNotEmpty(mIdsAlreadyMapped)) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, 
+                "MId " + Arrays.toString(mIdsAlreadyMapped.toArray()) + " are already Mapped")).build());
+        }
+        throwIfErrors();
+    }
+
+    /**
+     * Validates the existence of MIds in a MerchantEntityGroupRequest object.
+     * @param merchantEntityGroupRequest The request object containing MIds.
+     */
+    private void validateMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        List<String> invalidsMIds = adminDao.findInvalidsMIds(merchantEntityGroupRequest.getMIds());
+        if (CollectionUtils.isNotEmpty(invalidsMIds)) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "MId", 
+                "MId " + Arrays.toString(invalidsMIds.toArray()) + " are not valid")).build());
+        }
+        throwIfErrors();
+    }
+
+    /**
+     * Validates the existence of an entity ID.
+     * @param merchantEntityGroupRequest The request object containing the entity ID.
+     */
+    private void validatedEntityId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        boolean entityIdPresent = adminDao.isEntityIdPresent(merchantEntityGroupRequest.getEntityId());
+        if (entityIdPresent) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, "EntityId")).build());
+        }
+        throwIfErrors();
+    }
+
+    /**
+     * Validates mandatory fields in a MerchantEntityGroupRequest object.
+     * @param merchantEntityGroupRequest The request object to validate.
+     */
+    private void validateMandatory(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        checkMandatoryField(merchantEntityGroupRequest.getEntityId(), "EntityId");
+        checkMandatoryCollection(merchantEntityGroupRequest.getMIds(), "Mapping MId List");
+        throwIfErrors();
+    }
+
+    /**
+     * Validates mandatory fields in a UserEntityMappingRequest object.
+     * @param userEntityMappingRequest The request object to validate.
+     */
+    private void validateMandatoryFields(UserEntityMappingRequest userEntityMappingRequest) {
+        checkMandatoryField(userEntityMappingRequest.getEntityId(), ENTITY_ID);
+        throwIfErrors();
+    }
+
+    /**
+     * Ensures either userName or userId is provided, but not both.
+     * @param isUserNamePresent Indicates if userName is present.
+     * @param isUserIdPresent Indicates if userId is present.
+     */
+    private void validateValues(boolean isUserNamePresent, boolean isUserIdPresent) {
+        if (isUserNamePresent == isUserIdPresent) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(ErrorConstants.MANDATORY_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE, 
+                "value of userName or UserId")).build());
+        }
+    }
+
+    /**
+     * Validates the existence of an entity ID.
+     * @param entityId The entity ID to validate.
+     */
+    private void validateEntityId(String entityId) {
+        if (!adminDao.isEntityIdPresent(entityId)) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ENTITY_ID, ENTITY_ID_NOT_VALID)).build());
+        }
+        throwIfErrors();
+    }
+
+    /**
+     * Validates a FooterRequest object.
+     * @param footerRequest The request object to validate.
+     */
+    public void footerValidator(FotterRequest footerRequest) {
+        errorDtoList = new ArrayList<>();
+        if (CollectionUtils.isEmpty(footerRequest.getFooterLabels())) {
+            errorDtoList.add(ErrorDto.builder()
+                .errorCode(MANDATORY_ERROR_CODE)
+                .errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE, "Footer"))
+                .build());
+        } else {
+            footerRequest.getFooterLabels().forEach(footerLabelDto -> {
+                checkMandatoryField(footerLabelDto.getLabel(), "Label");
+                checkMandatoryField(footerLabelDto.getValue(), "Value");
+            });
+        }
+        throwIfErrors();
+    }
+}
+
+
+
+
 package com.epay.merchant.validator;
 
 import com.epay.merchant.dao.AdminDao;
