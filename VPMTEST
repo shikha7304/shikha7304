@@ -1,3 +1,186 @@
+Here’s a detailed breakdown of class-level and method-level comments separately:
+
+Class-Level Comments
+
+MerchantUserController
+
+/**
+ * Controller class for managing merchant user-related operations.
+ * Handles user profile, access permissions, roles, and MID assignments.
+ */
+
+LogoutController
+
+/**
+ * Controller class for managing logout operations for merchant users.
+ * Ensures token invalidation and session termination.
+ */
+
+LogoutService
+
+/**
+ * Service class for handling logout functionality.
+ * Responsible for invalidating tokens and ensuring secure logout.
+ */
+
+TokenService
+
+/**
+ * Service class for managing token-related operations.
+ * Includes methods to validate, invalidate, and update user tokens.
+ */
+
+MerchantUserValidator
+
+/**
+ * Validator class for merchant user-related requests.
+ * Ensures mandatory field validation, role assignments, and duplicate user checks.
+ */
+
+Method-Level Comments
+
+MerchantUserController
+
+/**
+ * Retrieves a paginated list of merchant information accessible to the logged-in user.
+ * @param pageable Pageable object containing pagination details.
+ * @return MerchantResponse containing a list of MerchantInfoResponse.
+ */
+public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable);
+
+/**
+ * Fetches the profile and menu access permissions of the logged-in merchant user.
+ * @return MerchantResponse containing MerchantUserAccessResponse.
+ */
+public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess();
+
+/**
+ * Retrieves the profile details of the logged-in merchant user.
+ * @return MerchantResponse containing UserProfileResponse.
+ */
+public MerchantResponse<UserProfileResponse> getMerchantUserProfile();
+
+/**
+ * Creates a new merchant user. Accessible by ADMIN or SUPER_ADMIN roles.
+ * @param merchantUserRequest Request body containing user details for creation.
+ * @return MerchantResponse containing MerchantUserResponse.
+ */
+public MerchantResponse<MerchantUserResponse> createMerchantUser(MerchantUserRequest merchantUserRequest);
+
+/**
+ * Updates the profile of the logged-in merchant user.
+ * @param merchantUserRequest Request body containing updated profile details.
+ * @return MerchantResponse containing MerchantUserResponse.
+ */
+public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest);
+
+/**
+ * Updates the profile of a merchant user. Accessible by ADMIN or SUPER_ADMIN roles.
+ * @param merchantUserRequest Request body containing user details to update.
+ * @return MerchantResponse containing MerchantUserResponse.
+ */
+public MerchantResponse<MerchantUserResponse> updateMerchantUser(MerchantUserRequest merchantUserRequest);
+
+/**
+ * Searches for merchant users based on specified criteria.
+ * @param merchantUserGetRequest Request body containing search filters and parameters.
+ * @return MerchantResponse containing MerchantUserResponse.
+ */
+public MerchantResponse<MerchantUserResponse> searchMerchantUsers(MerchantUserGetRequest merchantUserGetRequest);
+
+/**
+ * Retrieves a list of all user roles defined in the application. Accessible by ADMIN or SUPER_ADMIN roles.
+ * @return MerchantResponse containing a list of UserRoleResponse.
+ */
+public MerchantResponse<UserRoleResponse> getUserRole();
+
+/**
+ * Fetches assigned and unassigned merchant IDs (MIDs) for the specified user.
+ * @param userName Username of the merchant user.
+ * @return MerchantResponse containing MerchantUserAssignedMIdsResponse.
+ */
+public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(String userName);
+
+/**
+ * Assigns merchant IDs (MIDs) to the specified user. Accessible by ADMIN or SUPER_ADMIN roles.
+ * @param userName Username of the merchant user.
+ * @param assignedMIds List of MIDs to be assigned.
+ * @return MerchantResponse containing a success message.
+ */
+public MerchantResponse<String> assignedMIdsToUser(String userName, List<String> assignedMIds);
+
+LogoutController
+
+/**
+ * Invalidates the logged-in user's token and logs them out of the system.
+ * @return MerchantResponse containing a logout success message.
+ */
+public MerchantResponse<String> logout();
+
+LogoutService
+
+/**
+ * Invalidates the token of the logged-in user.
+ * @return MerchantResponse containing a logout success message.
+ */
+public MerchantResponse<String> merchantUserLogout();
+
+TokenService
+
+/**
+ * Invalidates the token for the specified username.
+ * @param userName Username of the merchant user.
+ * @return Integer representing success or failure status.
+ */
+public int invalidateUserToken(String userName);
+
+MerchantUserValidator
+
+/**
+ * Validates the merchant user request for creation or update.
+ * Ensures mandatory fields and unique user details.
+ * @param merchantUserRequest Request body containing user details.
+ * @param isCreate Boolean flag to indicate creation or update.
+ */
+public void validateMerchantUserRequest(MerchantUserRequest merchantUserRequest, boolean isCreate);
+
+/**
+ * Validates the profile details of the logged-in merchant user.
+ * @param merchantUserRequest Request body containing profile details.
+ */
+public void validateMerchantUserProfile(MerchantUserRequest merchantUserRequest);
+
+/**
+ * Checks mandatory fields in the MerchantUserRequest.
+ * @param user MerchantUserRequest object.
+ */
+public void validateMandatoryFields(MerchantUserRequest user);
+
+/**
+ * Validates field values in the MerchantUserRequest.
+ * @param merchantUserRequest MerchantUserRequest object.
+ */
+public void validateFieldValue(MerchantUserRequest merchantUserRequest);
+
+/**
+ * Validates for duplicate merchant user during creation.
+ * @param userName Username of the merchant user.
+ * @param email Email of the merchant user.
+ * @param mobilePhone Mobile phone of the merchant user.
+ */
+public void validateDuplicateMerchantUser(String userName, String email, String mobilePhone);
+
+/**
+ * Validates assigned role for the merchant user.
+ * @param role UUID of the user role.
+ */
+public void validatedAssignedRole(UUID role);
+
+
+
+
+
+
 package com.epay.merchant.controller;
 
 import com.epay.merchant.model.request.MerchantUserGetRequest;
