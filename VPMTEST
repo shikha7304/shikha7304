@@ -1,223 +1,143 @@
-Here’s the updated method definition comments for the provided classes:
+package com.epay.merchant.validator;
 
-DowntimeApiController
-
-getDowntimeApis() Method
-
-/**
- * Retrieves the list of all downtime APIs available.
- *
- * @return MerchantResponse containing a list of DowntimeApiResponse objects with downtime API details.
- */
-@GetMapping("list")
-@Operation(summary = "Get downtime API details.", description = "Fetches details of all downtime APIs.")
-public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
-
-getDowntimeApis(String mId) Method
-
-/**
- * Retrieves downtime API details for a specific merchant.
- *
- * @param mId The merchant ID for which downtime API details are to be fetched.
- * @return MerchantResponse containing MerchantDownTimeResponse objects with downtime API details for the specified merchant.
- */
-@GetMapping("details/{mId}")
-@Operation(summary = "Get downtime API details for a merchant.", description = "Fetches downtime API details for a specific merchant by their MId.")
-public MerchantResponse<MerchantDownTimeResponse> getDowntimeApis(@PathVariable String mId) {
-
-DowntimeApiService
-
-getDowntimeApis() Method
-
-/**
- * Retrieves details of all downtime APIs by interacting with the DAO layer.
- *
- * @return MerchantResponse containing a list of DowntimeApiResponse objects with information about all downtime APIs.
- */
-public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
-
-getMerchantDowntimeApis(String mId) Method
-
-/**
- * Retrieves downtime API details for a specific merchant by their ID.
- *
- * @param mId The merchant ID for which downtime API details are to be fetched.
- * @return MerchantResponse containing a list of MerchantDownTimeResponse objects with downtime API details for the specified merchant.
- */
-public MerchantResponse<MerchantDownTimeResponse> getMerchantDowntimeApis(String mId) {
-
-DowntimeApiDao
-
-getDowntimeAPIs() Method
-
-/**
- * Fetches records of all downtime APIs from the Admin Services Client.
- *
- * @return List of AdminDowntimePayModeInfo objects containing details of all downtime APIs.
- */
-public List<AdminDowntimePayModeInfo> getDowntimeAPIs() {
-
-getMerchantDowntimeAPIs(String mId) Method
-
-/**
- * Fetches downtime API details for a specific merchant from the Admin Services Client.
- *
- * @param mId The merchant ID for which downtime API details are to be fetched.
- * @return List of MerchantDownTimeResponse objects containing downtime API details for the specified merchant.
- */
-public List<MerchantDownTimeResponse> getMerchantDowntimeAPIs(String mId) {
-
-These updated comments improve clarity and provide concise descriptions of the purpose, parameters, and return values of each method. Let me know if you need further adjustments!package com.epay.merchant.controller;
-
-import com.epay.merchant.externalservice.response.MerchantDownTimeResponse;
-import com.epay.merchant.model.response.DowntimeApiResponse;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.service.DowntimeApiService;
-import io.swagger.v3.oas.annotations.Operation;
-import lombok.AllArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Objects;
-
-/**
- * Class Name: DowntimeApiController
- * *
- * Description: This class contains apis related to transaction-downtime-api details.
- * *
- * Author: V1018217
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-
-@RestController
-@AllArgsConstructor
-@RequestMapping("/downtime/api/")
-public class DowntimeApiController {
-    private final DowntimeApiService downtimeApiService;
-
-    /**
-     * Get transaction downtime api details
-     *
-     * @return list of downtime apis.
-     */
-    @GetMapping("list")
-    @Operation(summary = "Get downtime api details.", description = "Get downtime-api details")
-    public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
-        return downtimeApiService.getDowntimeApis();
-    }
-
-    /**
-     * Get transaction downtime api details
-     *
-     * @return list of downtime apis.
-     */
-    @GetMapping("details/{mId}")
-    @Operation(summary = "Get downtime api details for a merchant.", description = "Get downtime-api details by merchant MId")
-    public MerchantResponse<MerchantDownTimeResponse> getDowntimeApis(@PathVariable String mId) {
-        return downtimeApiService.getMerchantDowntimeApis(mId);
-    }
-}
-
-package com.epay.merchant.service;
-
-import com.epay.merchant.dao.DowntimeApiDao;
-import com.epay.merchant.externalservice.response.AdminDowntimePayModeInfo;
-import com.epay.merchant.externalservice.response.MerchantDownTimeResponse;
-import com.epay.merchant.mapper.DowntimeApiMapper;
-import com.epay.merchant.model.response.DowntimeApiResponse;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.MerchantConstant;
-import lombok.AllArgsConstructor;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-
-
-/**
- * Class Name: DowntimeApiService
- * *
- * Description: This class contains details of transaction downtime api details.
- * *
- * Author: V1018217
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-
-@Service
-@AllArgsConstructor
-public class DowntimeApiService {
-    private final DowntimeApiDao downtimeApiDao;
-    private final DowntimeApiMapper downtimeApiMapper;
-
-    /**
-     * This method contains merchant downtime api details.
-     *
-     * @return MerchantResponse containing list of merchant downtime api details.
-     */
-
-    public MerchantResponse<DowntimeApiResponse> getDowntimeApis() {
-        List<AdminDowntimePayModeInfo> downtimeApiDetails = downtimeApiDao.getDowntimeAPIs();
-        return MerchantResponse.<DowntimeApiResponse>builder().data(downtimeApiMapper.mapDowntimeApiDtoListToDowntimeApiResponseList(downtimeApiDetails)).status(MerchantConstant.RESPONSE_SUCCESS).count((long) downtimeApiDetails.size()).build();
-    }
-
-    /**
-     * This method contains merchant downtime api details.
-     * @param mId String
-     * @return  MerchantResponse containing list of merchant downtime api details.
-     */
-
-    public MerchantResponse<MerchantDownTimeResponse> getMerchantDowntimeApis(String mId) {
-        List<MerchantDownTimeResponse> downtimeApiDetails = downtimeApiDao.getMerchantDowntimeAPIs(mId);
-        return MerchantResponse.<MerchantDownTimeResponse>builder().data(downtimeApiDetails).status(MerchantConstant.RESPONSE_SUCCESS).count((long) downtimeApiDetails.size()).build();
-    }
-
-}
-
-package com.epay.merchant.dao;
-
-
-import com.epay.merchant.externalservice.AdminServicesClient;
-import com.epay.merchant.externalservice.response.AdminDowntimePayModeInfo;
-import com.epay.merchant.externalservice.response.MerchantDownTimeResponse;
-import lombok.AllArgsConstructor;
+import com.epay.merchant.dao.AdminDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.model.request.FotterRequest;
+import com.epay.merchant.model.request.MerchantEntityGroupRequest;
+import com.epay.merchant.model.request.UserEntityMappingRequest;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.MerchantUserRoles;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Component;
 
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import static com.epay.merchant.util.ErrorConstants.*;
+
 /**
- * Class Name: DowntimeApiDao
+ * Class Name: AdminDetailsValidator
  * *
- * Description: This class represents methods related to transaction downtime api details.
+ * Description:
  * *
- * Author: V1018217
+ * Author: V1018344(RahulP)
  * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
+ * ALl rights reserved
  * *
- * Version:1.0
+ * Version: 1.0
  */
+
 @Component
-@AllArgsConstructor
-public class DowntimeApiDao {
+@RequiredArgsConstructor
+public class AdminValidator extends BaseValidator {
 
-    private final AdminServicesClient adminServicesClient;
+    private final AdminDao adminDao;
 
-    /**
-     * Fetch record(s) of transaction downtime apis from db table.
-     *
-     * @return list of downtime apis.
-     */
-    public List<AdminDowntimePayModeInfo> getDowntimeAPIs() {
-        return adminServicesClient.getDowntimeAPIs();
+    public void entityValidator(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatory(merchantEntityGroupRequest);
+        validatedEntityId(merchantEntityGroupRequest);
+        validatedMId(merchantEntityGroupRequest);
     }
 
-    public List<MerchantDownTimeResponse> getMerchantDowntimeAPIs(String mId) {
-        return adminServicesClient.getMerchantDowntimeAPIs(mId);
+    public void userEntityRequestValidator(UserEntityMappingRequest userEntityMappingRequest) {
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(userEntityMappingRequest);
+        validateUserData(userEntityMappingRequest);
+        validateEntityId(userEntityMappingRequest.getEntityId());
+    }
+
+    private void validateUserData(UserEntityMappingRequest userEntityMappingRequest) {
+        boolean isUserNamePresent = StringUtils.isNotEmpty(userEntityMappingRequest.getUserName());
+        boolean isUserIdPresent = ObjectUtils.isNotEmpty(userEntityMappingRequest.getUserId());
+        validateValues(isUserNamePresent, isUserIdPresent);
+        boolean isMerchantUserExist = false;
+        if (isUserNamePresent) {
+            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserName(), List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
+        } else if (isUserIdPresent) {
+            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserId(), List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
+        }
+        if (!isMerchantUserExist) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, "Reason : only ADMIN and SUPER_ADMIN are allowed")).build());
+        }
+    }
+
+    private void validatedMId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        validateMappedEntityMIds(merchantEntityGroupRequest);
+        validateMIds(merchantEntityGroupRequest);
+    }
+
+    private void validateMappedEntityMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        List<String> mIdsAlreadyMapped = adminDao.findMappedEntityMIds(merchantEntityGroupRequest.getMIds());
+        if (CollectionUtils.isNotEmpty(mIdsAlreadyMapped)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, "MId " + Arrays.toString(mIdsAlreadyMapped.toArray()) + " are already Mapped")).build());
+        }
+        throwIfErrors();
+    }
+
+    private void validateMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        List<String> invalidsMIds = adminDao.findInvalidsMIds(merchantEntityGroupRequest.getMIds());
+        if (CollectionUtils.isNotEmpty(invalidsMIds)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "MId", "MId " + Arrays.toString(invalidsMIds.toArray()) + " are not valid")).build());
+        }
+        throwIfErrors();
+    }
+
+    private void validatedEntityId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        boolean entityIdPresent = adminDao.isEntityIdPresent(merchantEntityGroupRequest.getEntityId());
+        if (entityIdPresent) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, "EntityId")).build());
+        }
+        throwIfErrors();
+    }
+
+    private void validateMandatory(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        checkMandatoryField(merchantEntityGroupRequest.getEntityId(), "EntityId");
+        checkMandatoryCollection(merchantEntityGroupRequest.getMIds(), "Mapping MId List");
+        throwIfErrors();
+    }
+
+    private void validateMandatoryFields(UserEntityMappingRequest userEntityMappingRequest) {
+        checkMandatoryField(userEntityMappingRequest.getEntityId(), ENTITY_ID);
+        throwIfErrors();
+    }
+
+    private void validateValues(boolean isUserNamePresent, boolean isUserIdPresent) {
+        if (isUserNamePresent == isUserIdPresent) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.MANDATORY_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE, "value of userName or UserId")).build());
+        }
+    }
+
+    private void validateEntityId(String entityId) {
+        if (!adminDao.isEntityIdPresent(entityId)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ENTITY_ID, ENTITY_ID_NOT_VALID)).build());
+        }
+        throwIfErrors();
+    }
+
+    /**
+     * Footer Validator
+     * @param footerRequest FooterRequest
+     * Description - Validate Footer Request
+     **/
+    public void footerValidator(FotterRequest footerRequest) {
+        errorDtoList = new ArrayList<>();
+        if(CollectionUtils.isEmpty(footerRequest.getFooterLabels())) {
+            errorDtoList.add(ErrorDto.builder()
+                    .errorCode(MANDATORY_ERROR_CODE)
+                    .errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE,"Footer"))
+                    .build());
+        } else {
+            footerRequest.getFooterLabels().forEach(footerLabelDto -> {
+                checkMandatoryField(footerLabelDto.getLabel(), "Label");
+                checkMandatoryField(footerLabelDto.getValue(), "Value");
+            });
+        }
+        throwIfErrors();
     }
 }
