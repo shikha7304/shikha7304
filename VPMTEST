@@ -1,351 +1,413 @@
+package com.epay.merchant.controller;
 
-package com.epay.merchant.validator;
-
-import com.epay.merchant.dao.AdminDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.model.request.FotterRequest;
-import com.epay.merchant.model.request.MerchantEntityGroupRequest;
-import com.epay.merchant.model.request.UserEntityMappingRequest;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.MerchantUserRoles;
+import com.epay.merchant.model.request.MerchantUserGetRequest;
+import com.epay.merchant.model.request.MerchantUserRequest;
+import com.epay.merchant.model.response.*;
+import com.epay.merchant.service.MerchantUserService;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
-import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
-import static com.epay.merchant.util.ErrorConstants.*;
 
 /**
- * Class Name: AdminDetailsValidator
- * Description: This class contains methods to validate requests related to admin and entity operations.
- * Author: V1018344(RahulP)
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * Version: 1.0
- */
-
-@Component
-@RequiredArgsConstructor
-public class AdminValidator extends BaseValidator {
-
-    private final AdminDao adminDao;
-
-    /**
-     * Validates a MerchantEntityGroupRequest object.
-     * @param merchantEntityGroupRequest The request object to validate.
-     */
-    public void entityValidator(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        errorDtoList = new ArrayList<>();
-        validateMandatory(merchantEntityGroupRequest);
-        validatedEntityId(merchantEntityGroupRequest);
-        validatedMId(merchantEntityGroupRequest);
-    }
-
-    /**
-     * Validates a UserEntityMappingRequest object.
-     * @param userEntityMappingRequest The request object to validate.
-     */
-    public void userEntityRequestValidator(UserEntityMappingRequest userEntityMappingRequest) {
-        errorDtoList = new ArrayList<>();
-        validateMandatoryFields(userEntityMappingRequest);
-        validateUserData(userEntityMappingRequest);
-        validateEntityId(userEntityMappingRequest.getEntityId());
-    }
-
-    /**
-     * Validates user data in a UserEntityMappingRequest object.
-     * @param userEntityMappingRequest The request object containing user data.
-     */
-    private void validateUserData(UserEntityMappingRequest userEntityMappingRequest) {
-        boolean isUserNamePresent = StringUtils.isNotEmpty(userEntityMappingRequest.getUserName());
-        boolean isUserIdPresent = ObjectUtils.isNotEmpty(userEntityMappingRequest.getUserId());
-        validateValues(isUserNamePresent, isUserIdPresent);
-
-        boolean isMerchantUserExist = false;
-        if (isUserNamePresent) {
-            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserName(), 
-                List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
-        } else if (isUserIdPresent) {
-            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserId(), 
-                List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
-        }
-
-        if (!isMerchantUserExist) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                .errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, 
-                "Reason : only ADMIN and SUPER_ADMIN are allowed")).build());
-        }
-    }
-
-    /**
-     * Validates MIds in a MerchantEntityGroupRequest object.
-     * @param merchantEntityGroupRequest The request object containing MIds.
-     */
-    private void validatedMId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        validateMappedEntityMIds(merchantEntityGroupRequest);
-        validateMIds(merchantEntityGroupRequest);
-    }
-
-    /**
-     * Checks for already mapped MIds in a MerchantEntityGroupRequest object.
-     * @param merchantEntityGroupRequest The request object containing MIds.
-     */
-    private void validateMappedEntityMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        List<String> mIdsAlreadyMapped = adminDao.findMappedEntityMIds(merchantEntityGroupRequest.getMIds());
-        if (CollectionUtils.isNotEmpty(mIdsAlreadyMapped)) {
-            errorDtoList.add(ErrorDto.builder()
-                .errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE)
-                .errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, 
-                "MId " + Arrays.toString(mIdsAlreadyMapped.toArray()) + " are already Mapped")).build());
-        }
-        throwIfErrors();
-    }
-
-    /**
-     * Validates the existence of MIds in a MerchantEntityGroupRequest object.
-     * @param merchantEntityGroupRequest The request object containing MIds.
-     */
-    private void validateMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        List<String> invalidsMIds = adminDao.findInvalidsMIds(merchantEntityGroupRequest.getMIds());
-        if (CollectionUtils.isNotEmpty(invalidsMIds)) {
-            errorDtoList.add(ErrorDto.builder()
-                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                .errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "MId", 
-                "MId " + Arrays.toString(invalidsMIds.toArray()) + " are not valid")).build());
-        }
-        throwIfErrors();
-    }
-
-    /**
-     * Validates the existence of an entity ID.
-     * @param merchantEntityGroupRequest The request object containing the entity ID.
-     */
-    private void validatedEntityId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        boolean entityIdPresent = adminDao.isEntityIdPresent(merchantEntityGroupRequest.getEntityId());
-        if (entityIdPresent) {
-            errorDtoList.add(ErrorDto.builder()
-                .errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE)
-                .errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, "EntityId")).build());
-        }
-        throwIfErrors();
-    }
-
-    /**
-     * Validates mandatory fields in a MerchantEntityGroupRequest object.
-     * @param merchantEntityGroupRequest The request object to validate.
-     */
-    private void validateMandatory(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        checkMandatoryField(merchantEntityGroupRequest.getEntityId(), "EntityId");
-        checkMandatoryCollection(merchantEntityGroupRequest.getMIds(), "Mapping MId List");
-        throwIfErrors();
-    }
-
-    /**
-     * Validates mandatory fields in a UserEntityMappingRequest object.
-     * @param userEntityMappingRequest The request object to validate.
-     */
-    private void validateMandatoryFields(UserEntityMappingRequest userEntityMappingRequest) {
-        checkMandatoryField(userEntityMappingRequest.getEntityId(), ENTITY_ID);
-        throwIfErrors();
-    }
-
-    /**
-     * Ensures either userName or userId is provided, but not both.
-     * @param isUserNamePresent Indicates if userName is present.
-     * @param isUserIdPresent Indicates if userId is present.
-     */
-    private void validateValues(boolean isUserNamePresent, boolean isUserIdPresent) {
-        if (isUserNamePresent == isUserIdPresent) {
-            errorDtoList.add(ErrorDto.builder()
-                .errorCode(ErrorConstants.MANDATORY_ERROR_CODE)
-                .errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE, 
-                "value of userName or UserId")).build());
-        }
-    }
-
-    /**
-     * Validates the existence of an entity ID.
-     * @param entityId The entity ID to validate.
-     */
-    private void validateEntityId(String entityId) {
-        if (!adminDao.isEntityIdPresent(entityId)) {
-            errorDtoList.add(ErrorDto.builder()
-                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                .errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ENTITY_ID, ENTITY_ID_NOT_VALID)).build());
-        }
-        throwIfErrors();
-    }
-
-    /**
-     * Validates a FooterRequest object.
-     * @param footerRequest The request object to validate.
-     */
-    public void footerValidator(FotterRequest footerRequest) {
-        errorDtoList = new ArrayList<>();
-        if (CollectionUtils.isEmpty(footerRequest.getFooterLabels())) {
-            errorDtoList.add(ErrorDto.builder()
-                .errorCode(MANDATORY_ERROR_CODE)
-                .errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE, "Footer"))
-                .build());
-        } else {
-            footerRequest.getFooterLabels().forEach(footerLabelDto -> {
-                checkMandatoryField(footerLabelDto.getLabel(), "Label");
-                checkMandatoryField(footerLabelDto.getValue(), "Value");
-            });
-        }
-        throwIfErrors();
-    }
-}
-
-
-
-
-package com.epay.merchant.validator;
-
-import com.epay.merchant.dao.AdminDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.model.request.FotterRequest;
-import com.epay.merchant.model.request.MerchantEntityGroupRequest;
-import com.epay.merchant.model.request.UserEntityMappingRequest;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.MerchantUserRoles;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Component;
-
-import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
-import static com.epay.merchant.util.ErrorConstants.*;
-
-/**
- * Class Name: AdminDetailsValidator
+ * Class Name: MerchantUserController
  * *
  * Description:
  * *
- * Author: V1018344(RahulP)
+ * Author: Subhra Goswami
+ * <p>
  * Copyright (c) 2024 [State Bank of India]
- * ALl rights reserved
+ * All rights reserved
  * *
- * Version: 1.0
+ * Version:1.0
+ */
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/user")
+public class MerchantUserController {
+
+    private final MerchantUserService merchantUserService;
+    LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    /**
+     * Get All Access Merchant Info
+     * Retrieves the merchant info details of the logged-in user with access permissions.
+     * @param pageable Pageable
+     * @return MerchantResponse containing MerchantInfoResponse
+     */
+    @GetMapping("/access/mids/info")
+    @Operation(summary = "Get access merchant info details of logged in merchantUser.", description = "Get access merchant info details of logged in merchantUser.")
+    public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(@PageableDefault(size = 50, page = 0) Pageable pageable) {
+        log.info("Received request to fetch merchant info");
+        return merchantUserService.getAllAccessMerchantInfo(pageable);
+    }
+
+    /**
+     * Get Merchant User Access
+     *
+     * @return Merchant User Access Response
+     * Retrieves the profile and menu access permissions of the logged-in merchant user.
+     */
+    @GetMapping("/access")
+    @Operation(summary = "Get Merchant User Profile and Menu with permissions.", description = "Get Logged in user profile and access permission ")
+    public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
+        return merchantUserService.getMerchantUserAccess();
+    }
+
+    /**
+     * Get Merchant User Profile
+     * Retrieves the profile details of the logged-in merchant user.
+     * @return MerchantResponse containing UserProfileResponse
+     */
+    @GetMapping("/profile")
+    @Operation(summary = "Get Merchant User Profile details.", description = "Get Logged in user profile and view details ")
+    public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
+        log.info("GetMerchantUserProfile");
+        return merchantUserService.getMerchantUserProfile();
+    }
+
+    /**
+     * Create Merchant User
+     *
+     * @param merchantUserRequest MerchantUserRequest
+     * Creates a new merchant user. Can be used by Merchant Admin or Super Admin.
+     * @return MerchantResponse containing MerchantUserResponse
+     */
+    @PostMapping
+    @Operation(summary = "User Creation for Merchant by Merchant Admin or Super Admin", description = "Merchant SuperAdmin/Admin will use this API to create Merchant Users for managing merchant portal")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public MerchantResponse<MerchantUserResponse> createMerchantUser(@RequestBody MerchantUserRequest merchantUserRequest) {
+        log.info("Entity Creation : merchantRequest {}", merchantUserRequest);
+        return merchantUserService.createMerchantUser(merchantUserRequest);
+    }
+
+    /**
+     * Update Merchant User.
+     *
+     * @param merchantUserRequest MerchantUserRequest
+     * @return MerchantUserResponse
+     */
+    @PutMapping("/profile")
+    @Operation(summary = "Update Merchant User Profile", description = "Logged In Merchant User Profile Date")
+    public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(@RequestBody MerchantUserRequest merchantUserRequest) {
+        log.info("Profile Update : MerchantUserProfileRequest {}", merchantUserRequest);
+        return merchantUserService.updateMerchantUserProfile(merchantUserRequest);
+    }
+
+    /**
+     * Update Merchant User.
+     *
+     * @param merchantUserRequest MerchantUserRequest
+     * @return MerchantUserResponse
+     */
+    @PutMapping
+    @Operation(summary = "Update Merchant User by Parent MerchantUser", description = "Parent User can update the childMerchant User Request")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public MerchantResponse<MerchantUserResponse> updateMerchantUser(@RequestBody MerchantUserRequest merchantUserRequest) {
+        log.info("Profile Update : MerchantUserProfileRequest {}", merchantUserRequest);
+        return merchantUserService.updateMerchantUser(merchantUserRequest);
+    }
+
+    @PostMapping("/search")
+    @Operation(summary = "Search merchant user details")
+    public MerchantResponse<MerchantUserResponse> searchMerchantUsers(@RequestBody MerchantUserGetRequest merchantUserGetRequest) {
+        log.info("Received request to search merchant user through : merchantUserGetRequest {}", merchantUserGetRequest);
+        return merchantUserService.searchMerchantUsers(merchantUserGetRequest);
+    }
+
+    /**
+     * Get User Roles
+     *
+     * @return MerchantResponse containing the list of user roles
+     */
+    @GetMapping("/roles")
+    @Operation(summary = "Get All User Roles define in application", description = "Fetch the list of user roles available for merchants.")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public MerchantResponse<UserRoleResponse> getUserRole() {
+        return merchantUserService.getUserRole();
+    }
+
+    @GetMapping("/mid/mapping/{userName}")
+    @Operation(summary = "Get Assigned and UnAssigned Merchant Info", description = "Get Assigned and UnAssigned Merchant Info for given User")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(@PathVariable String userName) {
+        return merchantUserService.getAssignedUnAssignedMIdsOfUser(userName);
+    }
+
+    @PostMapping("/mid/mapping/{userName}")
+    @Operation(summary = "Assigned MIDs to Users", description = "Get Assigned and UnAssigned Merchant Info for given User")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public MerchantResponse<String> assignedMIdsToUser(@PathVariable String userName, @RequestBody List<String> assignedMIds) {
+        return merchantUserService.assignedMIdsToUser(userName, assignedMIds);
+    }
+
+}
+@RestController
+@RequestMapping("/logout")
+@RequiredArgsConstructor
+public class LogoutController {
+
+    private final LogoutService logoutService;
+    LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    @PostMapping
+    @Operation(summary = "Merchant User Logout API", description = "Merchant User Token will be invalidated")
+    public MerchantResponse<String> logout() {
+        return logoutService.merchantUserLogout();
+    }
+}
+public class LogoutService {
+
+    private final TokenService tokenService;
+
+    public MerchantResponse<String> merchantUserLogout(){
+        String userName = EPayIdentityUtil.getUserPrincipal().getAuthenticationId();
+        int i = tokenService.invalidateUserToken(userName);
+        return MerchantResponse.<String>builder().data(List.of("LogOut Successfully")).status(i).build();
+    }
+}
+ public int invalidateUserToken(String userName) {
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
+        Optional<TokenManagement> validToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUserDto.getId());
+        if (validToken.isPresent()) {
+            TokenManagement tokenManagement = validToken.get();
+            tokenManagement.setValid(false);
+            tokenDao.saveToken(List.of(tokenManagement));
+            return MerchantConstant.RESPONSE_SUCCESS;
+        }
+        return MerchantConstant.RESPONSE_FAILURE;
+    }
+
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.MerchantInfoDao;
+import com.epay.merchant.dao.MerchantUserDao;
+import com.epay.merchant.dao.OtpManagementDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.model.request.MerchantUserRequest;
+import com.epay.merchant.model.request.UserValidationRequest;
+import com.epay.merchant.util.EPayIdentityUtil;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.MerchantUserRoles;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.ObjectUtils;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.UUID;
+
+import static com.epay.merchant.util.ErrorConstants.*;
+
+/**
+ * Class Name: MerchantUserValidator
+ * *
+ * Description:
+ * *
+ * Author: V1017903(bhushan wadekar)
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
  */
 
 @Component
 @RequiredArgsConstructor
-public class AdminValidator extends BaseValidator {
+public class MerchantUserValidator extends BaseValidator {
 
-    private final AdminDao adminDao;
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
 
-    public void entityValidator(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantInfoDao merchantInfoDao;
+    private final OtpManagementDao otpManagementDao;
+
+    public void validateMerchantUserRequest(UserValidationRequest userValidationRequest) {
         errorDtoList = new ArrayList<>();
-        validateMandatory(merchantEntityGroupRequest);
-        validatedEntityId(merchantEntityGroupRequest);
-        validatedMId(merchantEntityGroupRequest);
+        logger.debug("Merchant validation start for UserValidationRequest {}", userValidationRequest);
+        validateMandatoryFields(userValidationRequest);
+        logger.debug("Merchant mandatory validation completed for UserValidationRequest {}", userValidationRequest);
+        validateFieldsValue(userValidationRequest);
+        logger.debug("Merchant field validation completed for UserValidationRequest {}", userValidationRequest);
     }
-
-    public void userEntityRequestValidator(UserEntityMappingRequest userEntityMappingRequest) {
+    /**
+     * Validates the MerchantUserRequest
+     *
+     * @param merchantUserRequest MerchantUserRequest
+     */
+    public void validateMerchantUserRequest(MerchantUserRequest merchantUserRequest, boolean isCreate) {
         errorDtoList = new ArrayList<>();
-        validateMandatoryFields(userEntityMappingRequest);
-        validateUserData(userEntityMappingRequest);
-        validateEntityId(userEntityMappingRequest.getEntityId());
+        logger.debug("Merchant validation start for MerchantUserRequest {}", merchantUserRequest);
+        validateMandatoryFields(merchantUserRequest);
+        validateIsRolePresent(merchantUserRequest);
+        validateFieldValue(merchantUserRequest);
+        if (isCreate) {
+            validateDuplicateMerchantUser(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
+        } else {
+            validateDuplicateMerchantUserOnUpdate(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
+        }
+        validatedAssignedRole(merchantUserRequest.getRole());
+        logger.debug("Merchant User role validation completed for MerchantUserRequest {}", merchantUserRequest);
     }
 
-    private void validateUserData(UserEntityMappingRequest userEntityMappingRequest) {
-        boolean isUserNamePresent = StringUtils.isNotEmpty(userEntityMappingRequest.getUserName());
-        boolean isUserIdPresent = ObjectUtils.isNotEmpty(userEntityMappingRequest.getUserId());
-        validateValues(isUserNamePresent, isUserIdPresent);
-        boolean isMerchantUserExist = false;
-        if (isUserNamePresent) {
-            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserName(), List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
-        } else if (isUserIdPresent) {
-            isMerchantUserExist = adminDao.isMerchantUserExistWithRoles(userEntityMappingRequest.getUserId(), List.of(MerchantUserRoles.ADMIN.name(), MerchantUserRoles.SUPER_ADMIN.name()));
+    public void validateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
+        errorDtoList = new ArrayList<>();
+        logger.debug("Merchant User Profile validation start for MerchantUserRequest {}", merchantUserRequest);
+        String userName = EPayIdentityUtil.getUserPrincipal().getAuthenticationId();
+        if (userName.equalsIgnoreCase(merchantUserRequest.getUserName())) {
+            validateMandatoryFields(merchantUserRequest);
+            validateFieldValue(merchantUserRequest);
+            validatedRequestId(merchantUserRequest, userName);
+            validateDuplicateMerchantUserOnUpdate(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
+        } else {
+            errorDtoList.add(ErrorDto.builder().errorCode(INVALID_ERROR_CODE).errorMessage(MessageFormat.format(INVALID_ERROR_MESSAGE, "Merchant User", "Profile Request not belongs to logged in User")).build());
+            throwIfErrors();
         }
-        if (!isMerchantUserExist) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, "Reason : only ADMIN and SUPER_ADMIN are allowed")).build());
+        logger.debug("Merchant User assigned MIDs validation completed for MerchantUserRequest {}", merchantUserRequest);
+    }
+    public void validatePostMapping(String userName, MerchantUserDto merchantUser, List<String> mIds) {
+        checkMandatoryCollection(mIds, "List of mIds");
+        validatedMappingRequest(userName, merchantUser);
+        validatedWithParentMIdsAccess(mIds, merchantUser);
+    }
+
+    public void validatedMappingRequest(String userName, MerchantUserDto merchantUser) {
+        String loggedInUserName = EPayIdentityUtil.getUserPrincipal().getUsername();
+        if (!loggedInUserName.equalsIgnoreCase(userName) || ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            MerchantUserDto loggedInUser = merchantUserDao.getByUserName(loggedInUserName, List.of(UserStatus.ACTIVE));
+            // Validated if LoggedIn user is the parent of requested User Or Not
+            if (!loggedInUser.getId().equals(merchantUser.getParentUserId())) {
+                throw new ValidationException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Mapping Request", "Logged In User is not a direct parent of request user"));
+            }
         }
     }
 
-    private void validatedMId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        validateMappedEntityMIds(merchantEntityGroupRequest);
-        validateMIds(merchantEntityGroupRequest);
-    }
-
-    private void validateMappedEntityMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        List<String> mIdsAlreadyMapped = adminDao.findMappedEntityMIds(merchantEntityGroupRequest.getMIds());
-        if (CollectionUtils.isNotEmpty(mIdsAlreadyMapped)) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, "MId " + Arrays.toString(mIdsAlreadyMapped.toArray()) + " are already Mapped")).build());
+    public void validatedWithParentMIdsAccess(List<String> mIds, MerchantUserDto merchantUser) {
+        String username = EPayIdentityUtil.getUserPrincipal().getUsername();
+        MerchantUserDto loggedInUser = merchantUserDao.getByUserName(username, List.of(UserStatus.ACTIVE));
+        List<String> parentMIdsList = new ArrayList<>();
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId()) && loggedInUser.getId().equals(merchantUser.getParentUserId())) {
+            // Get Parent Assigned MIDs List
+            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
+            parentMIdsList = parentAssignedMIds.stream().map(MerchantInfoDto::getMId).toList();
         }
+        if (!new HashSet<>(parentMIdsList).containsAll(mIds)) {
+            throw new ValidationException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Requested AssginedMIds", "Requested User is not having the access of given MId list"));
+        }
+    }
+    /**
+     * Validates the mandatory fields in userValidationRequest
+     *
+     * @param userValidationRequest UserValidationRequest
+     */
+    void validateMandatoryFields(UserValidationRequest userValidationRequest) {
+        checkMandatoryField(userValidationRequest.getRequestType(), REQUEST_TYPE);
+        checkMandatoryField(userValidationRequest.getUserName(), USER_NAME);
         throwIfErrors();
     }
-
-    private void validateMIds(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        List<String> invalidsMIds = adminDao.findInvalidsMIds(merchantEntityGroupRequest.getMIds());
-        if (CollectionUtils.isNotEmpty(invalidsMIds)) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "MId", "MId " + Arrays.toString(invalidsMIds.toArray()) + " are not valid")).build());
-        }
-        throwIfErrors();
-    }
-
-    private void validatedEntityId(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        boolean entityIdPresent = adminDao.isEntityIdPresent(merchantEntityGroupRequest.getEntityId());
-        if (entityIdPresent) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.ALREADY_EXIST_ERROR_MESSAGE, "EntityId")).build());
-        }
-        throwIfErrors();
-    }
-
-    private void validateMandatory(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        checkMandatoryField(merchantEntityGroupRequest.getEntityId(), "EntityId");
-        checkMandatoryCollection(merchantEntityGroupRequest.getMIds(), "Mapping MId List");
-        throwIfErrors();
-    }
-
-    private void validateMandatoryFields(UserEntityMappingRequest userEntityMappingRequest) {
-        checkMandatoryField(userEntityMappingRequest.getEntityId(), ENTITY_ID);
-        throwIfErrors();
-    }
-
-    private void validateValues(boolean isUserNamePresent, boolean isUserIdPresent) {
-        if (isUserNamePresent == isUserIdPresent) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.MANDATORY_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE, "value of userName or UserId")).build());
-        }
-    }
-
-    private void validateEntityId(String entityId) {
-        if (!adminDao.isEntityIdPresent(entityId)) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ENTITY_ID, ENTITY_ID_NOT_VALID)).build());
-        }
+    /**
+     * Validates the mandatory fields value in UserValidationRequest
+     *
+     * @param userValidationRequest UserValidationRequest
+     */
+    void validateFieldsValue(UserValidationRequest userValidationRequest) {
+        validateFieldValue(userValidationRequest.getRequestType(), RequestType.LOGIN.getName(), REQUEST_TYPE);
         throwIfErrors();
     }
 
     /**
-     * Footer Validator
-     * @param footerRequest FooterRequest
-     * Description - Validate Footer Request
-     **/
-    public void footerValidator(FotterRequest footerRequest) {
+     * Validates the mandatory fields in MerchantUserRequest
+     *
+     * @param user MerchantUserRequest
+     */
+    void validateMandatoryFields(MerchantUserRequest user) {
+        checkMandatoryField(user.getUserName(), USER_NAME);
+        checkMandatoryField(user.getFirstName(), FIRST_NAME);
+        checkMandatoryField(user.getLastName(), LAST_NAME);
+        checkMandatoryField(user.getEmail(), EMAIL);
+        checkMandatoryField(user.getMobilePhone(), MOBILE_PHONE);
+        checkMandatoryField(user.getCity(), CITY);
+        checkMandatoryField(user.getStateCode(), STATE);
+        checkMandatoryField(user.getCountryCode(), COUNTRY);
+        checkMandatoryField(user.getPinCode(), PIN);
+        throwIfErrors();
+    }
+
+    void validateIsRolePresent(MerchantUserRequest merchantUserRequest) {
         errorDtoList = new ArrayList<>();
-        if(CollectionUtils.isEmpty(footerRequest.getFooterLabels())) {
-            errorDtoList.add(ErrorDto.builder()
-                    .errorCode(MANDATORY_ERROR_CODE)
-                    .errorMessage(MessageFormat.format(ErrorConstants.MANDATORY_ERROR_MESSAGE,"Footer"))
-                    .build());
-        } else {
-            footerRequest.getFooterLabels().forEach(footerLabelDto -> {
-                checkMandatoryField(footerLabelDto.getLabel(), "Label");
-                checkMandatoryField(footerLabelDto.getValue(), "Value");
-            });
+        checkMandatoryField(merchantUserRequest.getRole(), "User Role");
+        throwIfErrors();
+    }
+    /**
+     * Validates field values in MerchantUserRequest
+     * @param  merchantUserRequest MerchantUserRequest
+     */
+    void validateFieldValue(MerchantUserRequest merchantUserRequest) {
+        validateFieldWithRegex(merchantUserRequest.getEmail(), MerchantConstant.EMAIL_REGEX, EMAIL, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getMobilePhone(), MerchantConstant.PHONE_REGEX, MOBILE_PHONE, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getOfficePhone(), MerchantConstant.LANDLINE_PHONE_REGEX, OFFICE_PHONE, FORMAT);
+        validateFieldWithRegex(merchantUserRequest.getPinCode(), MerchantConstant.PIN_REGEX, PINCODE, FORMAT);
+        throwIfErrors();
+    }
+    /**
+     * Validates for duplicate Merchant User
+     * @param  userName String
+     * @param email String
+     * @param mobilePhone String
+     */
+    void validateDuplicateMerchantUser(String userName, String email, String mobilePhone) {
+        boolean isUserExist = merchantUserDao.existsByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, mobilePhone, List.of(UserStatus.values()));
+        if (isUserExist) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.USER_ALREADY_EXIST_ERROR_MESSAGE_SAVE, userName, mobilePhone, email)).build());
+            throwIfErrors();
+        }
+    }
+
+    void validateDuplicateMerchantUserOnUpdate(String userName, String email, String mobilePhone) {
+        List<String> dbUserName = merchantUserDao.getUserNameByEmailOrMobilePhone(email, mobilePhone);
+        boolean found = dbUserName.stream().allMatch(u -> u.equalsIgnoreCase(userName));
+        if (!found) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(USER_ALREADY_EXIST_ERROR_MESSAGE_UPDATE, email, mobilePhone)).build());
+            throwIfErrors();
+        }
+    }
+    /**
+     *  Validates assigned role
+     * @param  role UUID
+     */
+    void validatedAssignedRole(UUID role) {
+        MerchantUserRoles loggedInUserRole = MerchantUserRoles.getRole(EPayIdentityUtil.getUserPrincipal().getUserRole().getFirst());
+        MerchantUserRoles userRoleName = MerchantUserRoles.getRole(merchantUserDao.getUserRoleName(role));
+        if (MerchantUserRoles.ADMIN == loggedInUserRole && MerchantUserRoles.SUPER_ADMIN.equals(userRoleName)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, ADMIN_AND_USER)).build());
+        } else if (MerchantUserRoles.USER == loggedInUserRole && !MerchantUserRoles.USER.equals(userRoleName)) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, TO_BE_ASSIGNED_ROLE_ARE_USER)).build());
         }
         throwIfErrors();
     }
+
+    void validatedRequestId(MerchantUserRequest merchantUserRequest, String userName) {
+        errorDtoList = new ArrayList<>();
+        checkMandatoryField(merchantUserRequest.getRequestId(),"RequestId");
+        throwIfErrors();
+        otpManagementDao.validateRequestIdByUserNameAndRequestType(merchantUserRequest.getRequestId(), userName, RequestType.PROFILE_EDIT);
+    }
+
 }
