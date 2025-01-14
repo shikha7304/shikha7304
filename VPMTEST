@@ -1,4 +1,113 @@
- public void validatePostMapping(String userName, MerchantUserDto merchantUser, List<String> mIds) {
+Here are the updated and added method-level comments for all the methods you provided:
+
+Updated Method-Level Comments
+
+validatePostMapping
+
+/**
+ * Validates the post-mapping request for assigning MIDs to a user.
+ * Ensures that the MIDs list is not empty and validates the mapping request
+ * along with parent MID access.
+ *
+ * @param userName      Username of the merchant user.
+ * @param merchantUser  Merchant user details.
+ * @param mIds          List of MIDs to be assigned.
+ */
+public void validatePostMapping(String userName, MerchantUserDto merchantUser, List<String> mIds) {
+    checkMandatoryCollection(mIds, "List of mIds");
+    validatedMappingRequest(userName, merchantUser);
+    validatedWithParentMIdsAccess(mIds, merchantUser);
+}
+
+validatedMappingRequest
+
+/**
+ * Validates the mapping request by checking if the logged-in user is the parent of the
+ * requested merchant user. Throws an exception if the validation fails.
+ *
+ * @param userName      Username of the merchant user.
+ * @param merchantUser  Merchant user details.
+ */
+public void validatedMappingRequest(String userName, MerchantUserDto merchantUser) {
+    String loggedInUserName = EPayIdentityUtil.getUserPrincipal().getUsername();
+    if (!loggedInUserName.equalsIgnoreCase(userName) || ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+        MerchantUserDto loggedInUser = merchantUserDao.getByUserName(loggedInUserName, List.of(UserStatus.ACTIVE));
+        if (!loggedInUser.getId().equals(merchantUser.getParentUserId())) {
+            throw new ValidationException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(
+                ErrorConstants.INVALID_ERROR_MESSAGE, "Mapping Request", 
+                "Logged In User is not a direct parent of requested user"));
+        }
+    }
+}
+
+validatedWithParentMIdsAccess
+
+/**
+ * Validates the provided MIDs with the parent user's access. Ensures that the requested
+ * MIDs are a subset of the parent user's accessible MIDs. Throws an exception if validation fails.
+ *
+ * @param mIds          List of MIDs to be validated.
+ * @param merchantUser  Merchant user details.
+ */
+public void validatedWithParentMIdsAccess(List<String> mIds, MerchantUserDto merchantUser) {
+    String username = EPayIdentityUtil.getUserPrincipal().getUsername();
+    MerchantUserDto loggedInUser = merchantUserDao.getByUserName(username, List.of(UserStatus.ACTIVE));
+    List<String> parentMIdsList = new ArrayList<>();
+    if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId()) && loggedInUser.getId().equals(merchantUser.getParentUserId())) {
+        List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
+        parentMIdsList = parentAssignedMIds.stream().map(MerchantInfoDto::getMId).toList();
+    }
+    if (!new HashSet<>(parentMIdsList).containsAll(mIds)) {
+        throw new ValidationException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(
+            ErrorConstants.INVALID_ERROR_MESSAGE, "Requested AssignedMIds", 
+            "Requested User does not have access to the given MID list"));
+    }
+}
+
+validateIsRolePresent
+
+/**
+ * Validates if a role is present in the provided MerchantUserRequest.
+ * Ensures that the role field is mandatory. Throws an exception if not present.
+ *
+ * @param merchantUserRequest Request object containing user details.
+ */
+public void validateIsRolePresent(MerchantUserRequest merchantUserRequest) {
+    errorDtoList = new ArrayList<>();
+    checkMandatoryField(merchantUserRequest.getRole(), "User Role");
+    throwIfErrors();
+}
+
+validateDuplicateMerchantUserOnUpdate
+
+/**
+ * Validates if a duplicate merchant user exists during an update operation.
+ * Ensures that the email and mobile phone do not conflict with other users
+ * in the database except for the current user being updated. Throws an exception if validation fails.
+ *
+ * @param userName    Username of the merchant user.
+ * @param email       Email address of the merchant user.
+ * @param mobilePhone Mobile phone number of the merchant user.
+ */
+public void validateDuplicateMerchantUserOnUpdate(String userName, String email, String mobilePhone) {
+    List<String> dbUserName = merchantUserDao.getUserNameByEmailOrMobilePhone(email, mobilePhone);
+    boolean found = dbUserName.stream().allMatch(u -> u.equalsIgnoreCase(userName));
+    if (!found) {
+        errorDtoList.add(ErrorDto.builder()
+            .errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE)
+            .errorMessage(MessageFormat.format(USER_ALREADY_EXIST_ERROR_MESSAGE_UPDATE, email, mobilePhone))
+            .build());
+        throwIfErrors();
+    }
+}
+
+These comments ensure that the purpose, parameters, and potential exceptions for each method are clearly documented. Let me know if further adjustments are needed!
+
+
+
+
+
+public void validatePostMapping(String userName, MerchantUserDto merchantUser, List<String> mIds) {
         checkMandatoryCollection(mIds, "List of mIds");
         validatedMappingRequest(userName, merchantUser);
         validatedWithParentMIdsAccess(mIds, merchantUser);
