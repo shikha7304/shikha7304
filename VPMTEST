@@ -1,471 +1,4 @@
-Here’s a detailed breakdown of class-level and method-level comments separately:
-
-Class-Level Comments
-
-MerchantUserController
-
-/**
- * Controller class for managing merchant user-related operations.
- * Handles user profile, access permissions, roles, and MID assignments.
- */
-
-LogoutController
-
-/**
- * Controller class for managing logout operations for merchant users.
- * Ensures token invalidation and session termination.
- */
-
-LogoutService
-
-/**
- * Service class for handling logout functionality.
- * Responsible for invalidating tokens and ensuring secure logout.
- */
-
-TokenService
-
-/**
- * Service class for managing token-related operations.
- * Includes methods to validate, invalidate, and update user tokens.
- */
-
-MerchantUserValidator
-
-/**
- * Validator class for merchant user-related requests.
- * Ensures mandatory field validation, role assignments, and duplicate user checks.
- */
-
-Method-Level Comments
-
-MerchantUserController
-
-/**
- * Retrieves a paginated list of merchant information accessible to the logged-in user.
- * @param pageable Pageable object containing pagination details.
- * @return MerchantResponse containing a list of MerchantInfoResponse.
- */
-public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable);
-
-/**
- * Fetches the profile and menu access permissions of the logged-in merchant user.
- * @return MerchantResponse containing MerchantUserAccessResponse.
- */
-public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess();
-
-/**
- * Retrieves the profile details of the logged-in merchant user.
- * @return MerchantResponse containing UserProfileResponse.
- */
-public MerchantResponse<UserProfileResponse> getMerchantUserProfile();
-
-/**
- * Creates a new merchant user. Accessible by ADMIN or SUPER_ADMIN roles.
- * @param merchantUserRequest Request body containing user details for creation.
- * @return MerchantResponse containing MerchantUserResponse.
- */
-public MerchantResponse<MerchantUserResponse> createMerchantUser(MerchantUserRequest merchantUserRequest);
-
-/**
- * Updates the profile of the logged-in merchant user.
- * @param merchantUserRequest Request body containing updated profile details.
- * @return MerchantResponse containing MerchantUserResponse.
- */
-public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest);
-
-/**
- * Updates the profile of a merchant user. Accessible by ADMIN or SUPER_ADMIN roles.
- * @param merchantUserRequest Request body containing user details to update.
- * @return MerchantResponse containing MerchantUserResponse.
- */
-public MerchantResponse<MerchantUserResponse> updateMerchantUser(MerchantUserRequest merchantUserRequest);
-
-/**
- * Searches for merchant users based on specified criteria.
- * @param merchantUserGetRequest Request body containing search filters and parameters.
- * @return MerchantResponse containing MerchantUserResponse.
- */
-public MerchantResponse<MerchantUserResponse> searchMerchantUsers(MerchantUserGetRequest merchantUserGetRequest);
-
-/**
- * Retrieves a list of all user roles defined in the application. Accessible by ADMIN or SUPER_ADMIN roles.
- * @return MerchantResponse containing a list of UserRoleResponse.
- */
-public MerchantResponse<UserRoleResponse> getUserRole();
-
-/**
- * Fetches assigned and unassigned merchant IDs (MIDs) for the specified user.
- * @param userName Username of the merchant user.
- * @return MerchantResponse containing MerchantUserAssignedMIdsResponse.
- */
-public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(String userName);
-
-/**
- * Assigns merchant IDs (MIDs) to the specified user. Accessible by ADMIN or SUPER_ADMIN roles.
- * @param userName Username of the merchant user.
- * @param assignedMIds List of MIDs to be assigned.
- * @return MerchantResponse containing a success message.
- */
-public MerchantResponse<String> assignedMIdsToUser(String userName, List<String> assignedMIds);
-
-LogoutController
-
-/**
- * Invalidates the logged-in user's token and logs them out of the system.
- * @return MerchantResponse containing a logout success message.
- */
-public MerchantResponse<String> logout();
-
-LogoutService
-
-/**
- * Invalidates the token of the logged-in user.
- * @return MerchantResponse containing a logout success message.
- */
-public MerchantResponse<String> merchantUserLogout();
-
-TokenService
-
-/**
- * Invalidates the token for the specified username.
- * @param userName Username of the merchant user.
- * @return Integer representing success or failure status.
- */
-public int invalidateUserToken(String userName);
-
-MerchantUserValidator
-
-/**
- * Validates the merchant user request for creation or update.
- * Ensures mandatory fields and unique user details.
- * @param merchantUserRequest Request body containing user details.
- * @param isCreate Boolean flag to indicate creation or update.
- */
-public void validateMerchantUserRequest(MerchantUserRequest merchantUserRequest, boolean isCreate);
-
-/**
- * Validates the profile details of the logged-in merchant user.
- * @param merchantUserRequest Request body containing profile details.
- */
-public void validateMerchantUserProfile(MerchantUserRequest merchantUserRequest);
-
-/**
- * Checks mandatory fields in the MerchantUserRequest.
- * @param user MerchantUserRequest object.
- */
-public void validateMandatoryFields(MerchantUserRequest user);
-
-/**
- * Validates field values in the MerchantUserRequest.
- * @param merchantUserRequest MerchantUserRequest object.
- */
-public void validateFieldValue(MerchantUserRequest merchantUserRequest);
-
-/**
- * Validates for duplicate merchant user during creation.
- * @param userName Username of the merchant user.
- * @param email Email of the merchant user.
- * @param mobilePhone Mobile phone of the merchant user.
- */
-public void validateDuplicateMerchantUser(String userName, String email, String mobilePhone);
-
-/**
- * Validates assigned role for the merchant user.
- * @param role UUID of the user role.
- */
-public void validatedAssignedRole(UUID role);
-
-
-
-
-
-
-package com.epay.merchant.controller;
-
-import com.epay.merchant.model.request.MerchantUserGetRequest;
-import com.epay.merchant.model.request.MerchantUserRequest;
-import com.epay.merchant.model.response.*;
-import com.epay.merchant.service.MerchantUserService;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import io.swagger.v3.oas.annotations.Operation;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-
-
-/**
- * Class Name: MerchantUserController
- * *
- * Description:
- * *
- * Author: Subhra Goswami
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("/user")
-public class MerchantUserController {
-
-    private final MerchantUserService merchantUserService;
-    LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    /**
-     * Get All Access Merchant Info
-     * Retrieves the merchant info details of the logged-in user with access permissions.
-     * @param pageable Pageable
-     * @return MerchantResponse containing MerchantInfoResponse
-     */
-    @GetMapping("/access/mids/info")
-    @Operation(summary = "Get access merchant info details of logged in merchantUser.", description = "Get access merchant info details of logged in merchantUser.")
-    public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(@PageableDefault(size = 50, page = 0) Pageable pageable) {
-        log.info("Received request to fetch merchant info");
-        return merchantUserService.getAllAccessMerchantInfo(pageable);
-    }
-
-    /**
-     * Get Merchant User Access
-     *
-     * @return Merchant User Access Response
-     * Retrieves the profile and menu access permissions of the logged-in merchant user.
-     */
-    @GetMapping("/access")
-    @Operation(summary = "Get Merchant User Profile and Menu with permissions.", description = "Get Logged in user profile and access permission ")
-    public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
-        return merchantUserService.getMerchantUserAccess();
-    }
-
-    /**
-     * Get Merchant User Profile
-     * Retrieves the profile details of the logged-in merchant user.
-     * @return MerchantResponse containing UserProfileResponse
-     */
-    @GetMapping("/profile")
-    @Operation(summary = "Get Merchant User Profile details.", description = "Get Logged in user profile and view details ")
-    public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
-        log.info("GetMerchantUserProfile");
-        return merchantUserService.getMerchantUserProfile();
-    }
-
-    /**
-     * Create Merchant User
-     *
-     * @param merchantUserRequest MerchantUserRequest
-     * Creates a new merchant user. Can be used by Merchant Admin or Super Admin.
-     * @return MerchantResponse containing MerchantUserResponse
-     */
-    @PostMapping
-    @Operation(summary = "User Creation for Merchant by Merchant Admin or Super Admin", description = "Merchant SuperAdmin/Admin will use this API to create Merchant Users for managing merchant portal")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public MerchantResponse<MerchantUserResponse> createMerchantUser(@RequestBody MerchantUserRequest merchantUserRequest) {
-        log.info("Entity Creation : merchantRequest {}", merchantUserRequest);
-        return merchantUserService.createMerchantUser(merchantUserRequest);
-    }
-
-    /**
-     * Update Merchant User.
-     *
-     * @param merchantUserRequest MerchantUserRequest
-     * @return MerchantUserResponse
-     */
-    @PutMapping("/profile")
-    @Operation(summary = "Update Merchant User Profile", description = "Logged In Merchant User Profile Date")
-    public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(@RequestBody MerchantUserRequest merchantUserRequest) {
-        log.info("Profile Update : MerchantUserProfileRequest {}", merchantUserRequest);
-        return merchantUserService.updateMerchantUserProfile(merchantUserRequest);
-    }
-
-    /**
-     * Update Merchant User.
-     *
-     * @param merchantUserRequest MerchantUserRequest
-     * @return MerchantUserResponse
-     */
-    @PutMapping
-    @Operation(summary = "Update Merchant User by Parent MerchantUser", description = "Parent User can update the childMerchant User Request")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public MerchantResponse<MerchantUserResponse> updateMerchantUser(@RequestBody MerchantUserRequest merchantUserRequest) {
-        log.info("Profile Update : MerchantUserProfileRequest {}", merchantUserRequest);
-        return merchantUserService.updateMerchantUser(merchantUserRequest);
-    }
-
-    @PostMapping("/search")
-    @Operation(summary = "Search merchant user details")
-    public MerchantResponse<MerchantUserResponse> searchMerchantUsers(@RequestBody MerchantUserGetRequest merchantUserGetRequest) {
-        log.info("Received request to search merchant user through : merchantUserGetRequest {}", merchantUserGetRequest);
-        return merchantUserService.searchMerchantUsers(merchantUserGetRequest);
-    }
-
-    /**
-     * Get User Roles
-     *
-     * @return MerchantResponse containing the list of user roles
-     */
-    @GetMapping("/roles")
-    @Operation(summary = "Get All User Roles define in application", description = "Fetch the list of user roles available for merchants.")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public MerchantResponse<UserRoleResponse> getUserRole() {
-        return merchantUserService.getUserRole();
-    }
-
-    @GetMapping("/mid/mapping/{userName}")
-    @Operation(summary = "Get Assigned and UnAssigned Merchant Info", description = "Get Assigned and UnAssigned Merchant Info for given User")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(@PathVariable String userName) {
-        return merchantUserService.getAssignedUnAssignedMIdsOfUser(userName);
-    }
-
-    @PostMapping("/mid/mapping/{userName}")
-    @Operation(summary = "Assigned MIDs to Users", description = "Get Assigned and UnAssigned Merchant Info for given User")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public MerchantResponse<String> assignedMIdsToUser(@PathVariable String userName, @RequestBody List<String> assignedMIds) {
-        return merchantUserService.assignedMIdsToUser(userName, assignedMIds);
-    }
-
-}
-@RestController
-@RequestMapping("/logout")
-@RequiredArgsConstructor
-public class LogoutController {
-
-    private final LogoutService logoutService;
-    LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    @PostMapping
-    @Operation(summary = "Merchant User Logout API", description = "Merchant User Token will be invalidated")
-    public MerchantResponse<String> logout() {
-        return logoutService.merchantUserLogout();
-    }
-}
-public class LogoutService {
-
-    private final TokenService tokenService;
-
-    public MerchantResponse<String> merchantUserLogout(){
-        String userName = EPayIdentityUtil.getUserPrincipal().getAuthenticationId();
-        int i = tokenService.invalidateUserToken(userName);
-        return MerchantResponse.<String>builder().data(List.of("LogOut Successfully")).status(i).build();
-    }
-}
- public int invalidateUserToken(String userName) {
-        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
-        Optional<TokenManagement> validToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUserDto.getId());
-        if (validToken.isPresent()) {
-            TokenManagement tokenManagement = validToken.get();
-            tokenManagement.setValid(false);
-            tokenDao.saveToken(List.of(tokenManagement));
-            return MerchantConstant.RESPONSE_SUCCESS;
-        }
-        return MerchantConstant.RESPONSE_FAILURE;
-    }
-
-package com.epay.merchant.validator;
-
-import com.epay.merchant.dao.MerchantInfoDao;
-import com.epay.merchant.dao.MerchantUserDao;
-import com.epay.merchant.dao.OtpManagementDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.dto.MerchantInfoDto;
-import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.model.request.MerchantUserRequest;
-import com.epay.merchant.model.request.UserValidationRequest;
-import com.epay.merchant.util.EPayIdentityUtil;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.MerchantUserRoles;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.util.enums.UserStatus;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.ObjectUtils;
-import org.springframework.stereotype.Component;
-
-import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.UUID;
-
-import static com.epay.merchant.util.ErrorConstants.*;
-
-/**
- * Class Name: MerchantUserValidator
- * *
- * Description:
- * *
- * Author: V1017903(bhushan wadekar)
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-
-@Component
-@RequiredArgsConstructor
-public class MerchantUserValidator extends BaseValidator {
-
-    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
-
-    private final MerchantUserDao merchantUserDao;
-    private final MerchantInfoDao merchantInfoDao;
-    private final OtpManagementDao otpManagementDao;
-
-    public void validateMerchantUserRequest(UserValidationRequest userValidationRequest) {
-        errorDtoList = new ArrayList<>();
-        logger.debug("Merchant validation start for UserValidationRequest {}", userValidationRequest);
-        validateMandatoryFields(userValidationRequest);
-        logger.debug("Merchant mandatory validation completed for UserValidationRequest {}", userValidationRequest);
-        validateFieldsValue(userValidationRequest);
-        logger.debug("Merchant field validation completed for UserValidationRequest {}", userValidationRequest);
-    }
-    /**
-     * Validates the MerchantUserRequest
-     *
-     * @param merchantUserRequest MerchantUserRequest
-     */
-    public void validateMerchantUserRequest(MerchantUserRequest merchantUserRequest, boolean isCreate) {
-        errorDtoList = new ArrayList<>();
-        logger.debug("Merchant validation start for MerchantUserRequest {}", merchantUserRequest);
-        validateMandatoryFields(merchantUserRequest);
-        validateIsRolePresent(merchantUserRequest);
-        validateFieldValue(merchantUserRequest);
-        if (isCreate) {
-            validateDuplicateMerchantUser(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
-        } else {
-            validateDuplicateMerchantUserOnUpdate(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
-        }
-        validatedAssignedRole(merchantUserRequest.getRole());
-        logger.debug("Merchant User role validation completed for MerchantUserRequest {}", merchantUserRequest);
-    }
-
-    public void validateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
-        errorDtoList = new ArrayList<>();
-        logger.debug("Merchant User Profile validation start for MerchantUserRequest {}", merchantUserRequest);
-        String userName = EPayIdentityUtil.getUserPrincipal().getAuthenticationId();
-        if (userName.equalsIgnoreCase(merchantUserRequest.getUserName())) {
-            validateMandatoryFields(merchantUserRequest);
-            validateFieldValue(merchantUserRequest);
-            validatedRequestId(merchantUserRequest, userName);
-            validateDuplicateMerchantUserOnUpdate(merchantUserRequest.getUserName(), merchantUserRequest.getEmail(), merchantUserRequest.getMobilePhone());
-        } else {
-            errorDtoList.add(ErrorDto.builder().errorCode(INVALID_ERROR_CODE).errorMessage(MessageFormat.format(INVALID_ERROR_MESSAGE, "Merchant User", "Profile Request not belongs to logged in User")).build());
-            throwIfErrors();
-        }
-        logger.debug("Merchant User assigned MIDs validation completed for MerchantUserRequest {}", merchantUserRequest);
-    }
-    public void validatePostMapping(String userName, MerchantUserDto merchantUser, List<String> mIds) {
+ public void validatePostMapping(String userName, MerchantUserDto merchantUser, List<String> mIds) {
         checkMandatoryCollection(mIds, "List of mIds");
         validatedMappingRequest(userName, merchantUser);
         validatedWithParentMIdsAccess(mIds, merchantUser);
@@ -495,75 +28,12 @@ public class MerchantUserValidator extends BaseValidator {
             throw new ValidationException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Requested AssginedMIds", "Requested User is not having the access of given MId list"));
         }
     }
-    /**
-     * Validates the mandatory fields in userValidationRequest
-     *
-     * @param userValidationRequest UserValidationRequest
-     */
-    void validateMandatoryFields(UserValidationRequest userValidationRequest) {
-        checkMandatoryField(userValidationRequest.getRequestType(), REQUEST_TYPE);
-        checkMandatoryField(userValidationRequest.getUserName(), USER_NAME);
-        throwIfErrors();
-    }
-    /**
-     * Validates the mandatory fields value in UserValidationRequest
-     *
-     * @param userValidationRequest UserValidationRequest
-     */
-    void validateFieldsValue(UserValidationRequest userValidationRequest) {
-        validateFieldValue(userValidationRequest.getRequestType(), RequestType.LOGIN.getName(), REQUEST_TYPE);
-        throwIfErrors();
-    }
-
-    /**
-     * Validates the mandatory fields in MerchantUserRequest
-     *
-     * @param user MerchantUserRequest
-     */
-    void validateMandatoryFields(MerchantUserRequest user) {
-        checkMandatoryField(user.getUserName(), USER_NAME);
-        checkMandatoryField(user.getFirstName(), FIRST_NAME);
-        checkMandatoryField(user.getLastName(), LAST_NAME);
-        checkMandatoryField(user.getEmail(), EMAIL);
-        checkMandatoryField(user.getMobilePhone(), MOBILE_PHONE);
-        checkMandatoryField(user.getCity(), CITY);
-        checkMandatoryField(user.getStateCode(), STATE);
-        checkMandatoryField(user.getCountryCode(), COUNTRY);
-        checkMandatoryField(user.getPinCode(), PIN);
-        throwIfErrors();
-    }
-
-    void validateIsRolePresent(MerchantUserRequest merchantUserRequest) {
+ void validateIsRolePresent(MerchantUserRequest merchantUserRequest) {
         errorDtoList = new ArrayList<>();
         checkMandatoryField(merchantUserRequest.getRole(), "User Role");
         throwIfErrors();
     }
-    /**
-     * Validates field values in MerchantUserRequest
-     * @param  merchantUserRequest MerchantUserRequest
-     */
-    void validateFieldValue(MerchantUserRequest merchantUserRequest) {
-        validateFieldWithRegex(merchantUserRequest.getEmail(), MerchantConstant.EMAIL_REGEX, EMAIL, FORMAT);
-        validateFieldWithRegex(merchantUserRequest.getMobilePhone(), MerchantConstant.PHONE_REGEX, MOBILE_PHONE, FORMAT);
-        validateFieldWithRegex(merchantUserRequest.getOfficePhone(), MerchantConstant.LANDLINE_PHONE_REGEX, OFFICE_PHONE, FORMAT);
-        validateFieldWithRegex(merchantUserRequest.getPinCode(), MerchantConstant.PIN_REGEX, PINCODE, FORMAT);
-        throwIfErrors();
-    }
-    /**
-     * Validates for duplicate Merchant User
-     * @param  userName String
-     * @param email String
-     * @param mobilePhone String
-     */
-    void validateDuplicateMerchantUser(String userName, String email, String mobilePhone) {
-        boolean isUserExist = merchantUserDao.existsByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, mobilePhone, List.of(UserStatus.values()));
-        if (isUserExist) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.USER_ALREADY_EXIST_ERROR_MESSAGE_SAVE, userName, mobilePhone, email)).build());
-            throwIfErrors();
-        }
-    }
-
-    void validateDuplicateMerchantUserOnUpdate(String userName, String email, String mobilePhone) {
+ void validateDuplicateMerchantUserOnUpdate(String userName, String email, String mobilePhone) {
         List<String> dbUserName = merchantUserDao.getUserNameByEmailOrMobilePhone(email, mobilePhone);
         boolean found = dbUserName.stream().allMatch(u -> u.equalsIgnoreCase(userName));
         if (!found) {
@@ -571,26 +41,261 @@ public class MerchantUserValidator extends BaseValidator {
             throwIfErrors();
         }
     }
-    /**
-     *  Validates assigned role
-     * @param  role UUID
-     */
-    void validatedAssignedRole(UUID role) {
-        MerchantUserRoles loggedInUserRole = MerchantUserRoles.getRole(EPayIdentityUtil.getUserPrincipal().getUserRole().getFirst());
-        MerchantUserRoles userRoleName = MerchantUserRoles.getRole(merchantUserDao.getUserRoleName(role));
-        if (MerchantUserRoles.ADMIN == loggedInUserRole && MerchantUserRoles.SUPER_ADMIN.equals(userRoleName)) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, ADMIN_AND_USER)).build());
-        } else if (MerchantUserRoles.USER == loggedInUserRole && !MerchantUserRoles.USER.equals(userRoleName)) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, ROLE, TO_BE_ASSIGNED_ROLE_ARE_USER)).build());
+
+
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.MerchantInfoDao;
+import com.epay.merchant.dao.MerchantUserDao;
+import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.request.MerchantUserGetRequest;
+import com.epay.merchant.model.request.MerchantUserRequest;
+import com.epay.merchant.model.response.*;
+import com.epay.merchant.util.EPayIdentityUtil;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.UserStatus;
+import com.epay.merchant.validator.MerchantUserValidator;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * *
+ * Description:
+ * *
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Service
+@RequiredArgsConstructor
+public class MerchantUserService {
+
+    private final MerchantInfoDao merchantInfoDao;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantUserValidator merchantUserValidator;
+    private final MerchantMapper merchantMapper;
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    private static List<String> getNewMIdMappingList(List<String> mIds, List<MerchantInfoDto> assignedMIds) {
+        List<String> newMappedMIds = new ArrayList<>();
+        for (String mId : mIds) {
+            boolean mIdFound = false;
+            for (MerchantInfoDto assignedMId : assignedMIds) {
+                if (mId.equalsIgnoreCase(assignedMId.getMId())) {
+                    mIdFound = true;
+                    break;
+                }
+            }
+            if (!mIdFound) {
+                newMappedMIds.add(mId);
+            }
         }
-        throwIfErrors();
+        return newMappedMIds;
     }
 
-    void validatedRequestId(MerchantUserRequest merchantUserRequest, String userName) {
-        errorDtoList = new ArrayList<>();
-        checkMandatoryField(merchantUserRequest.getRequestId(),"RequestId");
-        throwIfErrors();
-        otpManagementDao.validateRequestIdByUserNameAndRequestType(merchantUserRequest.getRequestId(), userName, RequestType.PROFILE_EDIT);
+    /**
+     * Fetches all merchant information with pagination
+     */
+    public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable) {
+        log.info("Fetching all merchant information");
+
+        // Step 1 : Get UserName from Security Context
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+
+        // Step 2 : Get All Merchant Info which is accessible to Logged in Merchant User
+        Page<MerchantInfoDto> merchantInfo = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName, pageable);
+
+        // Step 3 : Covert DTO to Response Object
+        List<MerchantInfoResponse> merchantInfoResponseList = merchantMapper.mapMerchantInfoDTOListToResponseList(merchantInfo.getContent());
+
+        // Step 4 : Building the response
+        return MerchantResponse.<MerchantInfoResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantInfoResponseList).count(merchantInfo.stream().count()).total(merchantInfo.getTotalElements()).build();
     }
 
+    /**
+     * Find Merchant User basic information and Access details
+     */
+    public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
+        // Step 1 : Get UserName from Security Context
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+
+        // Step 2 : Get Merchant User Info of Logged in Merchant User
+        MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, List.of(UserStatus.ACTIVE));
+        if (ObjectUtils.isEmpty(merchantUserDto)) {
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName"));
+        }
+
+        // Step 3 : Get Merchant Permission Info of Logged in Merchant User
+        List<UserMenuPermissionEntityDetails> userAccess = merchantUserDao.getUserMenuPermission(merchantUserDto.getId());
+
+        // Step 4 : Build Merchant User Access Response
+        MerchantUserAccessResponse merchantUserAccessResponse = MerchantUserAccessResponse.builder().userInfo(merchantUserDto).userAccess(userAccess).build();
+
+        // Step 4 : Building the response
+        return MerchantResponse.<MerchantUserAccessResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(merchantUserAccessResponse)).build();
+    }
+
+    /**
+     * Fetches Merchant User profile details for Logged-In User
+     */
+    public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
+
+        // Step 1 : Get UserName from Security Context
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+
+        // Step 2 : Get Merchant User Info of Logged in Merchant User
+        UserProfileResponse userProfileResponse = merchantUserDao.getMerchantUserProfile(userName, List.of(UserStatus.ACTIVE));
+
+        // Step 3 : Building the response
+        return MerchantResponse.<UserProfileResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(userProfileResponse)).count(1L).total(1L).build();
+    }
+
+    /**
+     * Merchant User Creation
+     *
+     * @param merchantUserRequest MerchantUserRequest
+     * @return MerchantUserResponse
+     */
+    public MerchantResponse<MerchantUserResponse> createMerchantUser(MerchantUserRequest merchantUserRequest) {
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, true);
+        return saveMerchantUser(merchantUserRequest, false, false);
+    }
+
+    public MerchantResponse<MerchantUserResponse> updateMerchantUser(MerchantUserRequest merchantUserRequest) {
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, false);
+        return saveMerchantUser(merchantUserRequest, false, true);
+    }
+
+    public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserProfile(merchantUserRequest);
+        return saveMerchantUser(merchantUserRequest, true, true);
+    }
+
+    private MerchantResponse<MerchantUserResponse> saveMerchantUser(MerchantUserRequest merchantUserRequest, boolean isProfileUpdate, boolean isUpdate) {
+        //Step 1 : Save the Merchant User Data in DB
+        MerchantUserDto merchantUserDto = merchantMapper.mapMerchantUserRequestToMerchantUserDto(merchantUserRequest);
+        if (isUpdate) {
+            merchantUserDto = merchantUserDao.updateMerchantUser(merchantUserDto, isProfileUpdate);
+        } else {
+            merchantUserDto = merchantUserDao.saveMerchantUser(merchantUserDto, StringUtils.EMPTY);
+        }
+        //Step 2 : Build MerchantResponse and return to caller
+        MerchantUserResponse merchantUserResponse = merchantMapper.mapMerchantUserDtoToResponse(merchantUserDto);
+        merchantUserResponse.setRole(merchantUserDao.getUserRoleName(merchantUserDto.getRole()));
+        return MerchantResponse.<MerchantUserResponse>builder().data(List.of(merchantUserResponse)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
+
+    /**
+     * Search Merchant User and return all records based on search inputs.
+     *
+     * @param merchantUserGetRequest MerchantUserRequest
+     * @return MerchantUserResponse of MerchantUser
+     */
+    public MerchantResponse<MerchantUserResponse> searchMerchantUsers(MerchantUserGetRequest merchantUserGetRequest) {
+        Page<MerchantUserDto> merchantUsers = merchantUserDao.findMerchantUsers(merchantUserGetRequest);
+        List<MerchantUserResponse> merchantUserResponseList = merchantMapper.mapMerchantUserDTOListToResponseList(merchantUsers.getContent());
+        return MerchantResponse.<MerchantUserResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantUserResponseList).count(merchantUsers.stream().count()).total(merchantUsers.getTotalElements()).build();
+    }
+
+    /**
+     * Fetch User Roles
+     *
+     * @return MerchantResponse<UserRoleResponse> containing user roles
+     */
+    public MerchantResponse<UserRoleResponse> getUserRole() {
+        log.info("Started fetching user roles");
+        List<UserRoleResponse> userRoleResponse = merchantUserDao.getUserRoles();
+        return MerchantResponse.<UserRoleResponse>builder().data(userRoleResponse).status(MerchantConstant.RESPONSE_SUCCESS).count((long) userRoleResponse.size()).build();
+    }
+
+    /**
+     * Retrieves MID mapping list based on user ID and parent MID list.
+     *
+     * @param userName String.
+     * @return MerchantResponse containing assigned and unassigned MIDs.
+     */
+    public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(String userName) {
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, List.of(UserStatus.ACTIVE));
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+
+        //Step 3  : Get Assigned MIds
+        List<MerchantInfoDto> assignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
+
+        //Step 4  : Get UnAssigned MIds from ParentUser
+        List<MerchantInfoResponse> unAssignedMerchantInfo = getParentAssignedMIds(merchantUser, assignedMIds);
+
+        //Step 5  : Build MerchantUserAssignedMIdsResponse
+        List<MerchantInfoResponse> assignedMerchantInfo = merchantMapper.mapMerchantInfoDTOListToResponseList(assignedMIds);
+        MerchantUserAssignedMIdsResponse userAssignedMIdsResponse = MerchantUserAssignedMIdsResponse.builder().assignedMIds(assignedMerchantInfo).unAssignedMIds(unAssignedMerchantInfo).build();
+
+        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMIdsResponse
+        return MerchantResponse.<MerchantUserAssignedMIdsResponse>builder().data(List.of(userAssignedMIdsResponse)).build();
+    }
+
+    /**
+     * Retrieves MID mapping list based on user ID and parent MID list.
+     *
+     * @param userName String.
+     * @return MerchantResponse containing assigned and unassigned MIDs.
+     */
+    public MerchantResponse<String> assignedMIdsToUser(String userName, List<String> mIds) {
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, List.of(UserStatus.ACTIVE));
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatePostMapping(userName, merchantUser, mIds);
+
+        //Step 3  : Build Remove and new Assigned MIds list from current data
+        List<MerchantInfoDto> assignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
+        List<String> removedMIds = assignedMIds.stream().map(MerchantInfoDto::getMId).filter(mId -> !mIds.contains(mId)).collect(Collectors.toList());
+        List<String> newMappedMIds = getNewMIdMappingList(mIds, assignedMIds);
+
+        //Step 4 : Update the data in DB as per remove and new MIDs list
+        merchantUserDao.assignedMIds(newMappedMIds, removedMIds, merchantUser.getId());
+
+        //Step 5 :  Build MerchantResponse Object of MerchantUserAssignedMIdsResponse
+        return MerchantResponse.<String>builder().data(List.of("MIds is assigned Successfully")).build();
+    }
+
+    private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
+        List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
+
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            //Step 2: Get Parent Assigned MIDs List
+            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
+
+            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
+            parentAssignedMIds.removeAll(assignedMIds);
+            if (CollectionUtils.isNotEmpty(parentAssignedMIds)) {
+                unAssignedMerchantInfo.addAll(merchantMapper.mapMerchantInfoDTOListToResponseList(parentAssignedMIds));
+            }
+        }
+        return unAssignedMerchantInfo;
+    }
 }
