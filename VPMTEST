@@ -1,3 +1,156 @@
+Here’s the updated method-level documentation for the NotificationDao class and other related methods from the provided code:
+
+Method-Level Comments
+
+sendEmailNotification
+
+/**
+ * Sends an email notification to the specified recipient and logs the notification details.
+ *
+ * @param merchantEmailDto       The email details, including content and recipient address.
+ * @param notificationManagement The notification entity to log the email sending activity.
+ */
+public void sendEmailNotification(MerchantEmailDto merchantEmailDto, NotificationManagement notificationManagement) {
+
+sendSmsNotification
+
+/**
+ * Sends an SMS notification to the specified recipient and logs the notification details.
+ *
+ * @param smsRequest             The SMS details, including the recipient's mobile number and message content.
+ * @param notificationManagement The notification entity to log the SMS sending activity.
+ */
+public void sendSmsNotification(SmsRequest smsRequest, NotificationManagement notificationManagement) {
+
+sendEmail
+
+/**
+ * Asynchronously sends an email notification using the provided email details.
+ * Handles exceptions during email delivery and updates the response status.
+ *
+ * @param merchantEmailDto The email details, including content and recipient address.
+ */
+private void sendEmail(MerchantEmailDto merchantEmailDto) {
+
+sendSMS
+
+/**
+ * Asynchronously sends an SMS notification using the provided SMS details.
+ * Handles exceptions during SMS delivery and updates the response status.
+ *
+ * @param smsRequest The SMS details, including the recipient's mobile number and message content.
+ */
+private void sendSMS(SmsRequest smsRequest) {
+
+getEmailDto
+
+/**
+ * Constructs an EmailDto object using the provided merchant email details.
+ * Supports custom recipient and CC configurations.
+ *
+ * @param merchantEmailDto The merchant email details, including content and type.
+ * @return EmailDto The constructed email object to be sent.
+ */
+private EmailDto getEmailDto(MerchantEmailDto merchantEmailDto) {
+
+sendOtpGenerationNotification
+
+/**
+ * Sends an OTP notification via email and SMS to the specified merchant user.
+ *
+ * @param otpManagement The OTP management entity containing request details.
+ * @param merchantUser  The merchant user to whom the OTP is sent.
+ * @param otp           The generated OTP code.
+ */
+private void sendOtpGenerationNotification(OtpManagement otpManagement, MerchantUserDto merchantUser, String otp) {
+
+sendEmail (for OTP)
+
+/**
+ * Sends an OTP notification via email to the specified merchant user.
+ * Logs the email activity in the notification management entity.
+ *
+ * @param otpManagement The OTP management entity containing request details.
+ * @param merchantUser  The merchant user to whom the email is sent.
+ * @param otp           The generated OTP code.
+ */
+private void sendEmail(OtpManagement otpManagement, MerchantUserDto merchantUser, String otp) {
+
+sendSms (for OTP)
+
+/**
+ * Sends an OTP notification via SMS to the specified merchant user.
+ * Logs the SMS activity in the notification management entity.
+ *
+ * @param otpManagement The OTP management entity containing request details.
+ * @param merchantUser  The merchant user to whom the SMS is sent.
+ * @param otp           The generated OTP code.
+ */
+private void sendSms(OtpManagement otpManagement, MerchantUserDto merchantUser, String otp) {
+
+validateRequestIdByUserNameAndRequestType
+
+/**
+ * Validates the OTP request ID for a specific user and request type.
+ * Ensures the OTP has not expired, is verified, and matches the provided request ID.
+ *
+ * @param requestId  The OTP request ID to validate.
+ * @param userName   The username associated with the OTP request.
+ * @param requestType The type of the OTP request (e.g., password reset, login).
+ * @throws MerchantException If the OTP is invalid, expired, or verification fails.
+ */
+public void validateRequestIdByUserNameAndRequestType(String requestId, String userName, RequestType requestType) {
+
+sendNotification
+
+/**
+ * Sends a notification (email and SMS) to the merchant user for password generation or reset.
+ *
+ * @param requestType The type of request (e.g., password reset or change).
+ * @param entityId    The entity ID associated with the request.
+ * @param merchantUser The merchant user to whom the notification is sent.
+ * @param password    The generated or updated password.
+ */
+private void sendNotification(RequestType requestType, UUID entityId, MerchantUserDto merchantUser, String password) {
+
+sendEmail (for Password Notification)
+
+/**
+ * Sends a password notification via email to the specified merchant user.
+ *
+ * @param requestType The type of request (e.g., password reset or change).
+ * @param merchantUser The merchant user to whom the email is sent.
+ * @param password    The generated or updated password.
+ * @param entityId    The entity ID associated with the request.
+ */
+private void sendEmail(RequestType requestType, MerchantUserDto merchantUser, String password, UUID entityId) {
+
+sendSms (for Password Notification)
+
+/**
+ * Sends a password notification via SMS to the specified merchant user.
+ *
+ * @param requestType The type of request (e.g., password reset or change).
+ * @param merchantUser The merchant user to whom the SMS is sent.
+ * @param entityId    The entity ID associated with the request.
+ */
+private void sendSms(RequestType requestType, MerchantUserDto merchantUser, UUID entityId) {
+
+buildNotificationManagement
+
+/**
+ * Constructs a NotificationManagement entity for logging notification activities.
+ *
+ * @param requestType The type of the notification request.
+ * @param entityId    The entity ID associated with the notification.
+ * @return NotificationManagement The constructed notification management entity.
+ */
+private static NotificationManagement buildNotificationManagement(RequestType requestType, UUID entityId) {
+
+Let me know if additional adjustments are needed!
+
+
+
 package com.epay.merchant.dao;
 
 import com.epay.merchant.config.MerchantConfig;
