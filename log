@@ -1,0 +1,177 @@
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.AdminDao;
+import com.epay.merchant.dto.MerchantDto;
+import com.epay.merchant.dto.MerchantEntityGroupDto;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.dto.OnboardingDto;
+import com.epay.merchant.mapper.MerchantEntityGroupMapper;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.request.*;
+import com.epay.merchant.model.response.*;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.MerchantStatus;
+import com.epay.merchant.util.enums.NotificationType;
+import com.epay.merchant.validator.AdminValidator;
+import com.epay.merchant.validator.OnboardingValidator;
+import com.sbi.epay.encryptdecrypt.util.enums.HashAlgorithm;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import java.text.MessageFormat;
+import java.util.Arrays;
+import java.util.List;
+
+
+/**
+ * Class Name: AdminService
+ * *
+ * Description:
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Service
+@RequiredArgsConstructor
+public class AdminService {
+
+    private final OnboardingValidator onboardingValidator;
+    private final AdminValidator adminValidator;
+    private final AdminDao adminDao;
+    private final MerchantEntityGroupMapper merchantEntityGroupMapper;
+    private final MerchantMapper merchantMapper;
+    private final HelpSupportService helpSupportService;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    /**
+     * Onboard a merchant and merchant admin user.
+     * Destination: AdminDao.onboardingMerchantAndMerchantUser
+     *
+     * @param onboardingRequest OnboardingRequest
+     * @return MerchantResponse with OnboardingResponse
+     */
+    public MerchantResponse<OnboardingResponse> onboardingMerchant(OnboardingRequest onboardingRequest) {
+        log.info("Started onboardingRequest for merchant {}", onboardingRequest.getMerchant());
+        //Step 1 : OnboardingRequest validation
+        onboardingValidator.validateOnboardingRequest(onboardingRequest);
+        //Step 2 : Set up the default value for Merchant
+        setMerchantDefaultValues(onboardingRequest.getMerchant());
+        //Step 3 : Save the Merchant and Merchant User Data in DB
+        OnboardingDto onboardingDto = adminDao.onboardingMerchantAndMerchantUser(onboardingRequest);
+        //Step 5 : Build MerchantResponse and return to caller
+        log.info("Returning OnboardingResponse for merchant");
+        return MerchantResponse.<OnboardingResponse>builder().data(List.of(OnboardingResponse.builder().merchant(onboardingDto.getMerchant()).user(onboardingDto.getUser()).build())).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
+    /**
+     * Create a merchant entity group.
+     * Destination: AdminDao.saveMerchantEntityGroup
+     *
+     * @param merchantEntityGroupRequest MerchantEntityGroupRequest
+     * @return MerchantResponse with MerchantEntityGroupResponse
+     */
+    public MerchantResponse<MerchantEntityGroupResponse> createMerchantEntityGroup(MerchantEntityGroupRequest merchantEntityGroupRequest) {
+        log.info("Create merchant entity group for EntityId {}", merchantEntityGroupRequest.getEntityId());
+        //Step 1 : MerchantEntityGroupRequest validation
+        adminValidator.entityValidator(merchantEntityGroupRequest);
+        MerchantEntityGroupDto merchantEntityGroupDto = merchantEntityGroupMapper.mapEntityRequestToMerchantEntityGroupDto(merchantEntityGroupRequest);
+        //Step 2 : Save Merchant Entity Group
+        merchantEntityGroupDto = adminDao.saveMerchantEntityGroup(merchantEntityGroupDto);
+        //Step 3 : Build MerchantResponse and return to caller
+        return MerchantResponse.<MerchantEntityGroupResponse>builder().data(List.of(merchantEntityGroupMapper.mapMerchantEntityGroupDtoToEntityResponse(merchantEntityGroupDto))).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
+
+    /**
+     * Get all users for a merchant.
+     * Destination: AdminDao.findAllMerchantUsersByMId
+     *
+     * @param mId String
+     * @param pageable Pageable
+     * @return MerchantResponse with MerchantUserResponse
+     */
+    public MerchantResponse<MerchantUserResponse> getAllMerchantUsers(String mId, Pageable pageable) {
+        log.info("getting userList based on mId: {}", mId);
+        Page<MerchantUserDto> merchantUsers = adminDao.findAllMerchantUsersByMId(mId, pageable);
+        log.info("Mapping users for Merchant ID: {}", mId);
+        List<MerchantUserResponse> merchantUserResponseList = merchantMapper.mapMerchantUserDTOListToResponseList(merchantUsers.getContent());
+        return MerchantResponse.<MerchantUserResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantUserResponseList).count(merchantUsers.stream().count()).total(merchantUsers.getTotalElements()).build();
+    }
+
+    /**
+     * Map a user to an entity.
+     * Destination: AdminDao.updateUserRole
+     *
+     * @param userEntityMappingRequest UserEntityMappingRequest
+     * @return MerchantResponse with mapping status
+     */
+    public MerchantResponse<String> userEntityMapping(UserEntityMappingRequest userEntityMappingRequest) {
+        log.info("Received request to map entity with details: {}", userEntityMappingRequest);
+
+        // Step 1: Validate the request
+        adminValidator.userEntityRequestValidator(userEntityMappingRequest);
+
+        // Step 2: Perform action based on user role
+        adminDao.updateUserRole(userEntityMappingRequest.getUserId(), userEntityMappingRequest.getUserName(), userEntityMappingRequest.getEntityId());
+
+        // Step 3: Build and return the response
+        return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("role has been updated successfully")).count(1L).total(1L).build();
+    }
+
+    /**
+     * Sets default values for a MerchantDto object if they are not present in the onboarding request.
+     *
+     * @param merchant MerchantDto
+     */
+    private void setMerchantDefaultValues(MerchantDto merchant) {
+        if (Arrays.stream(NotificationType.values()).noneMatch(nt -> StringUtils.equalsAnyIgnoreCase(merchant.getNotification(), nt.name()))) {
+            merchant.setNotification(NotificationType.BOTH.name());
+        }
+        if (StringUtils.isEmpty(merchant.getEncryptedAlgo())) {
+            merchant.setEncryptedAlgo(HashAlgorithm.SHA_512.toString());
+        }
+        if (ObjectUtils.isEmpty(merchant.getStatus())) {
+            merchant.setStatus(MerchantStatus.ACTIVE);
+        }
+    }
+
+    /**
+     * Update help and support details.
+     * Destination: AdminDao.updateHelpSupport
+     *
+     * @param mId String
+     * @param helpSupportRequest HelpSupportRequest
+     * @return MerchantResponse with HelpSupportResponse
+     */
+    public MerchantResponse<HelpSupportResponse> saveHelpSupport(String mId, HelpSupportRequest helpSupportRequest) {
+        return helpSupportService.saveHelpSupport(mId, helpSupportRequest);
+    }
+
+
+    /**
+     * Save Footer Labels
+     *
+     * @param footerRequest FooterRequest
+     * @return MerchantResponse
+     * Description - Merchant will use this API to create or Update Footer
+     **/
+    public MerchantResponse<String> saveFooterInfo(FotterRequest footerRequest) {
+        log.info("validating footerRequest {}", footerRequest);
+        //Step 1 : FooterUpdateRequest validation
+        adminValidator.footerValidator(footerRequest);
+        log.info("Saving footerRequest {}", footerRequest);
+        //Step 2 : Save Footer Entity
+        adminDao.saveFooterRequest(footerRequest);
+        log.info("Returning the MerchantResponse");
+        //Step 3 : Build FooterResponse and return to caller
+        return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, " updated"))).build();
+    }
+}
