@@ -1,1 +1,135 @@
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/key")
+@Validated
+public class KeyController {
+
+    private final KeyService keyService;
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+
+    @PostMapping("/generation/{type}")
+    @Operation(summary = "Generate the API and Encryption Key for a Merchant.", description = "Generate the API and Encryption Key for a Merchant.")
+    public void generateKey(@PathVariable("type") KeyType type, @RequestBody KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
+        logger.info("Started generateKey for type: {}", type);
+        keyService.generateKey(type, keyGenerationRequest, response);
+        logger.info("Completed generateKey for type: {}", type);
+    }
+
+    @PostMapping("/validated/api")
+    @Operation(summary = "Validate API Keys for Given MID", description = "Validate API Keys for Given MID")
+    public MerchantResponse<String> validatedAPIKey(@RequestBody @Valid APIKeyValidationRequest apiKeyValidationRequest) {
+        logger.info("Started validatedAPIKey for request: {}", apiKeyValidationRequest);
+        MerchantResponse<String> response = keyService.validatedAPIKey(apiKeyValidationRequest);
+        logger.info("Completed validatedAPIKey for request: {}", apiKeyValidationRequest);
+        return response;
+    }
+
+    @GetMapping("/encryption/{mId}")
+    @Operation(summary = "Get Encryption Keys for Given MID", description = "Get Encryption Keys for Given MID")
+    public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(@PathVariable String mId) {
+        logger.info("Started getMerchantEncryptionKeys for mId: {}", mId);
+        MerchantResponse<KMSEncryptionKeysResponse> response = keyService.getMerchantEncryptionKeys(mId);
+        logger.info("Completed getMerchantEncryptionKeys for mId: {}", mId);
+        return response;
+    }
+
+    @GetMapping("/{mId}/{keyType}")
+    @Operation(summary = "Get list of keys for given MID", description = "Get list of keys for given MID")
+    public MerchantResponse<KMSKeyResponse> getKeysByMerchant(@PathVariable("keyType") KeyType keyType, @PathVariable("mId") String mId, @PageableDefault(size = 50, page = 0) Pageable pageable) {
+        logger.info("Started getKeysByMerchant for mId: {}, keyType: {}", mId, keyType);
+        MerchantResponse<KMSKeyResponse> response = keyService.getKeysByMerchant(keyType, mId, pageable);
+        logger.info("Completed getKeysByMerchant for mId: {}, keyType: {}", mId, keyType);
+        return response;
+    }
+}
+
+
+@Service
+@RequiredArgsConstructor
+public class KeyService {
+
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+    private final KeyValidator keyValidator;
+    private final KeyDao keyDao;
+    private final PasswordGenerator passwordGenerator;
+
+    public void generateKey(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
+        logger.info("Started generateKey for type: {}", type);
+        ByteArrayOutputStream pdfStream;
+        keyValidator.validateKeyGenerationRequest(keyGenerationRequest);
+        switch (type) {
+            case API -> pdfStream = apiKeyGeneration(keyGenerationRequest);
+            case ENCRYPTION -> pdfStream = encryptionKeyGeneration(keyGenerationRequest);
+            default -> {
+                logger.error("Invalid KeyType provided: {}", type);
+                throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, 
+                        MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "KeyType", "Valid Key Type are " + Arrays.toString(KeyType.values())));
+            }
+        }
+        fileResponse(type, keyGenerationRequest, response, pdfStream);
+        logger.info("Completed generateKey for type: {}", type);
+    }
+
+    public MerchantResponse<String> validatedAPIKey(APIKeyValidationRequest apiKeyValidationRequest) {
+        logger.info("Started validatedAPIKey for request: {}", apiKeyValidationRequest);
+        MerchantResponse<String> response = keyDao.validatedAPIKey(apiKeyValidationRequest);
+        logger.info("Completed validatedAPIKey for request: {}", apiKeyValidationRequest);
+        return response;
+    }
+
+    public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(String mId) {
+        logger.info("Started getMerchantEncryptionKeys for mId: {}", mId);
+        keyValidator.validateMId(mId);
+        MerchantResponse<KMSEncryptionKeysResponse> response = keyDao.getMerchantEncryptionKeys(mId);
+        logger.info("Completed getMerchantEncryptionKeys for mId: {}", mId);
+        return response;
+    }
+
+    public MerchantResponse<KMSKeyResponse> getKeysByMerchant(KeyType keyType, String mId, Pageable pageable) {
+        logger.info("Started getKeysByMerchant for keyType: {}, mId: {}", keyType, mId);
+        MerchantResponse<KMSKeyResponse> response = keyDao.getKeysByMerchant(keyType, mId, pageable);
+        logger.info("Completed getKeysByMerchant for keyType: {}, mId: {}", keyType, mId);
+        return response;
+    }
+
+    private ByteArrayOutputStream encryptionKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
+        logger.info("Started encryptionKeyGeneration for request: {}", keyGenerationRequest);
+        KMSEncryptionKeysResponse kmsEncryptionKeysResponse = keyDao.generateEncryptionKey(keyGenerationRequest);
+        String password = passwordGenerator.generatePassword();
+        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new EncryptionKeyPDFBuilder(), kmsEncryptionKeysResponse.getMek(), password);
+        keyDao.saveNotification(KeyType.ENCRYPTION, kmsEncryptionKeysResponse.getId(), "Encryption Key PDF file Password is :" + password, keyGenerationRequest.getMId());
+        logger.info("Completed encryptionKeyGeneration for request: {}", keyGenerationRequest);
+        return byteArrayOutputStream;
+    }
+
+    private ByteArrayOutputStream apiKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
+        logger.info("Started apiKeyGeneration for request: {}", keyGenerationRequest);
+        KMSAPIKeysResponse kmsapiKeysResponse = keyDao.generateApiKey(keyGenerationRequest.getMId());
+        String password = passwordGenerator.generatePassword();
+        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new APIKeyPDFBuilder(), kmsapiKeysResponse, password);
+        keyDao.saveNotification(KeyType.API, kmsapiKeysResponse.getId(), "API Key PDF File Password is :" + password, keyGenerationRequest.getMId());
+        logger.info("Completed apiKeyGeneration for request: {}", keyGenerationRequest);
+        return byteArrayOutputStream;
+    }
+
+    private void fileResponse(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response, ByteArrayOutputStream pdfStream) {
+        logger.info("Started fileResponse for type: {}, request: {}", type, keyGenerationRequest);
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            ContentDisposition contentDisposition = ContentDisposition.attachment()
+                    .filename(type.name() + "_" + keyGenerationRequest.getMId() + "_" + System.currentTimeMillis() + ".pdf")
+                    .build();
+            headers.setContentDisposition(contentDisposition);
+            response.setContentType(MediaType.APPLICATION_PDF_VALUE);
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, headers.getFirst(HttpHeaders.CONTENT_DISPOSITION));
+            response.getOutputStream().write(pdfStream.toByteArray());
+            response.getOutputStream().flush();
+            logger.info("Completed fileResponse for type: {}, request: {}", type, keyGenerationRequest);
+        } catch (IOException e) {
+            logger.error("Error in fileResponse for type: {}, request: {}", type, keyGenerationRequest, e);
+            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, 
+                    MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, type.name() + "Key"));
+        }
+    }
+}
 
