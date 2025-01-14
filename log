@@ -1,177 +1,259 @@
-package com.epay.merchant.service;
+package com.epay.merchant.controller;
 
-import com.epay.merchant.dao.AdminDao;
-import com.epay.merchant.dto.MerchantDto;
-import com.epay.merchant.dto.MerchantEntityGroupDto;
-import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.dto.OnboardingDto;
-import com.epay.merchant.mapper.MerchantEntityGroupMapper;
-import com.epay.merchant.mapper.MerchantMapper;
-import com.epay.merchant.model.request.*;
-import com.epay.merchant.model.response.*;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.MerchantStatus;
-import com.epay.merchant.util.enums.NotificationType;
-import com.epay.merchant.validator.AdminValidator;
-import com.epay.merchant.validator.OnboardingValidator;
-import com.sbi.epay.encryptdecrypt.util.enums.HashAlgorithm;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
+import com.epay.merchant.externalservice.response.KMSEncryptionKeysResponse;
+import com.epay.merchant.externalservice.response.KMSKeyResponse;
+import com.epay.merchant.model.request.APIKeyValidationRequest;
+import com.epay.merchant.model.request.KeyGenerationRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.service.KeyService;
+import com.epay.merchant.util.enums.KeyType;
+import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
-
-import java.text.MessageFormat;
-import java.util.Arrays;
-import java.util.List;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
 
 /**
- * Class Name: AdminService
+ * Class Name: MerchantController
  * *
  * Description:
  * *
- * Author: Bhoopendra Rajput
+ * Author: V1017903(bhushan wadekar)
  * <p>
  * Copyright (c) 2024 [State Bank of India]
  * All rights reserved
  * *
  * Version:1.0
  */
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/key")
+@Validated
+public class KeyController {
+
+    private final KeyService keyService;
+
+    /**
+     * Generates a key (API or Encryption) for a merchant.
+     *
+     * @param type  KeyType  The type of key to generate (API or Encryption).
+     * @param keyGenerationRequest KeyGenerationRequest Request body containing key generation details.
+     * @param response  HttpServletResponse  HTTP response object for sending the generated file.
+     */
+    @PostMapping("/generation/{type}")
+    @Operation(summary = "Generate the API and Encryption Key for a Merchant.", description = "Generate the API and Encryption Key for a Merchant.")
+    public void generateKey(@PathVariable("type") KeyType type, @RequestBody KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
+        keyService.generateKey(type, keyGenerationRequest, response);
+    }
+
+    /**
+     * Validates an API key against the database.
+     *
+     * @param apiKeyValidationRequest APIKeyValidationRequest Request body containing API key validation details.
+     * @return MerchantResponse containing validation status.
+     */
+    @PostMapping("/validated/api")
+    @Operation(summary = "Validate API Keys for Given MID", description = "Validate API Keys for Given MID")
+    public MerchantResponse<String> validatedAPIKey(@RequestBody @Valid APIKeyValidationRequest apiKeyValidationRequest) {
+        return keyService.validatedAPIKey(apiKeyValidationRequest);
+    }
+
+    /**
+     * Fetches encryption keys for the given merchant ID.
+     *
+     * @param mId String Merchant ID for which encryption keys are to be fetched.
+     * @return MerchantResponse containing encryption key details.
+     */
+    @GetMapping("/encryption/{mId}")
+    @Operation(summary = "Get Encryption Keys for Given MID", description = "Get Encryption Keys for Given MID")
+    public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(@PathVariable String mId) {
+        return keyService.getMerchantEncryptionKeys(mId);
+    }
+
+    /**
+     * Retrieves a list of keys for the given merchant ID and key type.
+     *
+     * @param keyType KeyType Key type to filter (API or Encryption).
+     * @param mId String    Merchant ID for which keys are to be fetched.
+     * @param pageable Pageable object for pagination support.
+     * @return MerchantResponse containing the list of keys.
+     */
+    @GetMapping("/{mId}/{keyType}")
+    @Operation(summary = "Get list of keys for given MID", description = "Get list of keys for given MID")
+    public MerchantResponse<KMSKeyResponse> getKeysByMerchant(@PathVariable("keyType") KeyType keyType, @PathVariable("mId") String mId,  @PageableDefault(size = 50, page = 0) Pageable pageable) {
+        return keyService.getKeysByMerchant(keyType, mId, pageable);
+    }
+
+
+}
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.KeyDao;
+import com.epay.merchant.document.pdf.APIKeyPDFBuilder;
+import com.epay.merchant.document.pdf.EncryptionKeyPDFBuilder;
+import com.epay.merchant.document.pdf.PDFService;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.externalservice.response.KMSAPIKeysResponse;
+import com.epay.merchant.externalservice.response.KMSEncryptionKeysResponse;
+import com.epay.merchant.externalservice.response.KMSKeyResponse;
+import com.epay.merchant.model.request.APIKeyValidationRequest;
+import com.epay.merchant.model.request.KeyGenerationRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.PasswordGenerator;
+import com.epay.merchant.util.enums.KeyType;
+import com.epay.merchant.validator.KeyValidator;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.text.MessageFormat;
+import java.util.Arrays;
+
+
+/**
+ * Class Name: MerchantService
+ * *
+ * Description:
+ * *
+ * Author: V1017903(bhushan wadekar)
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+
 @Service
 @RequiredArgsConstructor
-public class AdminService {
+public class KeyService {
 
-    private final OnboardingValidator onboardingValidator;
-    private final AdminValidator adminValidator;
-    private final AdminDao adminDao;
-    private final MerchantEntityGroupMapper merchantEntityGroupMapper;
-    private final MerchantMapper merchantMapper;
-    private final HelpSupportService helpSupportService;
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+    private final KeyValidator keyValidator;
+    private final KeyDao keyDao;
+    private final PasswordGenerator passwordGenerator;
 
     /**
-     * Onboard a merchant and merchant admin user.
-     * Destination: AdminDao.onboardingMerchantAndMerchantUser
+     * Handles the generation of keys (API or Encryption) for merchants.
+     * Logs details about the key generation process and errors, if any.
      *
-     * @param onboardingRequest OnboardingRequest
-     * @return MerchantResponse with OnboardingResponse
+     * @param type  KeyType The type of key to generate (API or Encryption).
+     * @param keyGenerationRequest keyGenerationRequest Request body containing key generation details.
+     * @param response HttpServletResponse HTTP response object for sending the generated file.
      */
-    public MerchantResponse<OnboardingResponse> onboardingMerchant(OnboardingRequest onboardingRequest) {
-        log.info("Started onboardingRequest for merchant {}", onboardingRequest.getMerchant());
-        //Step 1 : OnboardingRequest validation
-        onboardingValidator.validateOnboardingRequest(onboardingRequest);
-        //Step 2 : Set up the default value for Merchant
-        setMerchantDefaultValues(onboardingRequest.getMerchant());
-        //Step 3 : Save the Merchant and Merchant User Data in DB
-        OnboardingDto onboardingDto = adminDao.onboardingMerchantAndMerchantUser(onboardingRequest);
-        //Step 5 : Build MerchantResponse and return to caller
-        log.info("Returning OnboardingResponse for merchant");
-        return MerchantResponse.<OnboardingResponse>builder().data(List.of(OnboardingResponse.builder().merchant(onboardingDto.getMerchant()).user(onboardingDto.getUser()).build())).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
-    }
-    /**
-     * Create a merchant entity group.
-     * Destination: AdminDao.saveMerchantEntityGroup
-     *
-     * @param merchantEntityGroupRequest MerchantEntityGroupRequest
-     * @return MerchantResponse with MerchantEntityGroupResponse
-     */
-    public MerchantResponse<MerchantEntityGroupResponse> createMerchantEntityGroup(MerchantEntityGroupRequest merchantEntityGroupRequest) {
-        log.info("Create merchant entity group for EntityId {}", merchantEntityGroupRequest.getEntityId());
-        //Step 1 : MerchantEntityGroupRequest validation
-        adminValidator.entityValidator(merchantEntityGroupRequest);
-        MerchantEntityGroupDto merchantEntityGroupDto = merchantEntityGroupMapper.mapEntityRequestToMerchantEntityGroupDto(merchantEntityGroupRequest);
-        //Step 2 : Save Merchant Entity Group
-        merchantEntityGroupDto = adminDao.saveMerchantEntityGroup(merchantEntityGroupDto);
-        //Step 3 : Build MerchantResponse and return to caller
-        return MerchantResponse.<MerchantEntityGroupResponse>builder().data(List.of(merchantEntityGroupMapper.mapMerchantEntityGroupDtoToEntityResponse(merchantEntityGroupDto))).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
-    }
-
-    /**
-     * Get all users for a merchant.
-     * Destination: AdminDao.findAllMerchantUsersByMId
-     *
-     * @param mId String
-     * @param pageable Pageable
-     * @return MerchantResponse with MerchantUserResponse
-     */
-    public MerchantResponse<MerchantUserResponse> getAllMerchantUsers(String mId, Pageable pageable) {
-        log.info("getting userList based on mId: {}", mId);
-        Page<MerchantUserDto> merchantUsers = adminDao.findAllMerchantUsersByMId(mId, pageable);
-        log.info("Mapping users for Merchant ID: {}", mId);
-        List<MerchantUserResponse> merchantUserResponseList = merchantMapper.mapMerchantUserDTOListToResponseList(merchantUsers.getContent());
-        return MerchantResponse.<MerchantUserResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantUserResponseList).count(merchantUsers.stream().count()).total(merchantUsers.getTotalElements()).build();
-    }
-
-    /**
-     * Map a user to an entity.
-     * Destination: AdminDao.updateUserRole
-     *
-     * @param userEntityMappingRequest UserEntityMappingRequest
-     * @return MerchantResponse with mapping status
-     */
-    public MerchantResponse<String> userEntityMapping(UserEntityMappingRequest userEntityMappingRequest) {
-        log.info("Received request to map entity with details: {}", userEntityMappingRequest);
-
-        // Step 1: Validate the request
-        adminValidator.userEntityRequestValidator(userEntityMappingRequest);
-
-        // Step 2: Perform action based on user role
-        adminDao.updateUserRole(userEntityMappingRequest.getUserId(), userEntityMappingRequest.getUserName(), userEntityMappingRequest.getEntityId());
-
-        // Step 3: Build and return the response
-        return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("role has been updated successfully")).count(1L).total(1L).build();
-    }
-
-    /**
-     * Sets default values for a MerchantDto object if they are not present in the onboarding request.
-     *
-     * @param merchant MerchantDto
-     */
-    private void setMerchantDefaultValues(MerchantDto merchant) {
-        if (Arrays.stream(NotificationType.values()).noneMatch(nt -> StringUtils.equalsAnyIgnoreCase(merchant.getNotification(), nt.name()))) {
-            merchant.setNotification(NotificationType.BOTH.name());
+    public void generateKey(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
+        ByteArrayOutputStream pdfStream;
+        // Step 1 : Validate the KMSKeyGenerationRequest
+        keyValidator.validateKeyGenerationRequest(keyGenerationRequest);
+        switch (type) {
+            case API -> pdfStream = apiKeyGeneration(keyGenerationRequest);
+            case ENCRYPTION -> pdfStream = encryptionKeyGeneration(keyGenerationRequest);
+            default ->
+                    throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "KeyType", "Valid Key Type are " + Arrays.toString(KeyType.values())));
         }
-        if (StringUtils.isEmpty(merchant.getEncryptedAlgo())) {
-            merchant.setEncryptedAlgo(HashAlgorithm.SHA_512.toString());
-        }
-        if (ObjectUtils.isEmpty(merchant.getStatus())) {
-            merchant.setStatus(MerchantStatus.ACTIVE);
-        }
+        fileResponse(type, keyGenerationRequest, response, pdfStream);
     }
 
     /**
-     * Update help and support details.
-     * Destination: AdminDao.updateHelpSupport
+     * Validates an API key and returns the validation status.
+     * Logs the validation process and potential errors.
      *
-     * @param mId String
-     * @param helpSupportRequest HelpSupportRequest
-     * @return MerchantResponse with HelpSupportResponse
+     * @param apiKeyValidationRequest APIKeyValidationRequest Request body containing API key validation details.
+     * @return MerchantResponse containing validation status.
      */
-    public MerchantResponse<HelpSupportResponse> saveHelpSupport(String mId, HelpSupportRequest helpSupportRequest) {
-        return helpSupportService.saveHelpSupport(mId, helpSupportRequest);
+    public MerchantResponse<String> validatedAPIKey(APIKeyValidationRequest apiKeyValidationRequest) {
+        keyValidator.validateAPIKeyValidationRequest(apiKeyValidationRequest);
+        return keyDao.validatedAPIKey(apiKeyValidationRequest);
     }
-
 
     /**
-     * Save Footer Labels
+     * Retrieves encryption keys for a given merchant ID.
+     * Logs the retrieval process and potential errors.
      *
-     * @param footerRequest FooterRequest
-     * @return MerchantResponse
-     * Description - Merchant will use this API to create or Update Footer
-     **/
-    public MerchantResponse<String> saveFooterInfo(FotterRequest footerRequest) {
-        log.info("validating footerRequest {}", footerRequest);
-        //Step 1 : FooterUpdateRequest validation
-        adminValidator.footerValidator(footerRequest);
-        log.info("Saving footerRequest {}", footerRequest);
-        //Step 2 : Save Footer Entity
-        adminDao.saveFooterRequest(footerRequest);
-        log.info("Returning the MerchantResponse");
-        //Step 3 : Build FooterResponse and return to caller
-        return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, " updated"))).build();
+     * @param mId String Merchant ID for which encryption keys are fetched.
+     * @return MerchantResponse containing encryption key details.
+     */
+    public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(String mId) {
+        keyValidator.validateMId(mId);
+        return keyDao.getMerchantEncryptionKeys(mId);
     }
+    /**
+     * This method generates an encryption key and creates a password-protected PDF file.
+     * @param keyGenerationRequest KeyGenerationRequest The request object containing key generation details
+     * @return  ByteArrayOutputStream containing the generated PDF file
+     */
+    private ByteArrayOutputStream encryptionKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
+        // Step 1 : Call the KMS APIs
+        KMSEncryptionKeysResponse kmsEncryptionKeysResponse = keyDao.generateEncryptionKey(keyGenerationRequest);
+        // Step 2 : Generate the Password-protected PDF File
+        String password = passwordGenerator.generatePassword();
+        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new EncryptionKeyPDFBuilder(), kmsEncryptionKeysResponse.getMek(), password);
+        // Step 3 : Send Notification to Merchant
+        keyDao.saveNotification(KeyType.ENCRYPTION, kmsEncryptionKeysResponse.getId(), "Encryption Key PDF file Password is :" + password, keyGenerationRequest.getMId());
+        return byteArrayOutputStream;
+    }
+
+    /**
+     * This method generates an API Key and creates a password-protected PDF file.
+     * @param keyGenerationRequest KeyGenerationRequest The request object containing API key generation details
+     * @return  ByteArrayOutputStream containing the generated PDF file
+     */
+    private ByteArrayOutputStream apiKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
+        // Step 1 : Call the KMS APIs
+        KMSAPIKeysResponse kmsapiKeysResponse = keyDao.generateApiKey(keyGenerationRequest.getMId());
+        // Step 2 : Generate the Password-protected PDF File
+        String password = passwordGenerator.generatePassword();
+        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new APIKeyPDFBuilder(), kmsapiKeysResponse, password);
+        // Step 3 : Send Notification to Merchant
+        keyDao.saveNotification(KeyType.API, kmsapiKeysResponse.getId(), "API Key PDF File Password is :" + password, keyGenerationRequest.getMId());
+        return byteArrayOutputStream;
+    }
+    /**
+     * Fetches the keys associated with a given merchant ID and key type.
+     * Logs the retrieval process and any errors encountered.
+     *
+     * @param keyType Key type to filter (API or Encryption).
+     * @param mId String Merchant ID for which keys are fetched.
+     * @param pageable Pageable object for pagination.
+     * @return MerchantResponse containing the list of keys.
+     */
+    public MerchantResponse<KMSKeyResponse> getKeysByMerchant(KeyType keyType, String mId, Pageable pageable) {
+        return keyDao.getKeysByMerchant(keyType, mId, pageable);
+    }
+
+    /**
+     * This method writes the generated PDF file to the HTTP response.
+     * @param keyGenerationRequest KeyGenerationRequest  The request object containing key generation details
+     * @param type KeyType The type of key to generate (API or Encryption).
+     * @param response HttpServletResponse the HttpServletResponse to send the PDF file
+     * @param pdfStream ByteArrayOutputStream  containing the generated PDF data
+     */
+    private void fileResponse(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response, ByteArrayOutputStream pdfStream) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            ContentDisposition contentDisposition = ContentDisposition.attachment().filename(type.name() + "_" + keyGenerationRequest.getMId() + "_" + System.currentTimeMillis() + ".pdf").build();
+            headers.setContentDisposition(contentDisposition);
+            response.setContentType(MediaType.APPLICATION_PDF_VALUE);
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, headers.getFirst(HttpHeaders.CONTENT_DISPOSITION));
+            response.getOutputStream().write(pdfStream.toByteArray());
+            response.getOutputStream().flush();
+        } catch (IOException e) {
+            logger.error("Error in PDF File Generation ", e);
+            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, type.name() + "Key"));
+        }
+    }
+
 }
