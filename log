@@ -1,135 +1,353 @@
-@RestController
-@RequiredArgsConstructor
-@RequestMapping("/key")
-@Validated
-public class KeyController {
+public class MerchantUserService {
 
-    private final KeyService keyService;
-    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+    private final MerchantInfoDao merchantInfoDao;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantUserValidator merchantUserValidator;
+    private final MerchantMapper merchantMapper;
 
-    @PostMapping("/generation/{type}")
-    @Operation(summary = "Generate the API and Encryption Key for a Merchant.", description = "Generate the API and Encryption Key for a Merchant.")
-    public void generateKey(@PathVariable("type") KeyType type, @RequestBody KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
-        logger.info("Started generateKey for type: {}", type);
-        keyService.generateKey(type, keyGenerationRequest, response);
-        logger.info("Completed generateKey for type: {}", type);
-    }
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
 
-    @PostMapping("/validated/api")
-    @Operation(summary = "Validate API Keys for Given MID", description = "Validate API Keys for Given MID")
-    public MerchantResponse<String> validatedAPIKey(@RequestBody @Valid APIKeyValidationRequest apiKeyValidationRequest) {
-        logger.info("Started validatedAPIKey for request: {}", apiKeyValidationRequest);
-        MerchantResponse<String> response = keyService.validatedAPIKey(apiKeyValidationRequest);
-        logger.info("Completed validatedAPIKey for request: {}", apiKeyValidationRequest);
-        return response;
-    }
-
-    @GetMapping("/encryption/{mId}")
-    @Operation(summary = "Get Encryption Keys for Given MID", description = "Get Encryption Keys for Given MID")
-    public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(@PathVariable String mId) {
-        logger.info("Started getMerchantEncryptionKeys for mId: {}", mId);
-        MerchantResponse<KMSEncryptionKeysResponse> response = keyService.getMerchantEncryptionKeys(mId);
-        logger.info("Completed getMerchantEncryptionKeys for mId: {}", mId);
-        return response;
-    }
-
-    @GetMapping("/{mId}/{keyType}")
-    @Operation(summary = "Get list of keys for given MID", description = "Get list of keys for given MID")
-    public MerchantResponse<KMSKeyResponse> getKeysByMerchant(@PathVariable("keyType") KeyType keyType, @PathVariable("mId") String mId, @PageableDefault(size = 50, page = 0) Pageable pageable) {
-        logger.info("Started getKeysByMerchant for mId: {}, keyType: {}", mId, keyType);
-        MerchantResponse<KMSKeyResponse> response = keyService.getKeysByMerchant(keyType, mId, pageable);
-        logger.info("Completed getKeysByMerchant for mId: {}, keyType: {}", mId, keyType);
-        return response;
-    }
-}
-
-
-@Service
-@RequiredArgsConstructor
-public class KeyService {
-
-    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
-    private final KeyValidator keyValidator;
-    private final KeyDao keyDao;
-    private final PasswordGenerator passwordGenerator;
-
-    public void generateKey(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
-        logger.info("Started generateKey for type: {}", type);
-        ByteArrayOutputStream pdfStream;
-        keyValidator.validateKeyGenerationRequest(keyGenerationRequest);
-        switch (type) {
-            case API -> pdfStream = apiKeyGeneration(keyGenerationRequest);
-            case ENCRYPTION -> pdfStream = encryptionKeyGeneration(keyGenerationRequest);
-            default -> {
-                logger.error("Invalid KeyType provided: {}", type);
-                throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, 
-                        MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "KeyType", "Valid Key Type are " + Arrays.toString(KeyType.values())));
+    private static List<String> getNewMenuMappingList(List<String> menuList, List<UserMenuPermissionEntityResponse> assignedMenus) {
+        List<String> newMappedMenu = new ArrayList<>();
+        for (String menu : menuList){
+            boolean mIdFound = false;
+            for (UserMenuPermissionEntityResponse assignedMenu : assignedMenus) {
+                if (menu.equalsIgnoreCase(assignedMenu.getMenuCode())) {
+                   mIdFound = true;
+                    break;
+                }
+            }
+            if(!mIdFound){
+                newMappedMenu.add(menu);
             }
         }
-        fileResponse(type, keyGenerationRequest, response, pdfStream);
-        logger.info("Completed generateKey for type: {}", type);
+        return newMappedMenu;
     }
 
-    public MerchantResponse<String> validatedAPIKey(APIKeyValidationRequest apiKeyValidationRequest) {
-        logger.info("Started validatedAPIKey for request: {}", apiKeyValidationRequest);
-        MerchantResponse<String> response = keyDao.validatedAPIKey(apiKeyValidationRequest);
-        logger.info("Completed validatedAPIKey for request: {}", apiKeyValidationRequest);
-        return response;
-    }
-
-    public MerchantResponse<KMSEncryptionKeysResponse> getMerchantEncryptionKeys(String mId) {
-        logger.info("Started getMerchantEncryptionKeys for mId: {}", mId);
-        keyValidator.validateMId(mId);
-        MerchantResponse<KMSEncryptionKeysResponse> response = keyDao.getMerchantEncryptionKeys(mId);
-        logger.info("Completed getMerchantEncryptionKeys for mId: {}", mId);
-        return response;
-    }
-
-    public MerchantResponse<KMSKeyResponse> getKeysByMerchant(KeyType keyType, String mId, Pageable pageable) {
-        logger.info("Started getKeysByMerchant for keyType: {}, mId: {}", keyType, mId);
-        MerchantResponse<KMSKeyResponse> response = keyDao.getKeysByMerchant(keyType, mId, pageable);
-        logger.info("Completed getKeysByMerchant for keyType: {}, mId: {}", keyType, mId);
-        return response;
-    }
-
-    private ByteArrayOutputStream encryptionKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
-        logger.info("Started encryptionKeyGeneration for request: {}", keyGenerationRequest);
-        KMSEncryptionKeysResponse kmsEncryptionKeysResponse = keyDao.generateEncryptionKey(keyGenerationRequest);
-        String password = passwordGenerator.generatePassword();
-        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new EncryptionKeyPDFBuilder(), kmsEncryptionKeysResponse.getMek(), password);
-        keyDao.saveNotification(KeyType.ENCRYPTION, kmsEncryptionKeysResponse.getId(), "Encryption Key PDF file Password is :" + password, keyGenerationRequest.getMId());
-        logger.info("Completed encryptionKeyGeneration for request: {}", keyGenerationRequest);
-        return byteArrayOutputStream;
-    }
-
-    private ByteArrayOutputStream apiKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
-        logger.info("Started apiKeyGeneration for request: {}", keyGenerationRequest);
-        KMSAPIKeysResponse kmsapiKeysResponse = keyDao.generateApiKey(keyGenerationRequest.getMId());
-        String password = passwordGenerator.generatePassword();
-        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new APIKeyPDFBuilder(), kmsapiKeysResponse, password);
-        keyDao.saveNotification(KeyType.API, kmsapiKeysResponse.getId(), "API Key PDF File Password is :" + password, keyGenerationRequest.getMId());
-        logger.info("Completed apiKeyGeneration for request: {}", keyGenerationRequest);
-        return byteArrayOutputStream;
-    }
-
-    private void fileResponse(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response, ByteArrayOutputStream pdfStream) {
-        logger.info("Started fileResponse for type: {}, request: {}", type, keyGenerationRequest);
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            ContentDisposition contentDisposition = ContentDisposition.attachment()
-                    .filename(type.name() + "_" + keyGenerationRequest.getMId() + "_" + System.currentTimeMillis() + ".pdf")
-                    .build();
-            headers.setContentDisposition(contentDisposition);
-            response.setContentType(MediaType.APPLICATION_PDF_VALUE);
-            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, headers.getFirst(HttpHeaders.CONTENT_DISPOSITION));
-            response.getOutputStream().write(pdfStream.toByteArray());
-            response.getOutputStream().flush();
-            logger.info("Completed fileResponse for type: {}, request: {}", type, keyGenerationRequest);
-        } catch (IOException e) {
-            logger.error("Error in fileResponse for type: {}, request: {}", type, keyGenerationRequest, e);
-            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, 
-                    MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, type.name() + "Key"));
+    private static List<String> getNewMIdMappingList(List<String> mIds, List<MerchantInfoDto> assignedMIds) {
+        List<String> newMappedMIds = new ArrayList<>();
+        for (String mId : mIds) {
+            boolean mIdFound = false;
+            for (MerchantInfoDto assignedMId : assignedMIds) {
+                if (mId.equalsIgnoreCase(assignedMId.getMId())) {
+                    mIdFound = true;
+                    break;
+                }
+            }
+            if (!mIdFound) {
+                newMappedMIds.add(mId);
+            }
         }
+        return newMappedMIds;
     }
-}
 
+    /**
+     * Fetches all merchant information accessible to the logged-in user with pagination support.
+     *
+     * @param pageable Pageable object for pagination details.
+     * @return MerchantResponse containing a paginated list of merchant information.
+     */
+    public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable) {
+        log.info("Fetching all merchant information");
+
+        // Step 1 : Get UserName from Security Context
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+
+        // Step 2 : Get All Merchant Info which is accessible to Logged in Merchant User
+        Page<MerchantInfoDto> merchantInfo = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName, pageable);
+
+        // Step 3 : Covert DTO to Response Object
+        List<MerchantInfoResponse> merchantInfoResponseList = merchantMapper.mapMerchantInfoDTOListToResponseList(merchantInfo.getContent());
+
+        // Step 4 : Building the response
+        return MerchantResponse.<MerchantInfoResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantInfoResponseList).count(merchantInfo.stream().count()).total(merchantInfo.getTotalElements()).build();
+    }
+
+    /**
+     * Retrieves the logged-in user's basic information and access details,
+     * including menu permissions and roles.
+     *
+     * @return MerchantResponse containing the user's access details.
+     */
+    public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
+        // Step 1 : Get UserName from Security Context
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+
+        // Step 2 : Get Merchant User Info of Logged in Merchant User
+        MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+        merchantUserDto.setRoleName(merchantUserDao.getRoleNameByRoleId(merchantUserDto.getRole()));
+        if (ObjectUtils.isEmpty(merchantUserDto)) {
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName"));
+        }
+
+        // Step 3 : Get Merchant Permission Info of Logged in Merchant User
+        List<UserMenuPermissionEntityResponse> userAccess = merchantUserDao.getUserMenuPermission(merchantUserDto.getId());
+
+        // Step 4 : Build Merchant User Access Response
+        MerchantUserAccessResponse merchantUserAccessResponse = MerchantUserAccessResponse.builder().userInfo(merchantUserDto).userAccess(userAccess).build();
+
+        // Step 4 : Building the response
+        return MerchantResponse.<MerchantUserAccessResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(merchantUserAccessResponse)).build();
+    }
+
+    /**
+     * Fetches the profile details of the logged-in merchant user.
+     *
+     * @return MerchantResponse containing the user's profile information.
+     */
+    public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
+
+        // Step 1 : Get UserName from Security Context
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+
+        // Step 2 : Get Merchant User Info of Logged in Merchant User
+        UserProfileResponse userProfileResponse = merchantUserDao.getMerchantUserProfile(userName, UserStatus.ACTIVE);
+
+        // Step 3 : Building the response
+        return MerchantResponse.<UserProfileResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(userProfileResponse)).count(1L).total(1L).build();
+    }
+
+    /**
+     * Creates a new merchant user based on the provided request details.
+     * Validates the request before saving the user data.
+     *
+     * @param merchantUserRequest Request object containing merchant user details.
+     * @return MerchantResponse containing the created user's details.
+     */
+    public MerchantResponse<MerchantUserResponse> createMerchantUser(MerchantUserRequest merchantUserRequest) {
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, true);
+        return saveMerchantUser(merchantUserRequest, false, false);
+    }
+
+    /**
+     * Updates an existing merchant user's details based on the provided request.
+     * Validates the request before updating the user data.
+     *
+     * @param merchantUserRequest Request object containing updated user details.
+     * @return MerchantResponse containing the updated user's details.
+     */
+    public MerchantResponse<MerchantUserResponse> updateMerchantUser(MerchantUserRequest merchantUserRequest) {
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, false);
+        return saveMerchantUser(merchantUserRequest, false, true);
+    }
+
+    /**
+     * Updates the profile of the logged-in merchant user.
+     * Validates the request before performing the update.
+     *
+     * @param merchantUserRequest Request object containing profile details.
+     * @return MerchantResponse containing the updated profile information.
+     */
+    public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserProfile(merchantUserRequest);
+        return saveMerchantUser(merchantUserRequest, true, true);
+    }
+
+    /**
+     * Update Merchant User Status
+     *
+     * @param merchantUserStatusRequest MerchantUserStatusRequest
+     * @return MerchantResponse<MerchantUserResponse> - Response containing updated user information
+     */
+    public MerchantResponse<MerchantUserResponse> updateUserStatus(MerchantUserStatusRequest merchantUserStatusRequest) {
+        log.info("Updating status Request {}", merchantUserStatusRequest);
+        merchantUserValidator.validateUpdateUserStatus(merchantUserStatusRequest);
+        MerchantUserResponse merchantUserResponse = merchantUserDao.updateUserStatusByUserName(merchantUserStatusRequest.getUserName(), merchantUserStatusRequest.getUserStatus(), merchantUserStatusRequest.getRemark());
+        return MerchantResponse.<MerchantUserResponse>builder().data(List.of(merchantUserResponse)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).total(1L).build();
+    }
+
+    /**
+     * Saves the merchant user details to the database.
+     * Handles both new user creation and user updates.
+     *
+     * @param merchantUserRequest Request object containing user details.
+     * @param isProfileUpdate     Indicates if the update is specific to a profile.
+     * @param isUpdate            Indicates if the operation is an update.
+     * @return MerchantResponse containing the saved user's details.
+     */
+    private MerchantResponse<MerchantUserResponse> saveMerchantUser(MerchantUserRequest merchantUserRequest, boolean isProfileUpdate, boolean isUpdate) {
+        //Step 1 : Save the Merchant User Data in DB
+        MerchantUserDto merchantUserDto = merchantMapper.mapMerchantUserRequestToMerchantUserDto(merchantUserRequest);
+        if (isUpdate) {
+            merchantUserDto = merchantUserDao.updateMerchantUser(merchantUserDto, isProfileUpdate);
+        } else {
+            merchantUserDto = merchantUserDao.saveMerchantUser(merchantUserDto, StringUtils.EMPTY);
+        }
+        //Step 2 : Build MerchantResponse and return to caller
+        MerchantUserResponse merchantUserResponse = merchantMapper.mapMerchantUserDtoToResponse(merchantUserDto);
+        merchantUserResponse.setRoleName(merchantUserDao.getUserRoleName(merchantUserDto.getRole()));
+        return MerchantResponse.<MerchantUserResponse>builder().data(List.of(merchantUserResponse)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
+
+    /**
+     * Searches for merchant users based on the provided search criteria.
+     * Returns a paginated list of matching merchant users.
+     *
+     * @param merchantUserGetRequest Request object containing search criteria.
+     * @return MerchantResponse containing the search results.
+     */
+    public MerchantResponse<MerchantUserResponse> searchMerchantUsers(MerchantUserGetRequest merchantUserGetRequest) {
+        Page<MerchantUserDto> merchantUsers = merchantUserDao.findMerchantUsers(merchantUserGetRequest);
+        List<MerchantUserResponse> merchantUserResponseList = merchantMapper.mapMerchantUserDTOListToResponseList(merchantUsers.getContent());
+        return MerchantResponse.<MerchantUserResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantUserResponseList).count(merchantUsers.stream().count()).total(merchantUsers.getTotalElements()).build();
+    }
+
+    /**
+     * Fetches all user roles available in the system.
+     *
+     * @return MerchantResponse containing a list of user roles.
+     */
+    public MerchantResponse<UserRoleResponse> getUserRole() {
+        log.info("Started fetching user roles");
+        List<UserRoleResponse> userRoleResponse = merchantUserDao.getUserRoles();
+        return MerchantResponse.<UserRoleResponse>builder().data(userRoleResponse).status(MerchantConstant.RESPONSE_SUCCESS).count((long) userRoleResponse.size()).build();
+    }
+
+    /**
+     * Retrieves the assigned and unassigned MIDs of a specified user.
+     * Validates if the logged-in user is authorized to perform this operation.
+     *
+     * @param userName Username of the merchant user.
+     * @return MerchantResponse containing lists of assigned and unassigned MIDs.
+     */
+    public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(String userName) {
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+
+        //Step 3  : Get Assigned MIds
+        List<MerchantInfoDto> assignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
+
+        //Step 4  : Get UnAssigned MIds from ParentUser
+        List<MerchantInfoResponse> unAssignedMerchantInfo = getParentAssignedMIds(merchantUser, assignedMIds);
+
+        //Step 5  : Build MerchantUserAssignedMIdsResponse
+        List<MerchantInfoResponse> assignedMerchantInfo = merchantMapper.mapMerchantInfoDTOListToResponseList(assignedMIds);
+        MerchantUserAssignedMIdsResponse userAssignedMIdsResponse = MerchantUserAssignedMIdsResponse.builder().assignedMIds(assignedMerchantInfo).unAssignedMIds(unAssignedMerchantInfo).build();
+
+        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMIdsResponse
+        return MerchantResponse.<MerchantUserAssignedMIdsResponse>builder().data(List.of(userAssignedMIdsResponse)).build();
+    }
+
+    /**
+     * Assigns a list of MIDs to the specified user.
+     * Validates the request and updates the database with the new mappings.
+     *
+     * @param userName Username of the merchant user.
+     * @param mIds     List of MIDs to be assigned to the user.
+     * @return MerchantResponse confirming the successful assignment.
+     */
+    public MerchantResponse<String> assignedMIdsToUser(String userName, List<String> mIds) {
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatePostMapping(userName, merchantUser, mIds);
+
+        //Step 3  : Build Remove and new Assigned MIds list from current data
+        List<MerchantInfoDto> assignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
+        List<String> removedMIds = assignedMIds.stream().map(MerchantInfoDto::getMId).filter(mId -> !mIds.contains(mId)).collect(Collectors.toList());
+        List<String> newMappedMIds = getNewMIdMappingList(mIds, assignedMIds);
+
+        //Step 4 : Update the data in DB as per remove and new MIDs list
+        merchantUserDao.assignedMIds(newMappedMIds, removedMIds, merchantUser.getId());
+
+        //Step 5 :  Build MerchantResponse Object of MerchantUserAssignedMIdsResponse
+        return MerchantResponse.<String>builder().data(List.of("MIds is assigned Successfully")).build();
+    }
+
+    public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+
+        //Step 3  : Get Assigned Menus
+        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+
+        //Step 4  : Get UnAssigned Menus from ParentUser
+        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
+
+        //Step 5  : Build MerchantUserAssignedMenusResponse
+        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder().assignedMenus(assignedMenus).unAssignedMenus(unAssignedMenus).build();
+
+        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMenusResponse
+        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder().data(List.of(userAssignedMenusResponse)).build();
+    }
+
+    public MerchantResponse<String> assignedMenuAccessToUser(String userName, List<String> menuList) {
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validateMenuPostMapping(userName, merchantUser, menuList);
+
+        //Step 3  : Build Remove and new Assigned Menu list from current data
+        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+        List<UUID> removedMenus = assignedMenus.stream().filter(assignedMenu -> !menuList.contains(assignedMenu.getMenuCode())).map(UserMenuPermissionEntityResponse::getMenuId).collect(Collectors.toList());
+        List<String> newMappedMenus = getNewMenuMappingList(menuList, assignedMenus);
+
+        //Step 4 : Update the data in DB as per remove and new Menu list
+        merchantUserDao.assignedMenus(newMappedMenus, removedMenus, merchantUser.getId());
+
+        //Step 5 :  Build MerchantResponse
+        return MerchantResponse.<String>builder().data(List.of("Menus is assigned Successfully")).build();
+    }
+
+    /**
+     * Retrieves the unassigned MIDs for a specified user by comparing the parent's
+     * accessible MIDs with the user's currently assigned MIDs.
+     *
+     * @param merchantUser Merchant user details.
+     * @param assignedMIds List of currently assigned MIDs for the user.
+     * @return List of unassigned MIDs available for the user.
+     */
+    private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
+        List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
+
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            //Step 2: Get Parent Assigned MIDs List
+            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
+
+            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
+            parentAssignedMIds.removeAll(assignedMIds);
+            if (CollectionUtils.isNotEmpty(parentAssignedMIds)) {
+                unAssignedMerchantInfo.addAll(merchantMapper.mapMerchantInfoDTOListToResponseList(parentAssignedMIds));
+            }
+        }
+        return unAssignedMerchantInfo;
+    }
+
+    private List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
+        List<UserMenuPermissionEntityResponse> unAssignedMerchantInfo = new ArrayList<>();
+
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            //Step 2: Get Parent Assigned MIDs List
+            List<UserMenuPermissionEntityResponse> parentAssignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getParentUserId());
+
+            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
+            parentAssignedMenus.removeAll(assignedMenus);
+            for (UserMenuPermissionEntityResponse p : parentAssignedMenus) {
+                boolean isFound = false;
+                for (UserMenuPermissionEntityResponse a : assignedMenus) {
+                    if (a.getMenuCode().equalsIgnoreCase(p.getMenuCode())) {
+                        isFound = true;
+                        break;
+                    }
+                }
+                if(!isFound) {
+                    unAssignedMerchantInfo.add(p);
+                }
+            }
+        }
+        return unAssignedMerchantInfo;
+    }
+
+
+}
