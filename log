@@ -1,1 +1,184 @@
+@Service
+@RequiredArgsConstructor
+public class ThemeService {
 
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final ThemeValidator themeValidator;
+    private final ThemeDao themeDao;
+
+    public MerchantResponse<ThemeDto> createPaymentPageTheme(MultipartFile logoFile, String mId, String primaryColor, String secondaryColor) {
+        log.info("Starting createPaymentPageTheme with mId: {}", mId);
+        ThemeDto paymentPageTheme = saveTheme(logoFile, mId, primaryColor, secondaryColor, false);
+        log.info("Successfully created payment page theme for mId: {}", mId);
+        return MerchantResponse.<ThemeDto>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .data(List.of(paymentPageTheme))
+                .count(1L)
+                .total(1L)
+                .build();
+    }
+
+    public MerchantResponse<ThemeDto> updatePaymentPageTheme(MultipartFile logoFile, String mId, String primaryColor, String secondaryColor) {
+        log.info("Starting updatePaymentPageTheme with mId: {}", mId);
+        ThemeDto paymentPageTheme = saveTheme(logoFile, mId, primaryColor, secondaryColor, true);
+        log.info("Successfully updated payment page theme for mId: {}", mId);
+        return MerchantResponse.<ThemeDto>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .data(List.of(paymentPageTheme))
+                .count(1L)
+                .total(1L)
+                .build();
+    }
+
+    public MerchantResponse<ThemeDto> getPaymentPageTheme(String mId) {
+        log.info("Fetching payment page theme for mId: {}", mId);
+        themeValidator.validatedMIdGetTheme(mId);
+        ThemeDto themeDto = themeDao.findTheme(mId, MerchantConstant.THEME_PAYMENT);
+        log.info("Successfully fetched payment page theme for mId: {}", mId);
+        return MerchantResponse.<ThemeDto>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .data(List.of(themeDto))
+                .count(1L)
+                .total(1L)
+                .build();
+    }
+
+    private ThemeDto buildPaymentPageThemeDto(String mId, MultipartFile logoFile, String primaryColor, String secondaryColor) {
+        log.info("Building ThemeDto for mId: {}", mId);
+        return ThemeDto.builder()
+                .mId(mId)
+                .logo(getBase64(logoFile))
+                .primaryColor(primaryColor)
+                .secondaryColor(secondaryColor)
+                .module(MerchantConstant.THEME_PAYMENT)
+                .build();
+    }
+
+    private ThemeDto saveTheme(MultipartFile logoFile, String mId, String primaryColor, String secondaryColor, boolean isUpdate) {
+        log.info("Saving theme for mId: {}, isUpdate: {}", mId, isUpdate);
+        ThemeDto themeDto = buildPaymentPageThemeDto(mId, logoFile, primaryColor, secondaryColor);
+        themeValidator.validateLogo(logoFile, isUpdate);
+
+        if (isUpdate) {
+            themeValidator.validateUpdateRequest(themeDto);
+            log.info("Updating existing theme for mId: {}", mId);
+            return themeDao.updatePaymentPageTheme(themeDto);
+        }
+        
+        themeValidator.validateSaveRequest(themeDto);
+        log.info("Creating new theme for mId: {}", mId);
+        return themeDao.createPaymentPageTheme(themeDto);
+    }
+}
+
+
+@Service
+@RequiredArgsConstructor
+public class TokenService {
+
+    final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final AuthenticationService authenticationService;
+    private final TokenDao tokenDao;
+    private final MerchantConfig merchantConfig;
+
+    @Transactional
+    public String generateUserToken(String userName) {
+        log.info("Starting token generation for user: {}", userName);
+        
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
+        log.info("Fetched MerchantUserDto for user: {}", userName);
+
+        TokenManagement tokenManagement = tokenDao.saveInitialToken(merchantUserDto.getId());
+        log.info("Saved initial token record for user: {}", userName);
+
+        String token = generateUserToken(tokenManagement, merchantUserDto);
+        log.info("Successfully generated token for user: {}", userName);
+
+        tokenDao.updateMerchantUserForLogin(merchantUserDto, true);
+        log.info("Updated login status to active for user: {}", userName);
+
+        return token;
+    }
+
+    public int updateMerchantUserForLogin(String userName, boolean loginStatus) {
+        log.info("Updating login status for user: {}, loginStatus: {}", userName, loginStatus);
+
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName, List.of(UserStatus.values()));
+        if (UserStatus.ACTIVE.equals(merchantUserDto.getStatus())) {
+            log.info("User is active. Updating login status in DB for user: {}", userName);
+            return tokenDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
+        }
+
+        log.info("User is not active. Skipping login status update for user: {}", userName);
+        return 0;
+    }
+
+    public int invalidateUserToken(String userName) {
+        log.info("Invalidating token for user: {}", userName);
+
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
+        Optional<TokenManagement> validToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUserDto.getId());
+
+        if (validToken.isPresent()) {
+            TokenManagement tokenManagement = validToken.get();
+            tokenManagement.setValid(false);
+            tokenDao.saveToken(List.of(tokenManagement));
+            log.info("Successfully invalidated token for user: {}", userName);
+            return MerchantConstant.RESPONSE_SUCCESS;
+        }
+
+        log.info("No valid token found to invalidate for user: {}", userName);
+        return MerchantConstant.RESPONSE_FAILURE;
+    }
+
+    @Transactional
+    private String generateUserToken(TokenManagement tokenManagement, MerchantUserDto merchantUser) {
+        log.info("Generating token for user: {}", merchantUser.getUserName());
+        try {
+            List<TokenManagement> tokenManagements = new ArrayList<>();
+            updateExistingToken(merchantUser, tokenManagements);
+
+            String token = generateUserToken(tokenManagement, merchantUser, tokenManagements);
+            tokenDao.saveToken(tokenManagements);
+            log.info("Token successfully generated for user: {}", merchantUser.getUserName());
+
+            return token;
+        } catch (Exception e) {
+            log.error("Token generation failed for user: {}. Error: {}", merchantUser.getUserName(), e.getMessage());
+            tokenManagement.setTokenStatus(TokenStatus.GENERATION_FAIL);
+            tokenManagement.setRemarks(TokenStatus.GENERATION_FAIL.remarks + " : " + e.getMessage());
+            tokenDao.saveToken(List.of(tokenManagement));
+            tokenDao.updateMerchantUserForLogin(merchantUser, false);
+            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "Token"));
+        }
+    }
+
+    private void updateExistingToken(MerchantUserDto merchantUser, List<TokenManagement> tokenManagements) {
+        log.info("Checking for existing valid tokens for user: {}", merchantUser.getUserName());
+        Optional<TokenManagement> existingToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUser.getId());
+
+        if (existingToken.isPresent()) {
+            TokenManagement existingTokenData = existingToken.get();
+            existingTokenData.setTokenStatus(TokenStatus.INVALIDATED);
+            existingTokenData.setTokenExpiryTime(System.currentTimeMillis());
+            existingTokenData.setValid(false);
+            existingTokenData.setRemarks(TokenStatus.INVALIDATED.remarks);
+            tokenManagements.add(existingTokenData);
+            log.info("Invalidated existing token for user: {}", merchantUser.getUserName());
+        } else {
+            log.info("No existing valid token found for user: {}", merchantUser.getUserName());
+        }
+    }
+
+    private UserTokenRequest buildUserTokenRequest(MerchantUserDto merchantUser) {
+        log.info("Building UserTokenRequest for user: {}", merchantUser.getUserName());
+        UserTokenRequest tokenRequest = new UserTokenRequest();
+        tokenRequest.setTokenType(TokenType.USER);
+        tokenRequest.setUsername(merchantUser.getUserName());
+        tokenRequest.setPassword(merchantUser.getPassword());
+        tokenRequest.setRoles(List.of(tokenDao.getMerchantUserRoleName(merchantUser.getRole())));
+        tokenRequest.setExpirationTime(DateTimeUtils.addMinutes(merchantConfig.getTokenExpiryTime() - 1));
+        log.info("UserTokenRequest built successfully for user: {}", merchantUser.getUserName());
+        return tokenRequest;
+    }
+}
