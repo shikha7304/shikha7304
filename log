@@ -1,234 +1,26 @@
-/**
- * Service class handling password-related operations such as password change and reset.
- * Contains validation and database update logic for secure password management.
- */
-@Service
-@RequiredArgsConstructor
-public class PasswordService {
-
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    private final PasswordValidator passwordValidator;
-    private final PasswordManagementDao passwordManagementDao;
-    private final MerchantConfig merchantConfig;
-
-    /**
-     * Handles the password change process for a user.
-     *
-     * Steps:
-     * 1. Validate mandatory fields in the request.
-     * 2. Decrypt the new and confirm passwords.
-     * 3. Validate the password change request, including user and password verification.
-     * 4. Update the password details in the database.
-     * 5. Return a success response.
-     *
-     * @param passwordChangeRequest Request object containing userName, oldPassword, and newPassword.
-     * @return A success response with a message confirming password change.
-     */
-    public MerchantResponse<String> changePassword(PasswordChangeRequest passwordChangeRequest) {
-        try {
-            log.info("Starting password change process for user: {}", passwordChangeRequest.getUserName());
-            passwordValidator.validateMandatoryFields(passwordChangeRequest);
-            log.info("Validated mandatory fields for password change request.");
-
-            passwordChangeRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getNewPassword()));
-            passwordChangeRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getConfirmPassword()));
-            log.info("Decrypted new and confirm passwords for password change request.");
-
-            validatePasswordChange(passwordChangeRequest);
-            log.info("Validated password change request for user: {}", passwordChangeRequest.getUserName());
-
-            passwordManagementDao.updatePasswordDetails(passwordChangeRequest.getUserName(), passwordChangeRequest.getNewPassword(), List.of(UserStatus.EXPIRED), RequestType.CHANGE_PASSWORD);
-            log.info("Updated password in the database for user: {}", passwordChangeRequest.getUserName());
-
-            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Changed Successfully")).count(1L).total(1L).build();
-        } catch (Exception e) {
-            log.error("Password change request failed for user: {}", passwordChangeRequest.getUserName(), e);
-            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getMessage());
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
-        }
-    }
-
-    /**
-     * Handles the password reset process for a user.
-     *
-     * Steps:
-     * 1. Validate mandatory fields in the reset request.
-     * 2. Decrypt the new and confirm passwords.
-     * 3. Validate the password reset request.
-     * 4. Update the password details in the database.
-     * 5. Return a success response.
-     *
-     * @param passwordResetRequest Request object containing userName, newPassword, and confirmPassword.
-     * @return A success response with a message confirming password reset.
-     */
-    public MerchantResponse<String> resetPassword(PasswordResetRequest passwordResetRequest) {
-        try {
-            log.info("Starting password reset process for user: {}", passwordResetRequest.getUserName());
-            passwordValidator.validateMandatoryFields(passwordResetRequest);
-            log.info("Validated mandatory fields for password reset request.");
-
-            passwordResetRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getNewPassword()));
-            passwordResetRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getConfirmPassword()));
-            log.info("Decrypted new and confirm passwords for password reset request.");
-
-            validatePasswordReset(passwordResetRequest);
-            log.info("Validated password reset request for user: {}", passwordResetRequest.getUserName());
-
-            passwordManagementDao.updatePasswordDetails(passwordResetRequest.getUserName(), passwordResetRequest.getNewPassword(), List.of(UserStatus.ACTIVE), RequestType.RESET_PASSWORD);
-            log.info("Updated password in the database for user: {}", passwordResetRequest.getUserName());
-
-            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Reset Successfully")).count(1L).total(1L).build();
-        } catch (Exception e) {
-            log.error("Password reset request failed for user: {}", passwordResetRequest.getUserName(), e);
-            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getMessage());
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
-        }
-    }
-
-    /**
-     * Validates the password change request for a user.
-     *
-     * @param passwordChangeRequest The request object containing userName, oldPassword, and newPassword.
-     */
-    private void validatePasswordChange(PasswordChangeRequest passwordChangeRequest) {
-        log.info("Validating password change request for user: {}", passwordChangeRequest.getUserName());
-        passwordValidator.validatePasswordValue(passwordChangeRequest.getNewPassword(), passwordChangeRequest.getConfirmPassword());
-        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordChangeRequest.getUserName(), List.of(UserStatus.EXPIRED));
-        String passwordHashValue = hashValue(passwordChangeRequest.getNewPassword());
-        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue, passwordChangeRequest.getOldPassword());
-        log.info("Successfully validated password change request for user: {}", passwordChangeRequest.getUserName());
-    }
-
-    /**
-     * Validates the password reset request for a user.
-     *
-     * @param passwordResetRequest The request object containing userName, newPassword, and confirmPassword.
-     */
-    private void validatePasswordReset(PasswordResetRequest passwordResetRequest) {
-        log.info("Validating password reset request for user: {}", passwordResetRequest.getUserName());
-        passwordValidator.validatePasswordValue(passwordResetRequest.getNewPassword(), passwordResetRequest.getConfirmPassword());
-        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordResetRequest.getUserName(), List.of(UserStatus.ACTIVE));
-        String passwordHashValue = hashValue(passwordResetRequest.getNewPassword());
-        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue);
-        log.info("Successfully validated password reset request for user: {}", passwordResetRequest.getUserName());
-    }
-
-    /**
-     * Handles password operation failures by saving an audit log.
-     *
-     * @param userName    The username associated with the failure.
-     * @param requestType The type of password operation (change/reset).
-     * @param error       The error message to log.
-     */
-    private void handlePasswordFailure(String userName, RequestType requestType, String error) {
-        log.info("Handling password failure for user: {}, RequestType: {}", userName, requestType);
-        if (StringUtils.isNotEmpty(userName)) {
-            try {
-                passwordManagementDao.saveAudit(userName, requestType, false, error);
-                log.info("Password failure audit logged for user: {}, RequestType: {}", userName, requestType);
-            } catch (Exception ex) {
-                log.error("Failed to log password failure audit for user: {}, RequestType: {}", userName, requestType, ex);
-            }
-        }
-    }
-}
-
-
-/**
- * Service class for handling user authentication and token validation.
- */
-public class SecurityService implements AuthenticationUserService {
-
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    private final TokenDao tokenDao;
-    private final MerchantUserDao merchantUserDao;
-
-    /**
-     * Loads user details based on the provided username.
-     *
-     * This method retrieves user information from the database and wraps it in an `EPayPrincipal` object.
-     * It is primarily used for authentication purposes.
-     *
-     * @param userName The username of the user whose details are to be loaded.
-     * @return An `Optional` containing the `EPayPrincipal` object if the user exists.
-     */
-    @Override
-    public Optional<EPayPrincipal> loadUserByUserName(String userName) {
-        log.info("Loading user details for username: {}", userName);
-        try {
-            MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
-            EPayPrincipal authenticateEntity = new EPayPrincipal();
-            authenticateEntity.setAuthenticationId(merchantUserDto.getUserName());
-            log.info("Successfully loaded user details for username: {}", userName);
-            return Optional.of(authenticateEntity);
-        } catch (Exception e) {
-            log.error("Failed to load user details for username: {}", userName, e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Validates whether the provided token is valid.
-     *
-     * This method checks the token's existence and validity using the `TokenDao`.
-     *
-     * @param token The token to be validated.
-     * @return `true` if the token is invalid, `false` if the token is valid.
-     */
-    @Override
-    public boolean isTokenInValid(String token) {
-        log.info("Validating token: {}", token);
-        try {
-            boolean isInvalid = !tokenDao.isValidTokenExist(token);
-            log.info("Token validation result for token {}: {}", token, isInvalid ? "Invalid" : "Valid");
-            return isInvalid;
-        } catch (Exception e) {
-            log.error("Error occurred while validating token: {}", token, e);
-            return true; // Return invalid if an error occurs.
-        }
-    }
-}
-
-
-
-
-
 package com.epay.merchant.service;
 
-import com.epay.merchant.config.MerchantConfig;
-import com.epay.merchant.dao.PasswordManagementDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.model.request.PasswordChangeRequest;
-import com.epay.merchant.model.request.PasswordResetRequest;
+import com.epay.merchant.dao.ThemeDao;
+import com.epay.merchant.dto.ThemeDto;
 import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.ErrorConstants;
 import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.util.enums.UserStatus;
-import com.epay.merchant.validator.PasswordValidator;
+import com.epay.merchant.validator.ThemeValidator;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-import static com.epay.merchant.util.EncryptionDecryptionUtil.decryptValue;
-import static com.epay.merchant.util.EncryptionDecryptionUtil.hashValue;
+import static com.epay.merchant.util.MerchantUtil.getBase64;
 
 /**
- * Class Name: PasswordService
+ * Class Name: ThemeService
  * *
- * Description:
+ * Description: To handle the theme business logic.
  * *
- * Author: Subhra Goswami
+ * Author: Bhoopendra Rajput
  * <p>
  * Copyright (c) 2024 [State Bank of India]
  * All rights reserved
@@ -237,165 +29,249 @@ import static com.epay.merchant.util.EncryptionDecryptionUtil.hashValue;
  */
 @Service
 @RequiredArgsConstructor
-public class PasswordService {
+public class ThemeService {
 
     private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    private final PasswordValidator passwordValidator;
-    private final PasswordManagementDao passwordManagementDao;
-    private final MerchantConfig merchantConfig;
+    private final ThemeValidator themeValidator;
+    private final ThemeDao themeDao;
 
     /**
-     * Method to handle the password change logic
-     * @param passwordChangeRequest PasswordChangeRequest
+     * createPaymentPageTheme
+     *
+     * @param logoFile       MultipartFile
+     * @param mId            String
+     * @param primaryColor   String
+     * @param secondaryColor String
+     * @return MerchantResponse
      */
-    public MerchantResponse<String> changePassword(PasswordChangeRequest passwordChangeRequest) {
-        try {
-            log.info("Starting password change process for user: {}", passwordChangeRequest.getUserName());
-            // Step 1: Validate mandatory password reset request
-            passwordValidator.validateMandatoryFields(passwordChangeRequest);
-            log.info("Password change request validated successfully for mandatory field");
+    public MerchantResponse<ThemeDto> createPaymentPageTheme(MultipartFile logoFile, String mId, String primaryColor, String secondaryColor) {
+        ThemeDto paymentPageTheme = saveTheme(logoFile, mId, primaryColor, secondaryColor, false);
+        log.debug("createPaymentPageTheme completed with theme {}", paymentPageTheme);
+        return MerchantResponse.<ThemeDto>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(paymentPageTheme)).count(1L).total(1L).build();
+    }
 
-            // Step 2 : Decrypt Password
-            passwordChangeRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getNewPassword()));
-            passwordChangeRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getConfirmPassword()));
-            log.info("Password change request decrypted successfully");
+    /**
+     * updatePaymentPageTheme
+     *
+     * @param logoFile       MultipartFile
+     * @param mId            String
+     * @param primaryColor   String
+     * @param secondaryColor String
+     * @return MerchantResponse
+     */
+    public MerchantResponse<ThemeDto> updatePaymentPageTheme(MultipartFile logoFile, String mId, String primaryColor, String secondaryColor) {
+        ThemeDto paymentPageTheme = saveTheme(logoFile, mId, primaryColor, secondaryColor, true);
+        return MerchantResponse.<ThemeDto>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(paymentPageTheme)).count(1L).total(1L).build();
+    }
 
-            // Step 3: Validate the password change request
-            validatePasswordChange(passwordChangeRequest);
-            log.info("Password change request validated successfully");
+    /**
+     * Get PaymentPageTheme by MID.
+     *
+     * @param mId String
+     * @return MerchantResponse
+     */
+    public MerchantResponse<ThemeDto> getPaymentPageTheme(String mId) {
+        themeValidator.validatedMIdGetTheme(mId);
+        ThemeDto themeDto = themeDao.findTheme(mId, MerchantConstant.THEME_PAYMENT);
+        return MerchantResponse.<ThemeDto>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(themeDto)).count(1L).total(1L).build();
+    }
 
-            // Step 4: Update the password details in the database
-            passwordManagementDao.updatePasswordDetails(passwordChangeRequest.getUserName(), passwordChangeRequest.getNewPassword(), List.of(UserStatus.EXPIRED), RequestType.CHANGE_PASSWORD);
-
-            // Step 5: Build and return the success response
-            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Changed Successfully")).count(1L).total(1L).build();
-        } catch (ValidationException e) {
-            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
-                throw e;
-            });
-            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")));
-            log.error("Password Change Request Validation Failed for PasswordChangeRequest {} ", passwordChangeRequest);
-            throw e;
-        } catch (MerchantException e) {
-            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getErrorMessage());
-            log.error("Password Change Request Failed for PasswordChangeRequest {} ", passwordChangeRequest);
-            throw e;
-        } catch (Exception e) {
-            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getLocalizedMessage());
-            log.error("Password Change Request Failed for PasswordChangeRequest {} ", passwordChangeRequest);
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
+    /**
+     * Create ThemeDto object
+     *
+     * @param mId            String
+     * @param logoFile       MultipartFile
+     * @param primaryColor   String
+     * @param secondaryColor String
+     * @return ThemeDto
+     */
+    private ThemeDto buildPaymentPageThemeDto(String mId, MultipartFile logoFile, String primaryColor, String secondaryColor) {
+        return ThemeDto.builder().mId(mId).logo(getBase64(logoFile)).primaryColor(primaryColor).secondaryColor(secondaryColor).module(MerchantConstant.THEME_PAYMENT).build();
+    }
+    /**
+     * Save saveTheme object
+     *
+     * @param logoFile            String
+     * @param mId       MultipartFile
+     * @param primaryColor   String
+     * @param secondaryColor String
+     * @param isUpdate   boolean
+     * @return ThemeDto
+     */
+    private ThemeDto saveTheme(MultipartFile logoFile, String mId, String primaryColor, String secondaryColor, boolean isUpdate) {
+        ThemeDto themeDto = buildPaymentPageThemeDto(mId, logoFile, primaryColor, secondaryColor);
+        themeValidator.validateLogo(logoFile, isUpdate);
+        if (isUpdate) {
+            themeValidator.validateUpdateRequest(themeDto);
+            return themeDao.updatePaymentPageTheme(themeDto);
         }
-    }
-
-    /**
-     * Method to handle the reset password logic
-     * @param passwordResetRequest PasswordResetRequest
-     */
-    public MerchantResponse<String> resetPassword(PasswordResetRequest passwordResetRequest) {
-        try {
-            log.info("Starting password reset process for user: {}", passwordResetRequest.getUserName());
-            // Step 1: Validate mandatory password reset request
-            passwordValidator.validateMandatoryFields(passwordResetRequest);
-            log.info("Password reset request validated successfully for mandatory field");
-
-            // Step 2 : Decrypt Password
-            passwordResetRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getNewPassword()));
-            passwordResetRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getConfirmPassword()));
-            log.info("Password reset request decrypted successfully");
-
-            // Step 3: Validate the password reset request
-            validatePasswordReset(passwordResetRequest);
-            log.info("Password reset request validated successfully");
-
-            // Step 4: Update the password details in the database
-            passwordManagementDao.updatePasswordDetails(passwordResetRequest.getUserName(), passwordResetRequest.getNewPassword(), List.of(UserStatus.ACTIVE), RequestType.RESET_PASSWORD);
-
-            // Step 5: Build and return the success response
-            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Reset Successfully")).count(1L).total(1L).build();
-        } catch (ValidationException e) {
-            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
-                throw e;
-            });
-            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")));
-            log.error("Password Reset Request Validation Failed for passwordResetRequest {} ", passwordResetRequest);
-            throw e;
-        } catch (MerchantException e) {
-            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getErrorMessage());
-            log.error("Password Reset Request Failed for passwordResetRequest {} ", passwordResetRequest);
-            throw e;
-        } catch (Exception e) {
-            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getLocalizedMessage());
-            log.error("Password Reset Request Failed for passwordResetRequest {} ", passwordResetRequest);
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
-        }
-    }
-
-    /**
-     * Method to validate the user status and create hash password and update in DB
-     * @param passwordChangeRequest PasswordChangeRequest
-     */
-    private void validatePasswordChange(PasswordChangeRequest passwordChangeRequest) {
-        log.info("Validating password change request for user: {}", passwordChangeRequest.getUserName());
-        passwordValidator.validatePasswordValue(passwordChangeRequest.getNewPassword(), passwordChangeRequest.getConfirmPassword());
-        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordChangeRequest.getUserName(), List.of(UserStatus.EXPIRED));
-        String passwordHashValue = hashValue(passwordChangeRequest.getNewPassword());
-        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue, passwordChangeRequest.getOldPassword());
-    }
-
-    /**
-     * Method to validate the reset password logic
-     * @param passwordResetRequest PasswordResetRequest
-     */
-    private void validatePasswordReset(PasswordResetRequest passwordResetRequest) {
-        passwordValidator.validatePasswordValue(passwordResetRequest.getNewPassword(), passwordResetRequest.getConfirmPassword());
-        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordResetRequest.getUserName(), List.of(UserStatus.ACTIVE));
-        String passwordHashValue = hashValue(passwordResetRequest.getNewPassword());
-        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue);
-    }
-
-    /**
-     * Method to handle password failure logic
-     * @param userName String
-     * @param requestType RequestType
-     * @param e String
-     */
-    private void handlePasswordFailure(String userName, RequestType requestType, String e) {
-        if (StringUtils.isNotEmpty(userName)) {
-            try {
-                passwordManagementDao.saveAudit(userName, requestType, false, e);
-            } catch (MerchantException ex) {
-                log.error("Error in handlePasswordFailure for userName {}, RequestType {} ", userName, requestType, ex.getErrorMessages());
-            } catch (Exception ex) {
-                log.error("Error in handlePasswordFailure for userName {}, RequestType {} ", userName, requestType, ex.getMessage());
-            }
-        }
+        themeValidator.validateSaveRequest(themeDto);
+        return themeDao.createPaymentPageTheme(themeDto);
     }
 }
 
 
-public class SecurityService implements AuthenticationUserService {
+package com.epay.merchant.service;
 
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.TokenDao;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.entity.TokenManagement;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.util.DateTimeUtils;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.TokenStatus;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.service.AuthenticationService;
+import com.sbi.epay.authentication.util.enums.TokenType;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class TokenService {
+
+    final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final AuthenticationService authenticationService;
     private final TokenDao tokenDao;
-    private final MerchantUserDao merchantUserDao;
-
+    private final MerchantConfig merchantConfig;
 
     /**
-     This method will call the authenticateEntity to authenticate and get the userName by token
-     @param userName String
+     * This method will generate the user token and update the merchant user login status in DB
+     * @param userName String
+     * @return Token String
      */
-    @Override
-    public Optional<EPayPrincipal> loadUserByUserName(String userName) {
-        MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
-        EPayPrincipal authenticateEntity = new EPayPrincipal();
-        authenticateEntity.setAuthenticationId(merchantUserDto.getUserName());
-        return Optional.of(authenticateEntity);
+    @Transactional
+    public String generateUserToken(String userName) {
+        // Step 1 : Get the User
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
+
+        // Step 2 : Save Initial Token Request
+        TokenManagement tokenManagement = tokenDao.saveInitialToken(merchantUserDto.getId());
+
+        // Step 3 : Generate User Token Request
+        String token = generateUserToken(tokenManagement, merchantUserDto);
+
+        //Step 4 : Update Merchant User Login Status
+        tokenDao.updateMerchantUserForLogin(merchantUserDto, true);
+        return token;
+
     }
+
     /**
-     * It will check if the token is valid or not
+     *This method will update the login status detail for a given userName
+     * @param userName String
+     * @param loginStatus  boolean
      */
-    @Override
-    public boolean isTokenInValid(String token) {
-        return !tokenDao.isValidTokenExist(token);
+    public int updateMerchantUserForLogin(String userName, boolean loginStatus) {
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName, List.of(UserStatus.values()));
+        if(UserStatus.ACTIVE.equals(merchantUserDto.getStatus())) {
+            return tokenDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
+        }
+        return 0;
     }
+
+    /**
+     * Invalidates the token for the specified username.
+     * @param userName Username of the merchant user.
+     * @return Integer representing success or failure status.
+     */
+    public int invalidateUserToken(String userName) {
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
+        Optional<TokenManagement> validToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUserDto.getId());
+        if (validToken.isPresent()) {
+            TokenManagement tokenManagement = validToken.get();
+            tokenManagement.setValid(false);
+            tokenDao.saveToken(List.of(tokenManagement));
+            return MerchantConstant.RESPONSE_SUCCESS;
+        }
+        return MerchantConstant.RESPONSE_FAILURE;
+    }
+
+    /**
+     * It will call the authentication utility to generate the token
+     * @param tokenManagement TokenManagement
+     * @param merchantUser MerchantUserDto
+     * @return  Token
+     */
+    @Transactional
+    private String generateUserToken(TokenManagement tokenManagement, MerchantUserDto merchantUser) {
+        try {
+            log.info("Going to call authentication utility to generate the token for userId: {}", merchantUser.getUserName());
+            List<TokenManagement> tokenManagements = new ArrayList<>();
+            updateExistingToken(merchantUser, tokenManagements);
+            String token = generateUserToken(tokenManagement, merchantUser, tokenManagements);
+            tokenDao.saveToken(tokenManagements);
+            return token;
+        } catch (Exception e) {
+            // Handle token generation failure
+            log.error("Token generation failed for userId: {}, Exception: {}", merchantUser.getUserName(), e.getMessage());
+            tokenManagement.setTokenStatus(TokenStatus.GENERATION_FAIL);
+            tokenManagement.setRemarks(TokenStatus.GENERATION_FAIL.remarks + " : " + e.getMessage());
+            tokenDao.saveToken(List.of(tokenManagement));
+            tokenDao.updateMerchantUserForLogin(merchantUser, false);
+            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "Token"));
+        }
+    }
+
+    /**
+     * This method generates the user token for a given user
+     * @param merchantUser MerchantUserDto
+     * @param tokenManagement TokenManagement
+     * @param tokenManagements List<TokenManagement>
+     * @return  token
+     */
+    private String generateUserToken(TokenManagement tokenManagement, MerchantUserDto merchantUser, List<TokenManagement> tokenManagements) {
+        String token = authenticationService.generateUserToken(buildUserTokenRequest(merchantUser));
+        tokenManagement.setToken(token);
+        tokenManagement.setTokenStatus(TokenStatus.GENERATED);
+        tokenManagement.setTokenExpiryTime(DateTimeUtils.addMinutes(merchantConfig.getTokenExpiryTime() - 1));
+        tokenManagement.setValid(true);
+        tokenManagement.setRemarks(TokenStatus.GENERATED.remarks);
+        tokenManagements.add(tokenManagement);
+        return token;
+    }
+
+    /**
+     * This method will validate the token if exists then update the token status
+     * @param merchantUser MerchantUserDto
+     * @param tokenManagements List<TokenManagement>
+     */
+    private void updateExistingToken(MerchantUserDto merchantUser, List<TokenManagement> tokenManagements) {
+        Optional<TokenManagement> existingToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUser.getId());
+        if (existingToken.isPresent()) {
+            TokenManagement existingTokenData = existingToken.get();
+            existingTokenData.setTokenStatus(TokenStatus.INVALIDATED);
+            existingTokenData.setTokenExpiryTime(System.currentTimeMillis());
+            existingTokenData.setValid(false);
+            existingTokenData.setRemarks(TokenStatus.INVALIDATED.remarks);
+            tokenManagements.add(existingTokenData);
+        }
+    }
+
+    /**
+     * This method will build the token request for given user
+     * @param merchantUser MerchantUserDto
+     * @return  tokenRequest
+     */
+    private UserTokenRequest buildUserTokenRequest(MerchantUserDto merchantUser) {
+        UserTokenRequest tokenRequest = new UserTokenRequest();
+        tokenRequest.setTokenType(TokenType.USER);
+        tokenRequest.setUsername(merchantUser.getUserName());
+        tokenRequest.setPassword(merchantUser.getPassword());
+        tokenRequest.setRoles(List.of(tokenDao.getMerchantUserRoleName(merchantUser.getRole())));
+        tokenRequest.setExpirationTime(DateTimeUtils.addMinutes(merchantConfig.getTokenExpiryTime() - 1));
+        return tokenRequest;
+    }
+
 }
