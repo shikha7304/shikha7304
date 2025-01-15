@@ -1,3 +1,200 @@
+/**
+ * Service class handling password-related operations such as password change and reset.
+ * Contains validation and database update logic for secure password management.
+ */
+@Service
+@RequiredArgsConstructor
+public class PasswordService {
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    private final PasswordValidator passwordValidator;
+    private final PasswordManagementDao passwordManagementDao;
+    private final MerchantConfig merchantConfig;
+
+    /**
+     * Handles the password change process for a user.
+     *
+     * Steps:
+     * 1. Validate mandatory fields in the request.
+     * 2. Decrypt the new and confirm passwords.
+     * 3. Validate the password change request, including user and password verification.
+     * 4. Update the password details in the database.
+     * 5. Return a success response.
+     *
+     * @param passwordChangeRequest Request object containing userName, oldPassword, and newPassword.
+     * @return A success response with a message confirming password change.
+     */
+    public MerchantResponse<String> changePassword(PasswordChangeRequest passwordChangeRequest) {
+        try {
+            log.info("Starting password change process for user: {}", passwordChangeRequest.getUserName());
+            passwordValidator.validateMandatoryFields(passwordChangeRequest);
+            log.info("Validated mandatory fields for password change request.");
+
+            passwordChangeRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getNewPassword()));
+            passwordChangeRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getConfirmPassword()));
+            log.info("Decrypted new and confirm passwords for password change request.");
+
+            validatePasswordChange(passwordChangeRequest);
+            log.info("Validated password change request for user: {}", passwordChangeRequest.getUserName());
+
+            passwordManagementDao.updatePasswordDetails(passwordChangeRequest.getUserName(), passwordChangeRequest.getNewPassword(), List.of(UserStatus.EXPIRED), RequestType.CHANGE_PASSWORD);
+            log.info("Updated password in the database for user: {}", passwordChangeRequest.getUserName());
+
+            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Changed Successfully")).count(1L).total(1L).build();
+        } catch (Exception e) {
+            log.error("Password change request failed for user: {}", passwordChangeRequest.getUserName(), e);
+            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getMessage());
+            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Handles the password reset process for a user.
+     *
+     * Steps:
+     * 1. Validate mandatory fields in the reset request.
+     * 2. Decrypt the new and confirm passwords.
+     * 3. Validate the password reset request.
+     * 4. Update the password details in the database.
+     * 5. Return a success response.
+     *
+     * @param passwordResetRequest Request object containing userName, newPassword, and confirmPassword.
+     * @return A success response with a message confirming password reset.
+     */
+    public MerchantResponse<String> resetPassword(PasswordResetRequest passwordResetRequest) {
+        try {
+            log.info("Starting password reset process for user: {}", passwordResetRequest.getUserName());
+            passwordValidator.validateMandatoryFields(passwordResetRequest);
+            log.info("Validated mandatory fields for password reset request.");
+
+            passwordResetRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getNewPassword()));
+            passwordResetRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getConfirmPassword()));
+            log.info("Decrypted new and confirm passwords for password reset request.");
+
+            validatePasswordReset(passwordResetRequest);
+            log.info("Validated password reset request for user: {}", passwordResetRequest.getUserName());
+
+            passwordManagementDao.updatePasswordDetails(passwordResetRequest.getUserName(), passwordResetRequest.getNewPassword(), List.of(UserStatus.ACTIVE), RequestType.RESET_PASSWORD);
+            log.info("Updated password in the database for user: {}", passwordResetRequest.getUserName());
+
+            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Reset Successfully")).count(1L).total(1L).build();
+        } catch (Exception e) {
+            log.error("Password reset request failed for user: {}", passwordResetRequest.getUserName(), e);
+            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getMessage());
+            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Validates the password change request for a user.
+     *
+     * @param passwordChangeRequest The request object containing userName, oldPassword, and newPassword.
+     */
+    private void validatePasswordChange(PasswordChangeRequest passwordChangeRequest) {
+        log.info("Validating password change request for user: {}", passwordChangeRequest.getUserName());
+        passwordValidator.validatePasswordValue(passwordChangeRequest.getNewPassword(), passwordChangeRequest.getConfirmPassword());
+        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordChangeRequest.getUserName(), List.of(UserStatus.EXPIRED));
+        String passwordHashValue = hashValue(passwordChangeRequest.getNewPassword());
+        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue, passwordChangeRequest.getOldPassword());
+        log.info("Successfully validated password change request for user: {}", passwordChangeRequest.getUserName());
+    }
+
+    /**
+     * Validates the password reset request for a user.
+     *
+     * @param passwordResetRequest The request object containing userName, newPassword, and confirmPassword.
+     */
+    private void validatePasswordReset(PasswordResetRequest passwordResetRequest) {
+        log.info("Validating password reset request for user: {}", passwordResetRequest.getUserName());
+        passwordValidator.validatePasswordValue(passwordResetRequest.getNewPassword(), passwordResetRequest.getConfirmPassword());
+        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordResetRequest.getUserName(), List.of(UserStatus.ACTIVE));
+        String passwordHashValue = hashValue(passwordResetRequest.getNewPassword());
+        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue);
+        log.info("Successfully validated password reset request for user: {}", passwordResetRequest.getUserName());
+    }
+
+    /**
+     * Handles password operation failures by saving an audit log.
+     *
+     * @param userName    The username associated with the failure.
+     * @param requestType The type of password operation (change/reset).
+     * @param error       The error message to log.
+     */
+    private void handlePasswordFailure(String userName, RequestType requestType, String error) {
+        log.info("Handling password failure for user: {}, RequestType: {}", userName, requestType);
+        if (StringUtils.isNotEmpty(userName)) {
+            try {
+                passwordManagementDao.saveAudit(userName, requestType, false, error);
+                log.info("Password failure audit logged for user: {}, RequestType: {}", userName, requestType);
+            } catch (Exception ex) {
+                log.error("Failed to log password failure audit for user: {}, RequestType: {}", userName, requestType, ex);
+            }
+        }
+    }
+}
+
+
+/**
+ * Service class for handling user authentication and token validation.
+ */
+public class SecurityService implements AuthenticationUserService {
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    private final TokenDao tokenDao;
+    private final MerchantUserDao merchantUserDao;
+
+    /**
+     * Loads user details based on the provided username.
+     *
+     * This method retrieves user information from the database and wraps it in an `EPayPrincipal` object.
+     * It is primarily used for authentication purposes.
+     *
+     * @param userName The username of the user whose details are to be loaded.
+     * @return An `Optional` containing the `EPayPrincipal` object if the user exists.
+     */
+    @Override
+    public Optional<EPayPrincipal> loadUserByUserName(String userName) {
+        log.info("Loading user details for username: {}", userName);
+        try {
+            MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+            EPayPrincipal authenticateEntity = new EPayPrincipal();
+            authenticateEntity.setAuthenticationId(merchantUserDto.getUserName());
+            log.info("Successfully loaded user details for username: {}", userName);
+            return Optional.of(authenticateEntity);
+        } catch (Exception e) {
+            log.error("Failed to load user details for username: {}", userName, e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Validates whether the provided token is valid.
+     *
+     * This method checks the token's existence and validity using the `TokenDao`.
+     *
+     * @param token The token to be validated.
+     * @return `true` if the token is invalid, `false` if the token is valid.
+     */
+    @Override
+    public boolean isTokenInValid(String token) {
+        log.info("Validating token: {}", token);
+        try {
+            boolean isInvalid = !tokenDao.isValidTokenExist(token);
+            log.info("Token validation result for token {}: {}", token, isInvalid ? "Invalid" : "Valid");
+            return isInvalid;
+        } catch (Exception e) {
+            log.error("Error occurred while validating token: {}", token, e);
+            return true; // Return invalid if an error occurs.
+        }
+    }
+}
+
+
+
+
+
 package com.epay.merchant.service;
 
 import com.epay.merchant.config.MerchantConfig;
