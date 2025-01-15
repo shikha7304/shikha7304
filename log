@@ -1,5 +1,155 @@
+/**
+ * Service class to manage merchant user's menu permissions and assigned MIDs.
+ */
+public class MerchantUserService {
 
+    private final Logger log = LoggerFactory.getLogger(MerchantUserService.class);
+
+    /**
+     * Retrieves the assigned and unassigned menus for a specific user.
+     *
+     * @param userName The username of the merchant user.
+     * @return A response containing assigned and unassigned menus of the user.
+     */
     public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
+        log.info("Starting to fetch assigned and unassigned menu access for user: {}", userName);
+
+        // Step 1: Get Requested User Information
+        log.info("Fetching requested user information for username: {}", userName);
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        // Step 2: Validate the requested user with the logged-in user's parent data
+        log.info("Validating user mapping for username: {}", userName);
+        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+
+        // Step 3: Get Assigned Menus
+        log.info("Fetching assigned menus for user ID: {}", merchantUser.getId());
+        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+
+        // Step 4: Get Unassigned Menus from Parent User
+        log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
+        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
+
+        // Step 5: Build MerchantUserAssignedMenusResponse
+        log.info("Building assigned and unassigned menu response for username: {}", userName);
+        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder()
+                .assignedMenus(assignedMenus)
+                .unAssignedMenus(unAssignedMenus)
+                .build();
+
+        // Step 6: Build MerchantResponse Object of MerchantUserAssignedMenusResponse
+        log.info("Successfully fetched assigned and unassigned menus for username: {}", userName);
+        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder()
+                .data(List.of(userAssignedMenusResponse))
+                .build();
+    }
+
+    /**
+     * Assigns a list of menus to a user while removing the previously assigned menus not in the new list.
+     *
+     * @param userName The username of the merchant user.
+     * @param menuList The list of menu codes to assign to the user.
+     * @return A response indicating successful assignment of menus.
+     */
+    public MerchantResponse<String> assignedMenuAccessToUser(String userName, List<String> menuList) {
+        log.info("Starting to assign menu access for username: {}", userName);
+
+        // Step 1: Get Requested User Information
+        log.info("Fetching requested user information for username: {}", userName);
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        // Step 2: Validate the menu assignment request
+        log.info("Validating menu mapping request for username: {}", userName);
+        merchantUserValidator.validateMenuPostMapping(userName, merchantUser, menuList);
+
+        // Step 3: Build Remove and New Assigned Menu List
+        log.info("Building lists of menus to remove and assign for user ID: {}", merchantUser.getId());
+        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+        List<UUID> removedMenus = assignedMenus.stream()
+                .filter(assignedMenu -> !menuList.contains(assignedMenu.getMenuCode()))
+                .map(UserMenuPermissionEntityResponse::getMenuId)
+                .collect(Collectors.toList());
+        List<String> newMappedMenus = getNewMenuMappingList(menuList, assignedMenus);
+
+        // Step 4: Update the data in DB
+        log.info("Updating assigned menus in the database for user ID: {}", merchantUser.getId());
+        merchantUserDao.assignedMenus(newMappedMenus, removedMenus, merchantUser.getId());
+
+        // Step 5: Build MerchantResponse
+        log.info("Menu access assigned successfully for username: {}", userName);
+        return MerchantResponse.<String>builder()
+                .data(List.of("Menus are assigned successfully"))
+                .build();
+    }
+
+    /**
+     * Retrieves the unassigned MIDs for a specified user by comparing the parent's
+     * accessible MIDs with the user's currently assigned MIDs.
+     *
+     * @param merchantUser Merchant user details.
+     * @param assignedMIds List of currently assigned MIDs for the user.
+     * @return List of unassigned MIDs available for the user.
+     */
+    private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
+        log.info("Fetching unassigned MIDs for user ID: {}", merchantUser.getId());
+        List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
+
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            // Step 2: Get Parent Assigned MIDs List
+            log.info("Fetching parent assigned MIDs for parent user ID: {}", merchantUser.getParentUserId());
+            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
+
+            // Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
+            log.info("Removing assigned MIDs from parent MIDs for user ID: {}", merchantUser.getId());
+            parentAssignedMIds.removeAll(assignedMIds);
+            if (CollectionUtils.isNotEmpty(parentAssignedMIds)) {
+                unAssignedMerchantInfo.addAll(merchantMapper.mapMerchantInfoDTOListToResponseList(parentAssignedMIds));
+            }
+        }
+        log.info("Successfully fetched unassigned MIDs for user ID: {}", merchantUser.getId());
+        return unAssignedMerchantInfo;
+    }
+
+    /**
+     * Retrieves the unassigned menus for a specified user by comparing the parent's
+     * accessible menus with the user's currently assigned menus.
+     *
+     * @param merchantUser Merchant user details.
+     * @param assignedMenus List of currently assigned menus for the user.
+     * @return List of unassigned menus available for the user.
+     */
+    private List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
+        log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
+        List<UserMenuPermissionEntityResponse> unAssignedMenus = new ArrayList<>();
+
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            // Step 2: Get Parent Assigned Menus List
+            log.info("Fetching parent assigned menus for parent user ID: {}", merchantUser.getParentUserId());
+            List<UserMenuPermissionEntityResponse> parentAssignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getParentUserId());
+
+            // Step 3: Remove Assigned Menus from Parent Assigned Menus List
+            log.info("Removing assigned menus from parent menus for user ID: {}", merchantUser.getId());
+            parentAssignedMenus.removeAll(assignedMenus);
+
+            for (UserMenuPermissionEntityResponse parentMenu : parentAssignedMenus) {
+                boolean isFound = assignedMenus.stream().anyMatch(assignedMenu -> assignedMenu.getMenuCode().equalsIgnoreCase(parentMenu.getMenuCode()));
+                if (!isFound) {
+                    unAssignedMenus.add(parentMenu);
+                }
+            }
+        }
+        log.info("Successfully fetched unassigned menus for user ID: {}", merchantUser.getId());
+        return unAssignedMenus;
+    }
+}
+
+
+
+
+
+
+
+public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
        
         //Step 1  : Get Requested User Information
         MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
