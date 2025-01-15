@@ -1,3 +1,194 @@
+
+
+public class MerchantUserService {
+
+    private final MerchantInfoDao merchantInfoDao;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantUserValidator merchantUserValidator;
+    private final MerchantMapper merchantMapper;
+
+    private final Logger log = LoggerFactory.getLogger(MerchantUserService.class);
+
+    public MerchantResponse<MerchantInfoResponse> getAllAccessMerchantInfo(Pageable pageable) {
+        log.info("Fetching all accessible merchant info for the logged-in user");
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+        log.debug("UserName: {}", userName);
+
+        Page<MerchantInfoDto> merchantInfo = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName, pageable);
+        log.debug("Fetched {} merchant info records for user {}", merchantInfo.getTotalElements(), userName);
+
+        List<MerchantInfoResponse> merchantInfoResponseList = merchantMapper.mapMerchantInfoDTOListToResponseList(merchantInfo.getContent());
+        log.info("Successfully mapped merchant info to response");
+
+        return MerchantResponse.<MerchantInfoResponse>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .data(merchantInfoResponseList)
+                .count(merchantInfo.stream().count())
+                .total(merchantInfo.getTotalElements())
+                .build();
+    }
+
+    public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
+        log.info("Fetching merchant user access for the logged-in user");
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+        log.debug("UserName: {}", userName);
+
+        MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+        if (ObjectUtils.isEmpty(merchantUserDto)) {
+            log.error("No active merchant user found for username: {}", userName);
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE,
+                    MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName"));
+        }
+
+        log.debug("Merchant user details fetched for username: {}", userName);
+
+        List<UserMenuPermissionEntityResponse> userAccess = merchantUserDao.getUserMenuPermission(merchantUserDto.getId());
+        log.debug("Fetched {} menu permissions for user ID: {}", userAccess.size(), merchantUserDto.getId());
+
+        MerchantUserAccessResponse merchantUserAccessResponse = MerchantUserAccessResponse.builder()
+                .userInfo(merchantUserDto)
+                .userAccess(userAccess)
+                .build();
+
+        log.info("Successfully fetched merchant user access for {}", userName);
+
+        return MerchantResponse.<MerchantUserAccessResponse>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .data(List.of(merchantUserAccessResponse))
+                .build();
+    }
+
+    public MerchantResponse<UserProfileResponse> getMerchantUserProfile() {
+        log.info("Fetching profile for the logged-in user");
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+        log.debug("UserName: {}", userName);
+
+        UserProfileResponse userProfileResponse = merchantUserDao.getMerchantUserProfile(userName, UserStatus.ACTIVE);
+        if (userProfileResponse == null) {
+            log.error("No user profile found for username: {}", userName);
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE,
+                    MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserProfile"));
+        }
+
+        log.info("Successfully fetched user profile for {}", userName);
+
+        return MerchantResponse.<UserProfileResponse>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .data(List.of(userProfileResponse))
+                .count(1L)
+                .total(1L)
+                .build();
+    }
+
+    public MerchantResponse<MerchantUserResponse> createMerchantUser(MerchantUserRequest merchantUserRequest) {
+        log.info("Creating a new merchant user");
+        log.debug("MerchantUserRequest: {}", merchantUserRequest);
+
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, true);
+        log.info("Merchant user request validation passed");
+
+        MerchantResponse<MerchantUserResponse> response = saveMerchantUser(merchantUserRequest, false, false);
+        log.info("Merchant user created successfully with username: {}", merchantUserRequest.getUserName());
+
+        return response;
+    }
+
+    public MerchantResponse<MerchantUserResponse> updateMerchantUser(MerchantUserRequest merchantUserRequest) {
+        log.info("Updating merchant user details for username: {}", merchantUserRequest.getUserName());
+        log.debug("MerchantUserRequest: {}", merchantUserRequest);
+
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, false);
+        log.info("Merchant user request validation passed");
+
+        MerchantResponse<MerchantUserResponse> response = saveMerchantUser(merchantUserRequest, false, true);
+        log.info("Merchant user updated successfully for username: {}", merchantUserRequest.getUserName());
+
+        return response;
+    }
+
+    public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
+        log.info("Updating profile for merchant user: {}", merchantUserRequest.getUserName());
+        log.debug("MerchantUserRequest: {}", merchantUserRequest);
+
+        merchantUserValidator.validateMerchantUserProfile(merchantUserRequest);
+        log.info("Merchant user profile validation passed");
+
+        MerchantResponse<MerchantUserResponse> response = saveMerchantUser(merchantUserRequest, true, true);
+        log.info("Merchant user profile updated successfully for username: {}", merchantUserRequest.getUserName());
+
+        return response;
+    }
+
+    public MerchantResponse<MerchantUserResponse> updateUserStatus(MerchantUserStatusRequest merchantUserStatusRequest) {
+        log.info("Updating status for user: {}", merchantUserStatusRequest.getUserName());
+        log.debug("MerchantUserStatusRequest: {}", merchantUserStatusRequest);
+
+        merchantUserValidator.validateUpdateUserStatus(merchantUserStatusRequest);
+        log.info("Merchant user status validation passed");
+
+        MerchantUserResponse merchantUserResponse = merchantUserDao.updateUserStatusByUserName(
+                merchantUserStatusRequest.getUserName(),
+                merchantUserStatusRequest.getUserStatus(),
+                merchantUserStatusRequest.getRemark()
+        );
+
+        log.info("User status updated successfully for username: {}", merchantUserStatusRequest.getUserName());
+
+        return MerchantResponse.<MerchantUserResponse>builder()
+                .data(List.of(merchantUserResponse))
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .count(1L)
+                .total(1L)
+                .build();
+    }
+
+    private MerchantResponse<MerchantUserResponse> saveMerchantUser(MerchantUserRequest merchantUserRequest, boolean isProfileUpdate, boolean isUpdate) {
+        log.info("{} merchant user with username: {}", isUpdate ? "Updating" : "Creating", merchantUserRequest.getUserName());
+        log.debug("MerchantUserRequest: {}", merchantUserRequest);
+
+        MerchantUserDto merchantUserDto = merchantMapper.mapMerchantUserRequestToMerchantUserDto(merchantUserRequest);
+
+        if (isUpdate) {
+            merchantUserDto = merchantUserDao.updateMerchantUser(merchantUserDto, isProfileUpdate);
+            log.info("Merchant user updated in the database for username: {}", merchantUserRequest.getUserName());
+        } else {
+            merchantUserDto = merchantUserDao.saveMerchantUser(merchantUserDto, StringUtils.EMPTY);
+            log.info("Merchant user saved in the database for username: {}", merchantUserRequest.getUserName());
+        }
+
+        MerchantUserResponse merchantUserResponse = merchantMapper.mapMerchantUserDtoToResponse(merchantUserDto);
+        log.debug("MerchantUserResponse: {}", merchantUserResponse);
+
+        merchantUserResponse.setRoleName(merchantUserDao.getUserRoleName(merchantUserDto.getRole()));
+        log.info("Merchant user role resolved for username: {}", merchantUserRequest.getUserName());
+
+        return MerchantResponse.<MerchantUserResponse>builder()
+                .data(List.of(merchantUserResponse))
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .count(1L)
+                .build();
+    }
+
+    public MerchantResponse<UserRoleResponse> getUserRole() {
+        log.info("Fetching all user roles");
+        List<UserRoleResponse> userRoleResponse = merchantUserDao.getUserRoles();
+        log.debug("Fetched {} user roles", userRoleResponse.size());
+
+        log.info("Successfully fetched user roles");
+        return MerchantResponse.<UserRoleResponse>builder()
+                .data(userRoleResponse)
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .count((long) userRoleResponse.size())
+                .build();
+    }
+}
+
+
+
+
+
+
+
 public class MerchantUserService {
 
     private final MerchantInfoDao merchantInfoDao;
