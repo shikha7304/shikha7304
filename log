@@ -1,242 +1,204 @@
+package com.epay.merchant.service;
+
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.PasswordManagementDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.model.request.PasswordChangeRequest;
+import com.epay.merchant.model.request.PasswordResetRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import com.epay.merchant.validator.PasswordValidator;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static com.epay.merchant.util.EncryptionDecryptionUtil.decryptValue;
+import static com.epay.merchant.util.EncryptionDecryptionUtil.hashValue;
+
 /**
- * Service class to manage merchant user's menu permissions and assigned MIDs.
+ * Class Name: PasswordService
+ * *
+ * Description:
+ * *
+ * Author: Subhra Goswami
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
  */
-public class MerchantUserService {
+@Service
+@RequiredArgsConstructor
+public class PasswordService {
 
-    private final Logger log = LoggerFactory.getLogger(MerchantUserService.class);
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    private final PasswordValidator passwordValidator;
+    private final PasswordManagementDao passwordManagementDao;
+    private final MerchantConfig merchantConfig;
 
     /**
-     * Retrieves the assigned and unassigned menus for a specific user.
-     *
-     * @param userName The username of the merchant user.
-     * @return A response containing assigned and unassigned menus of the user.
+     * Method to handle the password change logic
+     * @param passwordChangeRequest PasswordChangeRequest
      */
-    public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
-        log.info("Starting to fetch assigned and unassigned menu access for user: {}", userName);
+    public MerchantResponse<String> changePassword(PasswordChangeRequest passwordChangeRequest) {
+        try {
+            log.info("Starting password change process for user: {}", passwordChangeRequest.getUserName());
+            // Step 1: Validate mandatory password reset request
+            passwordValidator.validateMandatoryFields(passwordChangeRequest);
+            log.info("Password change request validated successfully for mandatory field");
 
-        // Step 1: Get Requested User Information
-        log.info("Fetching requested user information for username: {}", userName);
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+            // Step 2 : Decrypt Password
+            passwordChangeRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getNewPassword()));
+            passwordChangeRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordChangeRequest.getConfirmPassword()));
+            log.info("Password change request decrypted successfully");
 
-        // Step 2: Validate the requested user with the logged-in user's parent data
-        log.info("Validating user mapping for username: {}", userName);
-        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+            // Step 3: Validate the password change request
+            validatePasswordChange(passwordChangeRequest);
+            log.info("Password change request validated successfully");
 
-        // Step 3: Get Assigned Menus
-        log.info("Fetching assigned menus for user ID: {}", merchantUser.getId());
-        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+            // Step 4: Update the password details in the database
+            passwordManagementDao.updatePasswordDetails(passwordChangeRequest.getUserName(), passwordChangeRequest.getNewPassword(), List.of(UserStatus.EXPIRED), RequestType.CHANGE_PASSWORD);
 
-        // Step 4: Get Unassigned Menus from Parent User
-        log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
-        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
-
-        // Step 5: Build MerchantUserAssignedMenusResponse
-        log.info("Building assigned and unassigned menu response for username: {}", userName);
-        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder()
-                .assignedMenus(assignedMenus)
-                .unAssignedMenus(unAssignedMenus)
-                .build();
-
-        // Step 6: Build MerchantResponse Object of MerchantUserAssignedMenusResponse
-        log.info("Successfully fetched assigned and unassigned menus for username: {}", userName);
-        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder()
-                .data(List.of(userAssignedMenusResponse))
-                .build();
+            // Step 5: Build and return the success response
+            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Changed Successfully")).count(1L).total(1L).build();
+        } catch (ValidationException e) {
+            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
+                throw e;
+            });
+            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")));
+            log.error("Password Change Request Validation Failed for PasswordChangeRequest {} ", passwordChangeRequest);
+            throw e;
+        } catch (MerchantException e) {
+            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getErrorMessage());
+            log.error("Password Change Request Failed for PasswordChangeRequest {} ", passwordChangeRequest);
+            throw e;
+        } catch (Exception e) {
+            handlePasswordFailure(passwordChangeRequest.getUserName(), RequestType.CHANGE_PASSWORD, e.getLocalizedMessage());
+            log.error("Password Change Request Failed for PasswordChangeRequest {} ", passwordChangeRequest);
+            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
+        }
     }
 
     /**
-     * Assigns a list of menus to a user while removing the previously assigned menus not in the new list.
-     *
-     * @param userName The username of the merchant user.
-     * @param menuList The list of menu codes to assign to the user.
-     * @return A response indicating successful assignment of menus.
+     * Method to handle the reset password logic
+     * @param passwordResetRequest PasswordResetRequest
      */
-    public MerchantResponse<String> assignedMenuAccessToUser(String userName, List<String> menuList) {
-        log.info("Starting to assign menu access for username: {}", userName);
+    public MerchantResponse<String> resetPassword(PasswordResetRequest passwordResetRequest) {
+        try {
+            log.info("Starting password reset process for user: {}", passwordResetRequest.getUserName());
+            // Step 1: Validate mandatory password reset request
+            passwordValidator.validateMandatoryFields(passwordResetRequest);
+            log.info("Password reset request validated successfully for mandatory field");
 
-        // Step 1: Get Requested User Information
-        log.info("Fetching requested user information for username: {}", userName);
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+            // Step 2 : Decrypt Password
+            passwordResetRequest.setNewPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getNewPassword()));
+            passwordResetRequest.setConfirmPassword(decryptValue(merchantConfig.getDecryptionKey(), passwordResetRequest.getConfirmPassword()));
+            log.info("Password reset request decrypted successfully");
 
-        // Step 2: Validate the menu assignment request
-        log.info("Validating menu mapping request for username: {}", userName);
-        merchantUserValidator.validateMenuPostMapping(userName, merchantUser, menuList);
+            // Step 3: Validate the password reset request
+            validatePasswordReset(passwordResetRequest);
+            log.info("Password reset request validated successfully");
 
-        // Step 3: Build Remove and New Assigned Menu List
-        log.info("Building lists of menus to remove and assign for user ID: {}", merchantUser.getId());
-        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
-        List<UUID> removedMenus = assignedMenus.stream()
-                .filter(assignedMenu -> !menuList.contains(assignedMenu.getMenuCode()))
-                .map(UserMenuPermissionEntityResponse::getMenuId)
-                .collect(Collectors.toList());
-        List<String> newMappedMenus = getNewMenuMappingList(menuList, assignedMenus);
+            // Step 4: Update the password details in the database
+            passwordManagementDao.updatePasswordDetails(passwordResetRequest.getUserName(), passwordResetRequest.getNewPassword(), List.of(UserStatus.ACTIVE), RequestType.RESET_PASSWORD);
 
-        // Step 4: Update the data in DB
-        log.info("Updating assigned menus in the database for user ID: {}", merchantUser.getId());
-        merchantUserDao.assignedMenus(newMappedMenus, removedMenus, merchantUser.getId());
-
-        // Step 5: Build MerchantResponse
-        log.info("Menu access assigned successfully for username: {}", userName);
-        return MerchantResponse.<String>builder()
-                .data(List.of("Menus are assigned successfully"))
-                .build();
+            // Step 5: Build and return the success response
+            return MerchantResponse.<String>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of("Password Reset Successfully")).count(1L).total(1L).build();
+        } catch (ValidationException e) {
+            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
+                throw e;
+            });
+            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")));
+            log.error("Password Reset Request Validation Failed for passwordResetRequest {} ", passwordResetRequest);
+            throw e;
+        } catch (MerchantException e) {
+            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getErrorMessage());
+            log.error("Password Reset Request Failed for passwordResetRequest {} ", passwordResetRequest);
+            throw e;
+        } catch (Exception e) {
+            handlePasswordFailure(passwordResetRequest.getUserName(), RequestType.RESET_PASSWORD, e.getLocalizedMessage());
+            log.error("Password Reset Request Failed for passwordResetRequest {} ", passwordResetRequest);
+            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE);
+        }
     }
 
     /**
-     * Retrieves the unassigned MIDs for a specified user by comparing the parent's
-     * accessible MIDs with the user's currently assigned MIDs.
-     *
-     * @param merchantUser Merchant user details.
-     * @param assignedMIds List of currently assigned MIDs for the user.
-     * @return List of unassigned MIDs available for the user.
+     * Method to validate the user status and create hash password and update in DB
+     * @param passwordChangeRequest PasswordChangeRequest
      */
-    private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
-        log.info("Fetching unassigned MIDs for user ID: {}", merchantUser.getId());
-        List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
+    private void validatePasswordChange(PasswordChangeRequest passwordChangeRequest) {
+        log.info("Validating password change request for user: {}", passwordChangeRequest.getUserName());
+        passwordValidator.validatePasswordValue(passwordChangeRequest.getNewPassword(), passwordChangeRequest.getConfirmPassword());
+        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordChangeRequest.getUserName(), List.of(UserStatus.EXPIRED));
+        String passwordHashValue = hashValue(passwordChangeRequest.getNewPassword());
+        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue, passwordChangeRequest.getOldPassword());
+    }
 
-        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
-            // Step 2: Get Parent Assigned MIDs List
-            log.info("Fetching parent assigned MIDs for parent user ID: {}", merchantUser.getParentUserId());
-            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
+    /**
+     * Method to validate the reset password logic
+     * @param passwordResetRequest PasswordResetRequest
+     */
+    private void validatePasswordReset(PasswordResetRequest passwordResetRequest) {
+        passwordValidator.validatePasswordValue(passwordResetRequest.getNewPassword(), passwordResetRequest.getConfirmPassword());
+        MerchantUserDto merchantUser = passwordManagementDao.findByUserNameOrEmailOrMobilePhoneAndStatus(passwordResetRequest.getUserName(), List.of(UserStatus.ACTIVE));
+        String passwordHashValue = hashValue(passwordResetRequest.getNewPassword());
+        passwordValidator.validatePasswordUpdateWithDB(merchantUser, passwordHashValue);
+    }
 
-            // Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
-            log.info("Removing assigned MIDs from parent MIDs for user ID: {}", merchantUser.getId());
-            parentAssignedMIds.removeAll(assignedMIds);
-            if (CollectionUtils.isNotEmpty(parentAssignedMIds)) {
-                unAssignedMerchantInfo.addAll(merchantMapper.mapMerchantInfoDTOListToResponseList(parentAssignedMIds));
+    /**
+     * Method to handle password failure logic
+     * @param userName String
+     * @param requestType RequestType
+     * @param e String
+     */
+    private void handlePasswordFailure(String userName, RequestType requestType, String e) {
+        if (StringUtils.isNotEmpty(userName)) {
+            try {
+                passwordManagementDao.saveAudit(userName, requestType, false, e);
+            } catch (MerchantException ex) {
+                log.error("Error in handlePasswordFailure for userName {}, RequestType {} ", userName, requestType, ex.getErrorMessages());
+            } catch (Exception ex) {
+                log.error("Error in handlePasswordFailure for userName {}, RequestType {} ", userName, requestType, ex.getMessage());
             }
         }
-        log.info("Successfully fetched unassigned MIDs for user ID: {}", merchantUser.getId());
-        return unAssignedMerchantInfo;
-    }
-
-    /**
-     * Retrieves the unassigned menus for a specified user by comparing the parent's
-     * accessible menus with the user's currently assigned menus.
-     *
-     * @param merchantUser Merchant user details.
-     * @param assignedMenus List of currently assigned menus for the user.
-     * @return List of unassigned menus available for the user.
-     */
-    private List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
-        log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
-        List<UserMenuPermissionEntityResponse> unAssignedMenus = new ArrayList<>();
-
-        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
-            // Step 2: Get Parent Assigned Menus List
-            log.info("Fetching parent assigned menus for parent user ID: {}", merchantUser.getParentUserId());
-            List<UserMenuPermissionEntityResponse> parentAssignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getParentUserId());
-
-            // Step 3: Remove Assigned Menus from Parent Assigned Menus List
-            log.info("Removing assigned menus from parent menus for user ID: {}", merchantUser.getId());
-            parentAssignedMenus.removeAll(assignedMenus);
-
-            for (UserMenuPermissionEntityResponse parentMenu : parentAssignedMenus) {
-                boolean isFound = assignedMenus.stream().anyMatch(assignedMenu -> assignedMenu.getMenuCode().equalsIgnoreCase(parentMenu.getMenuCode()));
-                if (!isFound) {
-                    unAssignedMenus.add(parentMenu);
-                }
-            }
-        }
-        log.info("Successfully fetched unassigned menus for user ID: {}", merchantUser.getId());
-        return unAssignedMenus;
     }
 }
 
 
+public class SecurityService implements AuthenticationUserService {
 
+    private final TokenDao tokenDao;
+    private final MerchantUserDao merchantUserDao;
 
-
-
-
-public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
-       
-        //Step 1  : Get Requested User Information
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
-
-        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
-        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
-
-        //Step 3  : Get Assigned Menus
-        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
-
-        //Step 4  : Get UnAssigned Menus from ParentUser
-        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
-
-        //Step 5  : Build MerchantUserAssignedMenusResponse
-        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder().assignedMenus(assignedMenus).unAssignedMenus(unAssignedMenus).build();
-
-        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMenusResponse
-        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder().data(List.of(userAssignedMenusResponse)).build();
-    }
-
-    public MerchantResponse<String> assignedMenuAccessToUser(String userName, List<String> menuList) {
-        //Step 1  : Get Requested User Information
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
-
-        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
-        merchantUserValidator.validateMenuPostMapping(userName, merchantUser, menuList);
-
-        //Step 3  : Build Remove and new Assigned Menu list from current data
-        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
-        List<UUID> removedMenus = assignedMenus.stream().filter(assignedMenu -> !menuList.contains(assignedMenu.getMenuCode())).map(UserMenuPermissionEntityResponse::getMenuId).collect(Collectors.toList());
-        List<String> newMappedMenus = getNewMenuMappingList(menuList, assignedMenus);
-
-        //Step 4 : Update the data in DB as per remove and new Menu list
-        merchantUserDao.assignedMenus(newMappedMenus, removedMenus, merchantUser.getId());
-
-        //Step 5 :  Build MerchantResponse
-        return MerchantResponse.<String>builder().data(List.of("Menus is assigned Successfully")).build();
-    }
 
     /**
-     * Retrieves the unassigned MIDs for a specified user by comparing the parent's
-     * accessible MIDs with the user's currently assigned MIDs.
-     *
-     * @param merchantUser Merchant user details.
-     * @param assignedMIds List of currently assigned MIDs for the user.
-     * @return List of unassigned MIDs available for the user.
+     This method will call the authenticateEntity to authenticate and get the userName by token
+     @param userName String
      */
-    private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
-        List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
-
-        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
-            //Step 2: Get Parent Assigned MIDs List
-            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
-
-            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
-            parentAssignedMIds.removeAll(assignedMIds);
-            if (CollectionUtils.isNotEmpty(parentAssignedMIds)) {
-                unAssignedMerchantInfo.addAll(merchantMapper.mapMerchantInfoDTOListToResponseList(parentAssignedMIds));
-            }
-        }
-        return unAssignedMerchantInfo;
+    @Override
+    public Optional<EPayPrincipal> loadUserByUserName(String userName) {
+        MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+        EPayPrincipal authenticateEntity = new EPayPrincipal();
+        authenticateEntity.setAuthenticationId(merchantUserDto.getUserName());
+        return Optional.of(authenticateEntity);
     }
-
-    private List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
-        List<UserMenuPermissionEntityResponse> unAssignedMerchantInfo = new ArrayList<>();
-
-        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
-            //Step 2: Get Parent Assigned MIDs List
-            List<UserMenuPermissionEntityResponse> parentAssignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getParentUserId());
-
-            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
-            parentAssignedMenus.removeAll(assignedMenus);
-            for (UserMenuPermissionEntityResponse p : parentAssignedMenus) {
-                boolean isFound = false;
-                for (UserMenuPermissionEntityResponse a : assignedMenus) {
-                    if (a.getMenuCode().equalsIgnoreCase(p.getMenuCode())) {
-                        isFound = true;
-                        break;
-                    }
-                }
-                if(!isFound) {
-                    unAssignedMerchantInfo.add(p);
-                }
-            }
-        }
-        return unAssignedMerchantInfo;
+    /**
+     * It will check if the token is valid or not
+     */
+    @Override
+    public boolean isTokenInValid(String token) {
+        return !tokenDao.isValidTokenExist(token);
     }
-
-
 }
