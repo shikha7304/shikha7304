@@ -230,3 +230,68 @@ VALUES (
     1715563200  -- Updated At (timestamp)
 );
 
+
+select * from merchant_info;
+
+INSERT INTO MERCHANT_INFO (
+   MERCHANT_ID, MID, MERCHANT_NAME, BUSINESS_NAME, BRAND_NAME, BUSINESS_CATEGORY, 
+   CATEGORY_CODE, ADDRESS_LINE1, ADDRESS_LINE2, STATE, CITY, COUNTRY, PINCODE, 
+   MOBILE_NUMBER, PHONE_NUMBER, PRIMARY_EMAIL, SECONDARY_EMAIL, MERCHANT_URL, STATUS, 
+   VALIDITY_START_TIME, VALIDITY_END_TIME, ONBOARDING_TIME, ENCRYPTED_ALGO, RM_NAME, 
+   BANK_CODE, BRANCH_CODE, GST_NUMBER, IS_CHARGEBACK_ALLOWED, AGGREGATOR_ID, 
+   NOTIFICATION, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT
+) VALUES (
+   SYS_GUID(), -- Automatically generates a unique RAW(16) ID
+   'MID67890', -- MID
+   'ABC Merchant', -- MERCHANT_NAME
+   'ABC Business Corp', -- BUSINESS_NAME
+   'ABC Premium', -- BRAND_NAME
+   'E-commerce', -- BUSINESS_CATEGORY
+   'CAT456', -- CATEGORY_CODE
+   '456 Market Street', -- ADDRESS_LINE1
+   'Suite 500', -- ADDRESS_LINE2
+   'Texas', -- STATE
+   'Dallas', -- CITY
+   'USA', -- COUNTRY
+   '75201', -- PINCODE
+   '9876543210', -- MOBILE_NUMBER
+   '1231231234', -- PHONE_NUMBER
+   'abc.merchant@email.com', -- PRIMARY_EMAIL
+   'abc.support@email.com', -- SECONDARY_EMAIL
+   'http://www.abcmerchant.com', -- MERCHANT_URL
+   'INACTIVE', -- STATUS
+   1715100000, -- VALIDITY_START_TIME (example UNIX timestamp)
+   1716200000, -- VALIDITY_END_TIME
+   1714100000, -- ONBOARDING_TIME
+   'SHA256', -- ENCRYPTED_ALGO
+   'Jane Smith', -- RM_NAME
+   'BANK456', -- BANK_CODE
+   'BRANCH002', -- BRANCH_CODE
+   'GSTIN987654321', -- GST_NUMBER
+   'N', -- IS_CHARGEBACK_ALLOWED (Y/N)
+   'AGG002', -- AGGREGATOR_ID
+   'Notifications Disabled', -- NOTIFICATION
+   'SystemUser', -- CREATED_BY
+   1714600000, -- CREATED_AT (example timestamp)
+   'SystemUser', -- UPDATED_BY
+   1714700000  -- UPDATED_AT (example timestamp)
+);
+
+Error at Command Line : 4 Column : 1
+Error report -
+SQL Error: ORA-00911: invalid character
+00911. 00000 -  "invalid character"
+*Cause:    The identifier name started with an ASCII character other than a
+           letter or a number. After the first character of the identifier
+           name, ASCII characters are allowed including "$", "#" and "_".
+           Identifiers enclosed in double quotation marks may contain any
+           character other than a double quotation. Alternate quotation
+           marks (q'#...#') cannot use spaces, tabs, or carriage returns as
+           delimiters. For all other contexts, consult the SQL Language
+           Reference Manual.
+*Action:   Check the Oracle identifier naming convention. If you are
+           attempting to provide a password in the IDENTIFIED BY clause of
+           a CREATE USER or ALTER USER statement, then it is recommended to
+           always enclose the password in double quotation marks because
+           characters other than the double quotation are then allowed.
+
