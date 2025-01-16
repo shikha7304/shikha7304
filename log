@@ -1,4 +1,63 @@
 /**
+ * API endpoint to validate merchant ID (MID) to check if it exists and is active.
+ * @param mId Merchant ID of the user to be validated.
+ * @return MerchantResponse containing the validation result (true if valid, false otherwise).
+ */
+@GetMapping("validate/{mId}")
+@Operation(summary = "API to validate MID", description = "MID Validation during Login")
+public MerchantResponse<Boolean> validateMid(@PathVariable String mId) {
+    log.info("Received request to validate MID: {}", mId);
+    MerchantResponse<Boolean> response = merchantUserService.validateMId(mId);
+    log.info("Validation result for MID {}: {}", mId, response.getData());
+    return response;
+}
+
+/**
+ * Service method to validate if the given MID exists and is active.
+ * @param mId Merchant ID to be validated.
+ * @return MerchantResponse containing the validation result (true if valid, false otherwise).
+ */
+public MerchantResponse<Boolean> validateMId(String mId) {
+    log.info("Starting validation for MID: {}", mId);
+    
+    // Step 1: Validate mandatory fields
+    log.info("Validating mandatory fields for MID: {}", mId);
+    merchantUserValidator.validateMid(mId);
+
+    // Step 2: Check if MID exists and is active
+    log.info("Checking if MID {} exists and is active", mId);
+    boolean isExists = merchantInfoDao.isExistsByMIdAndStatus(mId, MerchantStatus.ACTIVE.name());
+    
+    log.info("Completed validation for MID: {}. Exists and active: {}", mId, isExists);
+    return MerchantResponse.<Boolean>builder()
+            .status(MerchantConstant.RESPONSE_SUCCESS)
+            .data(List.of(isExists))
+            .build();
+}
+
+/**
+ * Validates the given MID to ensure it meets mandatory requirements.
+ * @param mId Merchant ID to be validated.
+ * @throws ValidationException if mandatory fields are missing or invalid.
+ */
+public void validateMid(String mId) {
+    log.info("Performing mandatory field validation for MID: {}", mId);
+    errorDtoList = new ArrayList<>();
+    checkMandatoryField(mId, VALID_MID);
+
+    if (!errorDtoList.isEmpty()) {
+        log.error("Validation errors found for MID: {}", mId);
+    }
+    
+    throwIfErrors();
+}
+
+
+
+
+
+
+/**
      * Validate MID to check if its exists and active
      * @param  mId of the merchant user.
      * @return MerchantResponse
