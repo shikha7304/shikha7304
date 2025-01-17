@@ -1,3 +1,43 @@
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class TokenController {
+
+    @GetMapping("/token")
+    @Operation(
+        summary = "Merchant User Token Validation",
+        description = "Validates the token provided in the Authorization header."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", content = @Content(mediaType = "application/json", schema = @Schema(implementation = String.class))),
+        @ApiResponse(responseCode = "400", description = "Bad Request - Authorization header missing or invalid")
+    })
+    public MerchantResponse<Void> validateToken(
+            @Parameter(
+                description = "Authorization token for the user",
+                required = true,
+                example = "Bearer eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjpbIkFETUlOIl0sInRva2VuVHlwZSI6IlVTRVIiLCJ1c2VybmFtZSI6InVzZXIxIiwic3ViIjoiZ2RqZmdza2pmaHNkamtoa2Zsa2Rsa3NkbGZrc2tmd3BlcmlwM2tlM2xlM2xtbGRybmtmbmhpZXdqZmVqZm9rZXBma2xka2ZvaWtmb2tvcmszZGtsd2VkbHN2Zmx2a2ZrdmxrZGZ2b2RrdmNkb2tybzMiLCJpYXQiOjE3MzU2MzYwNzAsImV4cCI6MTY5MjIzNDQ0Njg3MH0.WQFZwgDlMaJOZnPf7KnITRNQhdDbsX6UrbQkI43PCsM9Yqb4DT1k13x31HtNquBB-PWUAcOQIWKN-kuNi9WoAA"
+            )
+            @RequestHeader("Authorization") String token) {
+        log.info("Received request for Token Validation");
+        return MerchantResponse.<Void>builder()
+                .status(MerchantConstant.RESPONSE_SUCCESS)
+                .build();
+    }
+}
+
+
+
+
+
 @GetMapping("/token")
     @Operation(summary = "Merchant User Token Validation", description = "Validates the token provided in the authorization header.")
     @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = String.class))})})
@@ -10,6 +50,33 @@
         log.info("Received request for Token Validation");
         return MerchantResponse.<Void>builder().status(MerchantConstant.RESPONSE_SUCCESS).build();
     }
+
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .components(new Components()
+                        .addSecuritySchemes("BearerAuth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                        )
+                )
+                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"));
+    }
+}
+
+
 
 
 
