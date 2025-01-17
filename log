@@ -1,148 +1,23 @@
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RestController;
-
-@RestController
-public class TokenController {
-
-    @GetMapping("/token")
-    @Operation(
-        summary = "Merchant User Token Validation",
-        description = "Validates the token provided in the Authorization header."
-    )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", content = @Content(mediaType = "application/json", schema = @Schema(implementation = String.class))),
-        @ApiResponse(responseCode = "400", description = "Bad Request - Authorization header missing or invalid")
-    })
-    public MerchantResponse<Void> validateToken(
-            @Parameter(
-                description = "Authorization token for the user",
-                required = true,
-                example = "Bearer eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjpbIkFETUlOIl0sInRva2VuVHlwZSI6IlVTRVIiLCJ1c2VybmFtZSI6InVzZXIxIiwic3ViIjoiZ2RqZmdza2pmaHNkamtoa2Zsa2Rsa3NkbGZrc2tmd3BlcmlwM2tlM2xlM2xtbGRybmtmbmhpZXdqZmVqZm9rZXBma2xka2ZvaWtmb2tvcmszZGtsd2VkbHN2Zmx2a2ZrdmxrZGZ2b2RrdmNkb2tybzMiLCJpYXQiOjE3MzU2MzYwNzAsImV4cCI6MTY5MjIzNDQ0Njg3MH0.WQFZwgDlMaJOZnPf7KnITRNQhdDbsX6UrbQkI43PCsM9Yqb4DT1k13x31HtNquBB-PWUAcOQIWKN-kuNi9WoAA"
-            )
-            @RequestHeader("Authorization") String token) {
-        log.info("Received request for Token Validation");
-        return MerchantResponse.<Void>builder()
-                .status(MerchantConstant.RESPONSE_SUCCESS)
-                .build();
-    }
-}
-
-
-
-
-
-@GetMapping("/token")
-    @Operation(summary = "Merchant User Token Validation", description = "Validates the token provided in the authorization header.")
+ @PostMapping
+    @Operation(summary = "Create Captcha creation API.", description = "Create Captcha creation API for given Request Type")
     @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = String.class))})})
-    public MerchantResponse<Void> validateToken( @Parameter(
-            description = "Authorization token for the user",
-            required = true,
-            example = "eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjpbIkFETUlOIl0sInRva2VuVHlwZSI6IlVTRVIiLCJ1c2VybmFtZSI6InVzZXIxIiwic3ViIjoiZ2RqZmdza2pmaHNkamtoa2Zsa2Rsa3NkbGZrc2tmd3BlcmlwM2tlM2xlM2xtbGRybmtmbmhpZXdqZmVqZm9rZXBma2xka2ZvaWtmb2tvcmszZGtsd2VkbHN2Zmx2a2ZrdmxrZGZ2b2RrdmNkb2tybzMiLCJpYXQiOjE3MzU2MzYwNzAsImV4cCI6MTY5MjIzNDQ0Njg3MH0.WQFZwgDlMaJOZnPf7KnITRNQhdDbsX6UrbQkI43PCsM9Yqb4DT1k13x31HtNquBB-PWUAcOQIWKN-kuNi9WoAA"
-            ) @RequestHeader("Authorization") String token)
-    {
-        log.info("Received request for Token Validation");
-        return MerchantResponse.<Void>builder().status(MerchantConstant.RESPONSE_SUCCESS).build();
+    public MerchantResponse<CaptchaResponse> createCaptcha(@Parameter(description = "Request Type is mandatory", required = true) @RequestBody CaptchaRequest captchaRequest) {
+        logger.info("Received request to generate captcha with requestId: {}", captchaRequest.getRequestId());
+        return captchaService.generateCaptcha(captchaRequest);
     }
 
-import io.swagger.v3.oas.models.Components;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
-@Configuration
-public class SwaggerConfig {
 
-    @Bean
-    public OpenAPI customOpenAPI() {
-        return new OpenAPI()
-                .components(new Components()
-                        .addSecuritySchemes("BearerAuth",
-                                new SecurityScheme()
-                                        .type(SecurityScheme.Type.HTTP)
-                                        .scheme("bearer")
-                                        .bearerFormat("JWT")
-                        )
-                )
-                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"));
-    }
+@AllArgsConstructor
+@Getter
+@Setter
+@ToString
+@Builder
+@NoArgsConstructor
+public class CaptchaRequest {
+
+
+    private UUID requestId;
+    @Schema(name = "requestType", example = "LOGIN")
+    private String requestType;
 }
-
-
-
-
-
-Validates the token provided in the authorization header.
-
-Parameters
-Cancel
-Name	Description
-Authorization *
-string
-(header)
-Authorization token for the user
-
-eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjpbIkFETUlOIl0sInRva2VuVHlwZSI6IlVTRVIiLCJ1c2VybmFtZSI6InVzZXIxIiwic3ViIjoiZ2RqZmdza2pmaHNkamtoa2Zsa2Rsa3NkbGZrc2tmd3BlcmlwM2tlM2xlM2xtbGRybmtmbmhpZXdqZmVqZm9rZXBma2xka2ZvaWtmb2tvcmszZGtsd2VkbHN2Zmx2a2ZrdmxrZGZ2b2RrdmNkb2tybzMiLCJpYXQiOjE3MzU2MzYwNzAsImV4cCI6MTY5MjIzNDQ0Njg3MH0.WQFZwgDlMaJOZnPf7KnITRNQhdDbsX6UrbQkI43PCsM9Yqb4DT1k13x31HtNquBB-PWUAcOQIWKN-kuNi9WoAA
-Execute
-Clear
-Responses
-Curl
-
-curl -X 'GET' \
-  'http://localhost:9093/merchant/v1/validation/token' \
-  -H 'accept: application/json'
-Request URL
-http://localhost:9093/merchant/v1/validation/token
-Server response
-Code	Details
-400
-Undocumented
-Error: response status is 400
-
-Response body
-Download
-{
-  "status": 0,
-  "errors": [
-    {
-      "errorCode": "400",
-      "errorMessage": "Required request header 'Authorization' for method parameter type String is not present"
-    }
-  ]
-}
-Response headers
- access-control-allow-credentials: true 
- access-control-allow-headers: Authorization,Origin,X-Correlation-ID,Content-Type,Accept 
- access-control-allow-methods: POST,GET,PUT,OPTIONS 
- access-control-allow-origin: * 
- cache-control: no-cache,no-store,max-age=0,must-revalidate 
- connection: close 
- content-type: application/json 
- date: Fri,17 Jan 2025 10:44:14 GMT 
- expires: 0 
- pragma: no-cache 
- transfer-encoding: chunked 
- vary: Origin,Access-Control-Request-Method,Access-Control-Request-Headers 
- x-content-type-options: nosniff 
- x-frame-options: DENY 
- x-xss-protection: 0 
-Responses
-Code	Description	Links
-200	
-OK
-
-Media type
-
-application/json
-Controls Accept header.
-Example Value
-Schema
-"string"
