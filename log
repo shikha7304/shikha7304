@@ -1,3 +1,55 @@
+
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class MerchantController {
+
+    @GetMapping("/access/{userName}/{mId}")
+    @Operation(summary = "Merchant User MID Access validation for Logged-in User")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", content = @Content(mediaType = "application/json", schema = @Schema(implementation = String.class)))
+    })
+    public MerchantResponse<String> validateMIdAccess(
+            @Parameter(description = "Username of the logged-in user", required = true)
+            @PathVariable String userName,
+            @Parameter(description = "MID of the merchant to be validated", required = true)
+            @PathVariable String mId) {
+
+        log.info("Received request for MID access validation for user: {} and MID: {}", userName, mId);
+        return validationService.validateMId(userName, mId);
+    }
+
+    @GetMapping("/access/active/{userName}/{mId}")
+    @Operation(summary = "Merchant User MID Access validation and Check MID Active Status for Logged-in User")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", content = @Content(mediaType = "application/json", schema = @Schema(implementation = String.class)))
+    })
+    public MerchantResponse<String> validateActiveMIdAccess(
+            @Parameter(description = "Username of the logged-in user", required = true)
+            @PathVariable String userName,
+            @Parameter(description = "MID of the merchant to be validated and checked for active status", required = true)
+            @PathVariable String mId) {
+
+        log.info("Received request for MID access validation and active status check for user: {} and MID: {}", userName, mId);
+        return validationService.validateActiveMId(userName, mId);
+    }
+}
+
+
+
+
+
+
+
 /**
  * API endpoint to validate merchant ID (MID) to check if it exists and is active.
  * @param mId Merchant ID of the user to be validated.
