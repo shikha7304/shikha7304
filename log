@@ -1,4 +1,42 @@
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class TokenController {
+
     @GetMapping("/token")
+    @Operation(
+        summary = "Merchant User Token Validation",
+        description = "Validates the token provided in the Authorization header."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", content = @Content(mediaType = "application/json", schema = @Schema(implementation = String.class))),
+        @ApiResponse(responseCode = "401", description = "Unauthorized - Invalid or missing token"),
+        @ApiResponse(responseCode = "400", description = "Bad Request - Malformed token")
+    })
+    public MerchantResponse<Void> validateToken(
+            @Parameter(
+                description = "Authorization token for the user",
+                required = true,
+                example = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI..."
+            )
+            @RequestHeader("Authorization") String token) {
+        log.info("Received request for Token Validation with token: {}", token);
+        return MerchantResponse.<Void>builder().status(MerchantConstant.RESPONSE_SUCCESS).build();
+    }
+}
+
+
+
+
+@GetMapping("/token")
     @Operation(summary = "Merchant User Token Validation")
     @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = String.class))})})
     public MerchantResponse<Void> validateToken() {
