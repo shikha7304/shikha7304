@@ -1,4 +1,90 @@
-   @PostMapping(value = "/payment/{mId}")
+@RestController
+@RequestMapping("/api")
+@Tag(name = "Payment Page Theme Management", description = "APIs for managing Payment Page Themes")
+public class PaymentPageThemeController {
+
+    @PostMapping(value = "/payment/{mId}")
+    @Operation(
+        summary = "Save Payment Page Theme",
+        description = "This API is used to save the Payment Page Theme for a specific merchant."
+    )
+    @ApiResponses(
+        value = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "Successfully saved the Payment Page Theme",
+                content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MerchantResponse.class)
+                )
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+        }
+    )
+    public MerchantResponse<ThemeDto> savePaymentPageTheme(
+        @Parameter(description = "Logo file for the Payment Page Theme", required = false)
+        @RequestParam(value = "logo", required = false) MultipartFile logo,
+
+        @Parameter(description = "Primary color for the Payment Page Theme", required = true)
+        @RequestParam(value = "primaryColor", required = true) String primaryColor,
+
+        @Parameter(description = "Secondary color for the Payment Page Theme", required = true)
+        @RequestParam(value = "secondaryColor", required = true) String secondaryColor,
+
+        @Parameter(description = "Merchant ID for saving the Payment Page Theme", required = true)
+        @PathVariable String mId
+    ) {
+        log.info("Post endpoint {/payment} invoked for mId: {}", mId);
+        return themeService.createPaymentPageTheme(logo, mId, primaryColor, secondaryColor);
+    }
+
+    /**
+     * Update Payment Page Theme
+     */
+    @PutMapping(value = "/payment/{mId}")
+    @Operation(
+        summary = "Update Payment Page Theme",
+        description = "This API is used to update the Payment Page Theme for a specific merchant."
+    )
+    @ApiResponses(
+        value = {
+            @ApiResponse(
+                responseCode = "200",
+                description = "Successfully updated the Payment Page Theme",
+                content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = MerchantResponse.class)
+                )
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid input parameters"),
+            @ApiResponse(responseCode = "500", description = "Internal server error")
+        }
+    )
+    public MerchantResponse<ThemeDto> updatePaymentPageTheme(
+        @Parameter(description = "Logo file for the Payment Page Theme", required = false)
+        @RequestParam(value = "logo", required = false) MultipartFile logo,
+
+        @Parameter(description = "Primary color for the Payment Page Theme", required = true)
+        @RequestParam(value = "primaryColor", required = true) String primaryColor,
+
+        @Parameter(description = "Secondary color for the Payment Page Theme", required = true)
+        @RequestParam(value = "secondaryColor", required = true) String secondaryColor,
+
+        @Parameter(description = "Merchant ID for updating the Payment Page Theme", required = true)
+        @PathVariable String mId
+    ) {
+        log.info("Put endpoint {/payment} invoked for mId: {}", mId);
+        return themeService.updatePaymentPageTheme(logo, mId, primaryColor, secondaryColor);
+    }
+}
+
+
+
+
+
+
+@PostMapping(value = "/payment/{mId}")
     @Operation(summary = "Save Payment Page Theme ", description = "User will use this API to save Payment Page Theme.")
     public MerchantResponse<ThemeDto> savePaymentPageTheme(
             @RequestParam(value = "logo", required = false) MultipartFile logo,
