@@ -1,23 +1,9 @@
- @PostMapping
-    @Operation(summary = "Create Captcha creation API.", description = "Create Captcha creation API for given Request Type")
-    @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = String.class))})})
-    public MerchantResponse<CaptchaResponse> createCaptcha(@Parameter(description = "Request Type is mandatory", required = true) @RequestBody CaptchaRequest captchaRequest) {
-        logger.info("Received request to generate captcha with requestId: {}", captchaRequest.getRequestId());
-        return captchaService.generateCaptcha(captchaRequest);
+
+    public void save(ReportScheduleManagementDto reportScheduleManagementDto) {
+        UUID reportId = reportDao.getReportIdByName(reportScheduleManagementDto.getReportName());
+        reportScheduleManagementDto.setReportId(reportId);
+        reportScheduleManagementDto.setStatus(ReportScheduledStatus.TO_BE_START);
+        reportScheduleManagementDto.setNextScheduleExecutionTime(DateTimeUtils.calculateDateByFrequency(reportScheduleManagementDto.getFrequency(), reportScheduleManagementDto.getScheduleExecutionTime()));
+        ReportScheduleManagement reportScheduleManagement = mapper.mapDtoToEntity(reportScheduleManagementDto);
+        reportScheduleManagementRepository.save(reportScheduleManagement);
     }
-
-
-
-@AllArgsConstructor
-@Getter
-@Setter
-@ToString
-@Builder
-@NoArgsConstructor
-public class CaptchaRequest {
-
-
-    private UUID requestId;
-    @Schema(name = "requestType", example = "LOGIN")
-    private String requestType;
-}
