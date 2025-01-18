@@ -1,9 +1,27 @@
+   @PostMapping(value = "/payment/{mId}")
+    @Operation(summary = "Save Payment Page Theme ", description = "User will use this API to save Payment Page Theme.")
+    public MerchantResponse<ThemeDto> savePaymentPageTheme(
+            @RequestParam(value = "logo", required = false) MultipartFile logo,
+            String primaryColor, String secondaryColor,
+//            @RequestParam(defaultValue = "false", required = false) boolean defaultTheme,
+            @PathVariable String mId) {
+        log.info("Post endpoint {/payment} invoked for mId: {}", mId);
+        return themeService.createPaymentPageTheme(logo, mId, primaryColor, secondaryColor/*, defaultTheme*/);
+    }
 
-    public void save(ReportScheduleManagementDto reportScheduleManagementDto) {
-        UUID reportId = reportDao.getReportIdByName(reportScheduleManagementDto.getReportName());
-        reportScheduleManagementDto.setReportId(reportId);
-        reportScheduleManagementDto.setStatus(ReportScheduledStatus.TO_BE_START);
-        reportScheduleManagementDto.setNextScheduleExecutionTime(DateTimeUtils.calculateDateByFrequency(reportScheduleManagementDto.getFrequency(), reportScheduleManagementDto.getScheduleExecutionTime()));
-        ReportScheduleManagement reportScheduleManagement = mapper.mapDtoToEntity(reportScheduleManagementDto);
-        reportScheduleManagementRepository.save(reportScheduleManagement);
+    /**
+     * Update PaymentPageTheme
+     *
+     * @param logo           MultipartFile
+     * @param primaryColor   String
+     * @param secondaryColor String
+     * @param mId            String
+     * @return MerchantResponse
+     */
+    @PutMapping(value = "/payment/{mId}")
+    @Operation(summary = "Update Payment Page Theme ", description = "User will use this API to update Payment Page Theme.")
+    @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = MerchantResponse.class))})})
+    public MerchantResponse<ThemeDto> updatePaymentPageTheme(@RequestParam(value = "logo", required = false) MultipartFile logo, String primaryColor, String secondaryColor, @PathVariable String mId) {
+        log.info("Put endpoint {/payment} invoked for mId: {}", mId);
+        return themeService.updatePaymentPageTheme(logo, mId, primaryColor, secondaryColor);
     }
