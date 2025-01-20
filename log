@@ -1,3 +1,5 @@
+
+@Schema(name = "entityId", example = "ENTITY001")
 public class MerchantDto implements Serializable {
 
     @JsonProperty("mId")
