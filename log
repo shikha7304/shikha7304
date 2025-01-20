@@ -1,67 +1,78 @@
- @GetMapping("/users/{mid}")
-    @Operation(summary = "share the all users info for that merchant.", description = "share the all users info for that merchant.")
-    @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = MerchantResponse.class ))})})
-    public MerchantResponse<MerchantUserResponse> getAllUser(@Parameter(description = "Merchant ID for Retrieving all users for a merchant.", required = true) @PathVariable String mid, @Parameter(description = "Pagination details for the request", required = false) @PageableDefault(size = 50, page = 0) Pageable pageable) {
-        log.info("Received request to get userList based on mid: {}", mid);
-        return adminService.getAllMerchantUsers(mid, pageable);
-    }
+public class MerchantDto implements Serializable {
 
-
-http://localhost:9093/merchant/v1/admin/users/MID6?page=0&size=1&sort=%5B%22string%22%5D
-Server response
-Code	Details
-500
-Undocumented
-Error: response status is 500
-
-Response body
-Download
-{
-  "status": 0,
-  "errors": [
-    {
-      "errorCode": "3002",
-      "errorMessage": "Sort expression '[\"string\"]: ASC' must only contain property references or aliases used in the select clause; If you really want to use something other than that for sorting, please use JpaSort.unsafe(…)"
-    }
-  ]
+    @JsonProperty("mId")
+    private String mId;
+    private String merchantName;
+    private String businessName;
+    private String brandName;
+    private String businessCategory;
+    private String categoryCode;
+    private String addressline1;
+    private String addressline2;
+    private String state;
+    private String city;
+    private String country;
+    private String pincode;
+    private String mobileNumber;
+    private String phoneNumber;
+    private String primaryEmail;
+    private String secondaryEmail;
+    private String merchantUrl;
+    private MerchantStatus status;
+    private Long validityStartTime;
+    private Long validityEndTime;
+    private Long onboardingTime;
+    private String encryptedAlgo;
+    private String rmName;
+    private String bankCode;
+    private String branchCode;
+    private String gstNumber;
+    @JsonProperty("isChargebackAllowed")
+    private boolean isChargebackAllowed;
+    private String aggregator;
+    private String notification;
+    private String createdBy;
+    private Long createdAt;
+    private String updatedBy;
+    private Long updatedAt;
 }
-Response headers
- access-control-allow-credentials: true 
- access-control-allow-headers: Authorization,Origin,X-Correlation-ID,Content-Type,Accept 
- access-control-allow-methods: POST,GET,PUT,OPTIONS 
- access-control-allow-origin: * 
- cache-control: no-cache,no-store,max-age=0,must-revalidate 
- connection: close 
- content-type: application/json 
- date: Sat,18 Jan 2025 14:31:42 GMT 
- expires: 0 
- pragma: no-cache 
- transfer-encoding: chunked 
- vary: Origin,Access-Control-Request-Method,Access-Control-Request-Headers 
- x-content-type-options: nosniff 
- x-frame-options: DENY 
- x-xss-protection: 0 
-Responses
-Code	Description	Links
-200	
-OK
 
-Media type
-
-application/json
-Controls Accept header.
-Example Value
-Schema
-{
-  "status": 0,
-  "data": [
-    {}
-  ],
-  "count": 0,
-  "total": 0,
-  "errors": [
-    {
-      "errorCode": "string",
-      "errorMessage": "string"
-    }
-  ]
+public class MerchantUserDto implements Serializable {
+    @JsonIgnore
+    private UUID id;
+    @JsonIgnore
+    private UUID parentUserId;
+    @JsonIgnore
+    private int version;
+    private String userName;
+    private String firstName;
+    private String middleName;
+    private String lastName;
+    private String email;
+    private String primaryPhone;
+    private String secondaryPhone;
+    private String mobilePhone;
+    private String officePhone;
+    @JsonProperty("country")
+    private String countryCode;
+    @JsonProperty("state")
+    private String stateCode;
+    @JsonProperty("pincode")
+    private String pinCode;
+    private String city;
+    private String remark;
+    @JsonIgnore
+    private UUID role;
+    private String roleName;
+    private UserStatus status;
+    @JsonIgnore
+    private String password;
+    @JsonIgnore
+    private Long passwordExpiryTime;
+    @JsonIgnore
+    private int loginFailAttempt;
+    private String createdBy;
+    private Long createdAt;
+    private String updatedBy;
+    private Long updatedAt;
+}
