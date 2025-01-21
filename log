@@ -1,107 +1,21 @@
-
-@Service
-public class CsvFileGeneratorService {
-
-    public void generateAndWriteCsv(HttpServletResponse response, List<MerchantUserResponse> merchantUsers) {
-        response.setContentType("text/csv");
-        response.setHeader("Content-Disposition", "attachment; filename=merchant_users.csv");
-
-        try (PrintWriter writer = response.getWriter();
-             CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT
-                     .withHeader("User ID", "Name", "Email", "Mobile No", "User Type", "Creation Date", "Status"))) {
-
-            for (MerchantUserResponse user : merchantUsers) {
-                csvPrinter.printRecord(
-                        user.getUserId(),
-                        user.getName(),
-                        user.getEmail(),
-                        user.getMobileNo(),
-                        user.getUserType(),
-                        user.getCreationDate(),
-                        user.getStatus()
-                );
-            }
-
-            csvPrinter.flush();
-        } catch (IOException e) {
-            log.error("Error generating CSV file", e);
-            throw new RuntimeException("Error generating CSV file", e);
-        }
-    }
-}
-
-
-
-
-
-
-/**
-     * Searches for merchant users based on search inputs.
-     * @param merchantUserGetRequest Request body containing search filters and parameters.
-     * @return MerchantResponse containing MerchantUserResponse.
-     */
-    @PostMapping("/search")
-    @Operation(summary = "Search merchant user details")
+@PostMapping("/download/merchantUsers")
+    @Operation(summary = "Download merchant user details")
     @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = MerchantResponse.class ))})})
-    public MerchantResponse<MerchantUserResponse> searchMerchantUsers(@RequestBody MerchantUserGetRequest merchantUserGetRequest) {
-        log.info("Received request to search merchant user through : merchantUserGetRequest {}", merchantUserGetRequest);
-        return merchantUserService.searchMerchantUsers(merchantUserGetRequest);
+    public void downloadMerchantUsers(HttpServletResponse response) {
+        log.info("Received request to download merchant user through : merchantUserGetRequest {}", response);
+        merchantUserService.downloadMerchantUserReport(response);
+    }
+  public void downloadMerchantUserReport(HttpServletResponse response) {
+//        log.info("Fetching merchant users for download: {}", merchantUserGetRequest);
+        List<MerchantUser> merchantUserResponseList   = merchantUserDao.getMerchantUsers();
+
+
     }
 
- public MerchantResponse<MerchantUserResponse> searchMerchantUsers(MerchantUserGetRequest merchantUserGetRequest) {
-        log.info("Search merchant users Request {}", merchantUserGetRequest);
-        Page<MerchantUserDto> merchantUsers = merchantUserDao.findMerchantUsers(merchantUserGetRequest);
-        List<MerchantUserResponse> merchantUserResponseList = merchantMapper.mapMerchantUserDTOListToResponseList(merchantUsers.getContent());
-        log.info("Returning list of merchant users {}", merchantUserResponseList);
-        return MerchantResponse.<MerchantUserResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantUserResponseList).count(merchantUsers.stream().count()).total(merchantUsers.getTotalElements()).build();
-    }
- public Page<MerchantUserDto> findMerchantUsers(MerchantUserGetRequest merchantUserGetRequest) {
-        Pageable pageable = PageRequest.of(merchantUserGetRequest.getPage(), merchantUserGetRequest.getSize());
+public List<MerchantUser> getMerchantUsers() {
         String username = EPayIdentityUtil.getUserPrincipal().getUsername();
         MerchantUserDto merchantUser = getByUserName(username, UserStatus.ACTIVE);
-        Specification<MerchantUser> specification = MerchantUserSpecification.searchUsers(merchantUser.getId(), merchantUserGetRequest.getUserName(), merchantUserGetRequest.getName(), merchantUserGetRequest.getMobilePhone(), merchantUserGetRequest.getFromDate(), merchantUserGetRequest.getToDate(), merchantUserGetRequest.getStatus());
-        return merchantUserRepository.findAll(specification, pageable).map(this::convertEntityToDTO);
+        return merchantUserRepository.findAllById(merchantUser.getId());
     }
 
-
-
-
- public void downloadReport(HttpServletResponse httpResponse, String mId, DownloadRequest downloadRequest) {
-        reportManagementValidator.validateDownloadRequest(mId, downloadRequest);
-        ReportManagementDto reportManagementDto = reportManagementDao.getReportManagement(mId, downloadRequest.getFilePath(), ReportStatus.GENERATED);
-        fileGeneratorService.downloadFile(httpResponse, reportManagementDto.getFormat(), reportManagementDto.getFilePath());
-    }
-
-public void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat, String filePath) {
-        String contentType = switch (reportFormat) {
-            case CSV -> "text/csv";
-            case XLS -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            case PDF -> MediaType.APPLICATION_PDF_VALUE;
-        };
-        setFileResponse(httpResponse, contentType, FilenameUtils.getName(filePath), getFileContent(filePath));
-    }
- public ReportManagementDto getReportManagement(String mId, String filePath, ReportStatus reportStatus) {
-        return mapper.mapEntityToDto(reportManagementRepository.findBymIdAndFilePathAndStatus(mId, filePath, reportStatus));
-    }
-
-@AllArgsConstructor
-@Data
-@NoArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class ReportManagementDto {
-    @JsonIgnore
-    private UUID id;
-    @JsonIgnore
-    private UUID reportId;
-    private Report report;
-    private String mId;
-    private Long durationFromDate;
-    private Long durationToDate;
-    private ReportFormat format;
-    private ReportStatus status;
-    private String filePath;
-    private String remarks;
-    @JsonIgnore
-    private UUID scheduledId;
-
-}
+    List<MerchantUser> findAllById(@Param("Id") UUID ID);
