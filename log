@@ -1,4 +1,41 @@
- /**
+
+@Service
+public class CsvFileGeneratorService {
+
+    public void generateAndWriteCsv(HttpServletResponse response, List<MerchantUserResponse> merchantUsers) {
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=merchant_users.csv");
+
+        try (PrintWriter writer = response.getWriter();
+             CSVPrinter csvPrinter = new CSVPrinter(writer, CSVFormat.DEFAULT
+                     .withHeader("User ID", "Name", "Email", "Mobile No", "User Type", "Creation Date", "Status"))) {
+
+            for (MerchantUserResponse user : merchantUsers) {
+                csvPrinter.printRecord(
+                        user.getUserId(),
+                        user.getName(),
+                        user.getEmail(),
+                        user.getMobileNo(),
+                        user.getUserType(),
+                        user.getCreationDate(),
+                        user.getStatus()
+                );
+            }
+
+            csvPrinter.flush();
+        } catch (IOException e) {
+            log.error("Error generating CSV file", e);
+            throw new RuntimeException("Error generating CSV file", e);
+        }
+    }
+}
+
+
+
+
+
+
+/**
      * Searches for merchant users based on search inputs.
      * @param merchantUserGetRequest Request body containing search filters and parameters.
      * @return MerchantResponse containing MerchantUserResponse.
