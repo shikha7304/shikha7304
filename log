@@ -1,146 +1,8 @@
-    @PostMapping("/download/merchantUsers")
-    @Operation(summary = "Download merchant user details")
-    @ApiResponses({@ApiResponse(responseCode = "200", content = {@Content(mediaType = "application/json", schema = @Schema(implementation = MerchantResponse.class ))})})
-    public void downloadMerchantUsers(HttpServletResponse response) {
-        log.info("Received request to download merchant user through : merchantUserGetRequest {}", response);
-        merchantUserService.downloadMerchantUserReport(response);
-    }
-
- public void downloadMerchantUserReport(HttpServletResponse response) {
+  public void downloadMerchantUserReport(HttpServletResponse response) {
         log.info("Fetching merchant users for download: {}", response);
         List<MerchantUserDto> merchantUserResponseList   = merchantUserDao.getMerchantUsers();
+        FileGeneratorService.downloadFile(response, ReportFormat.CSV );
     }
-
-public List<MerchantUserDto> getMerchantUsers() {
-        String username = EPayIdentityUtil.getUserPrincipal().getUsername();
-        MerchantUserDto merchantUser = getByUserName(username, UserStatus.ACTIVE);
-        List<MerchantUser> merchantUsers=merchantUserRepository.findAllById(merchantUser.getId());
-        return merchantMapper.mapMerchantUserEntityListToDtoList(merchantUsers);
-    }
-
-List<MerchantUser> findAllById(@Param("Id") UUID ID);
-package com.epay.merchant.service;
-
-
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.ReportFormat;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.text.StringEscapeUtils;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.stereotype.Service;
-
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.text.MessageFormat;
-
-import static com.epay.merchant.util.enums.ReportFormat.*;
-
-/**
- * Class Name: FileDownloadService
- * *
- * Description: To define logic to download the file
- * *
- * Author: Bhoopendra Rajput
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-@Service
-@RequiredArgsConstructor
-public class FileDownloadService {
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-    private static int DEFAULT_BUFFER_SIZE = 8192;
-
-    /**
-     * Building content type and setting file in response.
-     *
-     * @param httpResponse HttpServletResponse
-     * @param reportFormat ReportFormat
-     * @param filePath     String
-     */
-    public void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat, String filePath) {
-        String contentType = switch (reportFormat) {
-            case CSV -> "text/csv";
-            case XLS -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            case PDF -> MediaType.APPLICATION_PDF_VALUE;
-        };
-        setFileResponse(httpResponse, contentType, FilenameUtils.getName(filePath), getFileContent(filePath));
-    }
-
-    /**
-     * TODO: Temp code: it will replace from S3 code.
-     *
-     * @param filePath String
-     * @return InputStream
-     */
-    private InputStream getFileContent(String filePath) {
-        try {
-            return new FileInputStream(filePath);
-        } catch (IOException e) {
-            log.error("Unable to read file {}", filePath, e);
-            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, filePath));
-        }
-    }
-
-    /**
-     * Setting file name, content type and content in http servlet response.
-     *
-     * @param response    HttpServletResponse
-     * @param contentType String
-     * @param fileName    String
-     * @param inputStream InputStream
-     */
-    protected void setFileResponse(HttpServletResponse response, String contentType, String fileName, InputStream inputStream) {
-        // Write the file content to the response output stream
-        try {
-            setHeader(response, contentType, fileName);
-            long length = IOUtils.copy(inputStream, response.getOutputStream(), DEFAULT_BUFFER_SIZE);
-            if (length <= Integer.MAX_VALUE) {
-                response.setContentLength((int) length);
-            } else {
-                response.addHeader("Content-Length", Long.toString(length));
-            }
-        } catch (IOException e) {
-            log.error("Error in setting file content in response", e);
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
-        } finally {
-            try {
-                response.getOutputStream().flush();
-                response.getOutputStream().close();
-            } catch (IOException e) {
-                log.error("An error occurred while closing connection in setFileResponse method: {}", e.getMessage());
-                throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "xlsx", e.getMessage()));
-            }
-        }
-    }
-
-    /**
-     * Set the response headers for a downloadable file
-     * @param response HttpServletResponse
-     * @param contentType String
-     * @param fileName String
-     */
-    private void setHeader(HttpServletResponse response, String contentType, String fileName) {
-        response.setContentType(contentType);
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, StringEscapeUtils.escapeJava("attachment;filename=" + fileName));
-        HttpHeaders headers = new HttpHeaders();
-        ContentDisposition contentDisposition = ContentDisposition.attachment().filename(fileName).build();
-        headers.setContentDisposition(contentDisposition);
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, headers.getFirst(HttpHeaders.CONTENT_DISPOSITION));
-    }
-}
-
 
 package com.epay.merchant.service;
 
@@ -169,6 +31,7 @@ import java.text.MessageFormat;
 import java.util.List;
 import java.util.Map;
 
+
 @Service
 @RequiredArgsConstructor
 public class FileGeneratorService {
@@ -178,15 +41,9 @@ public class FileGeneratorService {
     /**
      * Building content type and setting file in response.
      * @param httpResponse HttpServletResponse
-     * @param reportFormat ReportFormat
-     * @param filePath String
+     *
      */
-    public  void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat, String filePath) {
-        String contentType = switch (reportFormat) {
-            case CSV -> "text/csv";
-            case XLS -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            case PDF -> MediaType.APPLICATION_PDF_VALUE;
-        };
+    public  void downloadFile(HttpServletResponse httpResponse, ReportFormat.CSV,) {
         setFileResponse(httpResponse, contentType, FilenameUtils.getName(filePath), getFileContent(filePath));
     }
 
