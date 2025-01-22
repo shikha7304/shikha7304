@@ -1,15 +1,12 @@
-  public void downloadMerchantUserReport(HttpServletResponse response) {
-        log.info("Fetching merchant users for download: {}", response);
-        List<MerchantUserDto> merchantUserResponseList   = merchantUserDao.getMerchantUsers();
-        FileGeneratorService.downloadFile(response, ReportFormat.CSV );
-    }
-
 package com.epay.merchant.service;
 
 
+import com.epay.merchant.dto.MerchantUserDto;
 import com.epay.merchant.exception.MerchantException;
 import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.Report;
 import com.epay.merchant.util.enums.ReportFormat;
+import com.epay.merchant.util.file.generator.FileGenerator;
 import com.epay.merchant.util.file.model.FileModel;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
@@ -31,22 +28,31 @@ import java.text.MessageFormat;
 import java.util.List;
 import java.util.Map;
 
-
 @Service
 @RequiredArgsConstructor
 public class FileGeneratorService {
     private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
     private static int DEFAULT_BUFFER_SIZE = 8192;
+    private final   FileGenerator fileGenerator;
 
     /**
      * Building content type and setting file in response.
      * @param httpResponse HttpServletResponse
-     *
+     * @param reportFormat ReportFormat
      */
-    public  void downloadFile(HttpServletResponse httpResponse, ReportFormat.CSV,) {
-        setFileResponse(httpResponse, contentType, FilenameUtils.getName(filePath), getFileContent(filePath));
+    public  void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat,List<MerchantUserDto>merchantUserDtos) {
+        String contentType = "text/csv";
+        String filename="abc";
+        setFileResponse(httpResponse, contentType,filename,merchantUserDtos);
     }
 
+    public  FileModel buildFileModel(ReportFormat reportFormat, List<String> header, List<List<Object>> fileData, Map<String, Object> pdfFileData) {
+        return fileGenerator.buildFileModel(reportFormat, header, fileData, pdfFileData);
+    }
+
+    public File fileGenerator(ReportFormat reportFormat, Report report, String userName, FileModel fileModel) {
+        return fileGenerator.fileGenerator(reportFormat, report, userName, fileModel);
+    }
     /**
      * TODO: Temp code: it will replace from S3 code.
      * @param filePath String
@@ -66,24 +72,29 @@ public class FileGeneratorService {
      * @param response HttpServletResponse
      * @param contentType String
      * @param fileName String
-     * @param inputStream InputStream
      */
-    protected void setFileResponse(HttpServletResponse response, String contentType, String fileName, InputStream inputStream) {
+    protected void setFileResponse(HttpServletResponse response, String contentType, String fileName,  List<MerchantUserDto> merchantUserResponseList) {
         // Set the response headers for a downloadable file
         response.setContentType(contentType);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION,  StringEscapeUtils.escapeJava("attachment;filename=" + fileName));
         // Write the file content to the response output stream
         try {
-            HttpHeaders headers = new HttpHeaders();
-            ContentDisposition contentDisposition = ContentDisposition.attachment().filename(fileName).build();
-            headers.setContentDisposition(contentDisposition);
-            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, headers.getFirst(HttpHeaders.CONTENT_DISPOSITION));
-            long length = IOUtils.copy(inputStream, response.getOutputStream(), DEFAULT_BUFFER_SIZE);
-            if (length <= Integer.MAX_VALUE) {
-                response.setContentLength((int)length);
-            } else {
-                response.addHeader("Content-Length", Long.toString(length));
+            // Write CSV header
+            String header = "User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n";
+            response.getWriter().write(header);
+            // Fetch the data and write rows
+            for (MerchantUserDto user : merchantUserResponseList) {
+                String csvRow = user.getId() + ","
+                        + user.getUserName() + ","
+                        + user.getFirstName() + " " + user.getLastName()+ ","
+                        + user.getEmail() + ","
+                        + user.getMobilePhone() + ","
+                        + user.getRole() + ","
+                        + user.getCreatedAt() + ","
+                        + user.getStatus() + "\n";
+                response.getWriter().write(csvRow);
             }
+                response.getWriter().flush();
         } catch (IOException e) {
             log.error("Error in setting file content in response", e);
             throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
