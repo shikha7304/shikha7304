@@ -1,3 +1,40 @@
+
+protected void setFileResponse(HttpServletResponse response, String contentType, String fileName, List<MerchantUserDto> merchantUserResponseList) {
+    // Set the response headers for a downloadable file
+    response.setContentType(contentType);
+    response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + fileName);
+
+    try {
+        // Use the writer to write the CSV content
+        var writer = response.getWriter();
+        // Write CSV header
+        writer.write("User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n");
+
+        // Write each MerchantUserDto row as CSV
+        for (MerchantUserDto user : merchantUserResponseList) {
+            writer.write(user.getId() + ","
+                    + user.getUserName() + ","
+                    + user.getFirstName() + " " + user.getLastName() + ","
+                    + user.getEmail() + ","
+                    + user.getMobilePhone() + ","
+                    + user.getRole() + ","
+                    + user.getCreatedAt() + ","
+                    + user.getStatus() + "\n");
+        }
+
+        // Flush the writer to ensure all data is written
+        writer.flush();
+    } catch (IOException e) {
+        log.error("Error in setting file content in response", e);
+        throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE,
+                MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
+    }
+}
+
+
+
+
+
 package com.epay.merchant.service;
 
 
