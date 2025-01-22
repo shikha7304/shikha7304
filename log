@@ -1,40 +1,3 @@
-
-protected void setFileResponse(HttpServletResponse response, String contentType, String fileName, List<MerchantUserDto> merchantUserResponseList) {
-    // Set the response headers for a downloadable file
-    response.setContentType(contentType);
-    response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + fileName);
-
-    try {
-        // Use the writer to write the CSV content
-        var writer = response.getWriter();
-        // Write CSV header
-        writer.write("User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n");
-
-        // Write each MerchantUserDto row as CSV
-        for (MerchantUserDto user : merchantUserResponseList) {
-            writer.write(user.getId() + ","
-                    + user.getUserName() + ","
-                    + user.getFirstName() + " " + user.getLastName() + ","
-                    + user.getEmail() + ","
-                    + user.getMobilePhone() + ","
-                    + user.getRole() + ","
-                    + user.getCreatedAt() + ","
-                    + user.getStatus() + "\n");
-        }
-
-        // Flush the writer to ensure all data is written
-        writer.flush();
-    } catch (IOException e) {
-        log.error("Error in setting file content in response", e);
-        throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE,
-                MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
-    }
-}
-
-
-
-
-
 package com.epay.merchant.service;
 
 
@@ -49,12 +12,7 @@ import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.text.StringEscapeUtils;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -79,7 +37,7 @@ public class FileGeneratorService {
      */
     public  void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat,List<MerchantUserDto>merchantUserDtos) {
         String contentType = "text/csv";
-        String filename="abc";
+        String filename="merchantUser_List";
         setFileResponse(httpResponse, contentType,filename,merchantUserDtos);
     }
 
@@ -113,13 +71,18 @@ public class FileGeneratorService {
     protected void setFileResponse(HttpServletResponse response, String contentType, String fileName,  List<MerchantUserDto> merchantUserResponseList) {
         // Set the response headers for a downloadable file
         response.setContentType(contentType);
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,  StringEscapeUtils.escapeJava("attachment;filename=" + fileName));
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,"attachment;filename=" + fileName);
         // Write the file content to the response output stream
         try {
             // Write CSV header
-            String header = "User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n";
+            /*String header = "User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n";
             response.getWriter().write(header);
-            // Fetch the data and write rows
+            */// Fetch the data and write rows
+
+            //use the writer to write  the csv content
+            var writer = response.getWriter();
+            writer.write("User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n");
+
             for (MerchantUserDto user : merchantUserResponseList) {
                 String csvRow = user.getId() + ","
                         + user.getUserName() + ","
@@ -131,18 +94,19 @@ public class FileGeneratorService {
                         + user.getStatus() + "\n";
                 response.getWriter().write(csvRow);
             }
-                response.getWriter().flush();
-        } catch (IOException e) {
+                writer.flush();
+        }
+        catch (IOException e) {
             log.error("Error in setting file content in response", e);
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
-        } finally {
-            try {
-                response.getOutputStream().flush();
-                response.getOutputStream().close();
-            } catch (IOException e) {
-                log.error("An error occurred while closing connection in setFileResponse method: {}", e.getMessage());
-                throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "xlsx", e.getMessage()));
-            }
+            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE,
+                    MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
         }
     }
 }
+
+Postman response
+User ID,Name,Email,Mobile No,User Type,Creation Date,Status
+59d82f3c-90c2-44a0-94bb-486283b9dbe6,user6+,Shikha Sharma,test@domain.com,9600000000,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1737366742755,ACTIVE
+c47745c5-dd21-4e5e-ad67-c19842bfa349,user7,Shikha Sharma,test123@domain.com,9600900000,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1737381019135,ACTIVE
+56e1b334-7b97-4bd4-8537-d863bcee78d4,user8,Shikha Sharma,test321@domain.com,9600009000,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1737442028930,ACTIVE
+2b43a8b7-d1ff-529e-e063-7c86b10a9616,user5,Rathore Doe,user5@example.com,9149023567,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1672531200,ACTIVE
