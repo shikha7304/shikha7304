@@ -1,6 +1,100 @@
 package com.epay.merchant.dao;
 
 import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.List;
+
+/**
+ * Class Name: ValidationDao
+ * 
+ * Description:
+ * ValidationDao is responsible for performing validations on merchant user data and merchant IDs (MIDs).
+ * It provides methods to validate if a merchant user exists, if they are active, and if they have access to a specific MID.
+ * 
+ * Responsibilities:
+ * - Validate merchant user details based on username, email, or phone number.
+ * - Verify merchant user status.
+ * - Validate access to MIDs and active MIDs.
+ * 
+ * Author: Ravi Rathore
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved.
+ * 
+ * Version: 1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class ValidationDao {
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantInfoDao merchantInfoDao;
+
+    /**
+     * Validates if the merchant user exists in the database and is active.
+     * 
+     * @param userName the username, email, or phone number of the merchant user.
+     * @return true if the merchant user is valid and active.
+     * @throws MerchantException if the merchant user is not active or does not exist.
+     */
+    public boolean validatedMerchantUser(String userName) {
+        log.info("Validating merchant user with userName: {}", userName);
+        MerchantUserDto merchantUser = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(
+                userName, userName, userName, List.of(UserStatus.values()));
+        
+        log.info("Merchant user fetched with status: {}", merchantUser.getStatus());
+        if (!UserStatus.ACTIVE.equals(merchantUser.getStatus())) {
+            log.error("Invalid merchant user status: {}", merchantUser.getStatus());
+            throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE,
+                    MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, 
+                    "Merchant User", "User is " + merchantUser.getStatus()));
+        }
+        log.info("Merchant user validated successfully for userName: {}", userName);
+        return true;
+    }
+
+    /**
+     * Validates if the given user has access to the specified merchant ID (MID).
+     * 
+     * @param userName the username of the merchant user.
+     * @param mId      the merchant ID to validate access for.
+     * @return true if the user has access to the MID.
+     */
+    public boolean validatedMId(String userName, String mId) {
+        log.info("Validating MID access for userName: {} and mId: {}", userName, mId);
+        boolean isValid = merchantInfoDao.validateMIdAccess(userName, mId);
+        log.info("MID validation result for userName: {}, mId: {} is {}", userName, mId, isValid);
+        return isValid;
+    }
+
+    /**
+     * Validates if the given user has access to an active merchant ID (MID).
+     * 
+     * @param userName the username of the merchant user.
+     * @param mId      the merchant ID to validate.
+     * @return true if the user has access to the active MID.
+     */
+    public boolean validatedActiveMId(String userName, String mId) {
+        log.info("Validating active MID access for userName: {} and mId: {}", userName, mId);
+        boolean isActive = merchantInfoDao.validateActiveMIdAccess(userName, mId);
+        log.info("Active MID validation result for userName: {}, mId: {} is {}", userName, mId, isActive);
+        return isActive;
+    }
+}
+
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.MerchantUserDto;
 import com.epay.merchant.entity.MerchantUser;
 import com.epay.merchant.exception.MerchantException;
 import com.epay.merchant.repository.MerchantUserRepository;
