@@ -1,32 +1,270 @@
-INSERT INTO MERCHANT_USER (id, PARENT_USERID, USER_NAME, FIRST_NAME, MIDDLE_NAME, LAST_NAME, EMAIL, PRIMARY_PHONE, SECONDARY_PHONE, MOBILE_PHONE,
-OFFICE_PHONE, COUNTRY_CODE, STATE_CODE, PIN_CODE, CITY, ROLE_ID, STATUS, PASSWORD, LAST_PASSWORD_CHANGE, PASSWORD_EXPIRY_TIME, LOGIN_FAIL_ATTEMPT, 
-LAST_SUCCESS_LOGIN, LAST_FAIL_LOGIN, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT ) 
-VALUES
-('3140ea44245643e4a30b7c489882c120', SYS_GUID(), 'user9', 'Thomas', 'M.', 'O''Calloway',
-'user9@example.com', '96321478529', NULL, '96321478529', '96321478529', '+91', 'ST123', '123456', 'City Y', '2BD0C275B4E0F43FE0637C86B10A71AC',
-'ACTIVE', 'hashedPassword123', NULL, 1704067200, 0, NULL, NULL, 'Admin', 1672531200, 'Admin', 1672531200 );
+It seems like you're asking for the full class definitions for the mentioned classes. Here's the complete breakdown of the class definitions, including the methods and the logger where necessary:
 
+### 1. **LoginController** (Controller Layer)
+```java
+package com.epay.merchant.controller;
 
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.service.LoginService;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.swagger.v3.oas.annotations.Operation;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * LoginController is responsible for handling login requests.
+ */
+@RestController
+@RequestMapping("/login")
+@RequiredArgsConstructor
+public class LoginController {
 
+    private final LoginService loginService;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
 
-INSERT INTO MERCHANT_USER (id, PARENT_USERID, USER_NAME, FIRST_NAME, MIDDLE_NAME, LAST_NAME, EMAIL, PRIMARY_PHONE, SECONDARY_PHONE, MOBILE_PHONE,
-OFFICE_PHONE, COUNTRY_CODE, STATE_CODE, PIN_CODE, CITY, ROLE_ID, STATUS, PASSWORD, LAST_PASSWORD_CHANGE, PASSWORD_EXPIRY_TIME, LOGIN_FAIL_ATTEMPT, 
-LAST_SUCCESS_LOGIN, LAST_FAIL_LOGIN, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT ) 
-VALUES
-('3140ea44245643e4a30b7c489882c120', SYS_GUID(), 'user9', 'Thomas', 'M.', 'O'Calloway',
-'user9@example.com', '96321478529', NULL, '96321478529', '96321478529', '+91', 'ST123', '123456', 'City Y', '2BD0C275B4E0F43FE0637C86B10A71AC',
-'ACTIVE', 'hashedPassword123', NULL, 1704067200, 0, NULL, NULL, 'Admin', 1672531200, 'Admin', 1672531200 );
+    /**
+     * Handles merchant user login request by validating user credentials.
+     *
+     * @param merchantLoginRequest The login request with merchant credentials.
+     * @return MerchantResponse containing authentication status and data.
+     */
+    @PostMapping
+    @Operation(summary = "Merchant User Login API", description = "Merchant User Validation during Login via userName, Email or MobileNumber fields and captcha info")
+    public MerchantResponse<Object> login(@RequestBody MerchantLoginRequest merchantLoginRequest) {
+        log.info("Received request for merchant login {}", merchantLoginRequest);
+        return loginService.merchantLogin(merchantLoginRequest);
+    }
+}
+```
 
-Error starting at line : 37 in command -
-INSERT INTO MERCHANT_USER (id, PARENT_USERID, USER_NAME, FIRST_NAME, MIDDLE_NAME, LAST_NAME, EMAIL, PRIMARY_PHONE, SECONDARY_PHONE, MOBILE_PHONE,
-OFFICE_PHONE, COUNTRY_CODE, STATE_CODE, PIN_CODE, CITY, ROLE_ID, STATUS, PASSWORD, LAST_PASSWORD_CHANGE, PASSWORD_EXPIRY_TIME, LOGIN_FAIL_ATTEMPT, 
-LAST_SUCCESS_LOGIN, LAST_FAIL_LOGIN, CREATED_BY, CREATED_AT, UPDATED_BY, UPDATED_AT ) 
-VALUES
-('3140ea44245643e4a30b7c489882c120', SYS_GUID(), 'user9', 'Thomas', 'M.', 'O'Calloway',
-'user9@example.com', '96321478529', NULL, '96321478529', '96321478529', '+91', 'ST123', '123456', 'City Y', '2BD0C275B4E0F43FE0637C86B10A71AC',
-'ACTIVE', 'hashedPassword123', NULL, 1704067200, 0, NULL, NULL, 'Admin', 1672531200, 'Admin', 1672531200 );
-Error at Command Line : 41 Column : 78
-Error report -
-SQL Error: ORA-00917: missing comma
-00917. 00000 -  "missing comma"
+### 2. **LoginService** (Service Layer)
+```java
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.MerchantLoginValidator;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * LoginService is responsible for validating the merchant login.
+ */
+@Service
+@RequiredArgsConstructor
+public class LoginService {
+
+    private final MerchantLoginValidator merchantLoginValidator;
+    private final TokenService tokenService;
+    private final LoginDao loginDao;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    /**
+     * Validates the merchant login request.
+     *
+     * @param merchantLoginRequest The login validation request containing credentials and captcha.
+     * @return MerchantResponse containing the success or failure response.
+     */
+    public MerchantResponse<Object> merchantLogin(MerchantLoginRequest merchantLoginRequest) {
+        log.info("Started merchantLogin for userName: {}", merchantLoginRequest.getUserName());
+        try {
+            log.info("Validating Merchant login request for userName: {}", merchantLoginRequest.getUserName());
+            merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest);
+            loginDao.saveLoginAudit(merchantLoginRequest.getUserName(), RequestType.LOGIN, true, MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, "Logged In User Found"));
+            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, "Logged In User Found"))).build();
+        } catch (ValidationException e) {
+            log.error("Login Validation Failed for userName {} with error {}", merchantLoginRequest.getUserName(), e.getErrorMessages());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")), e.getErrorMessages());
+        } catch (MerchantException e) {
+            log.error("Login Failed for userName {} with error {}", merchantLoginRequest.getUserName(), e.getErrorMessage());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessage(), List.of(ErrorDto.builder().errorCode(e.getErrorCode()).errorMessage(e.getErrorMessage()).build()));
+        } catch (Exception e) {
+            log.error("Login Failed for userName {} due to {}", merchantLoginRequest.getUserName(), e.getMessage());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getLocalizedMessage(), List.of(ErrorDto.builder().errorCode(ErrorConstants.GENERIC_ERROR_CODE).errorMessage(e.getLocalizedMessage()).build()));
+        }
+    }
+
+    /**
+     * Handles the login failure process, such as logging and updating failure count.
+     *
+     * @param userName The username that failed to login.
+     * @param e        The error message.
+     * @param errors   The list of errors encountered.
+     * @return MerchantResponse indicating failure status.
+     */
+    private MerchantResponse<Object> handleLoginFailure(String userName, String e, List<ErrorDto> errors) {
+        log.info("Started handleLoginFailure for userName: {}", userName);
+        int loginFailureCount = 0;
+        if (StringUtils.isNotEmpty(userName)) {
+            try {
+                log.info("Updating login failure count for userName: {}", userName);
+                loginFailureCount = tokenService.updateMerchantUserForLogin(userName, false);
+                if (loginFailureCount > 0) {
+                    log.info("Saving login audit for userName: {}, loginFailureCount: {}", userName, loginFailureCount);
+                    loginDao.saveLoginAudit(userName, RequestType.LOGIN, false, e);
+                }
+            } catch (MerchantException ex) {
+                log.error("Error in handleLoginFailure for userName {} with error: {}", userName, ex.getErrorMessages());
+            } catch (Exception ex) {
+                log.error("Error in handleLoginFailure for userName {} with error: {}", userName, ex.getMessage());
+            }
+        }
+        if (loginFailureCount > 0) {
+            log.info("Returning response with login failure count: {} for userName: {}", loginFailureCount, userName);
+            return MerchantResponse.builder().data(List.of(Map.of("loginFailAttempt", loginFailureCount))).status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
+        } else {
+            log.info("Returning failure response for userName: {}", userName);
+            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
+        }
+    }
+}
+```
+
+### 3. **MerchantLoginValidator** (Validator Layer)
+```java
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dao.ValidationDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+
+import static com.epay.merchant.util.ErrorConstants.LOGIN_USER_NOT_FOUND_ERROR_MESSAGE;
+import static com.epay.merchant.util.ErrorConstants.NOT_FOUND_ERROR_CODE;
+
+/**
+ * MerchantLoginValidator is responsible for validating the merchant login request, including mandatory fields, user existence, and captcha.
+ */
+@Component
+@RequiredArgsConstructor
+public class MerchantLoginValidator extends BaseValidator {
+
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+    private final LoginDao loginDao;
+    private final ValidationDao validationDao;
+    private final CaptchaValidator captchaValidator;
+
+    /**
+     * Validates the merchant login request including mandatory fields, captcha validation, and user existence.
+     *
+     * @param merchantLoginRequest The login request to validate.
+     */
+    public void validateMerchantLoginRequest(MerchantLoginRequest merchantLoginRequest) {
+        logger.debug("Merchant validation start for {}", merchantLoginRequest);
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(merchantLoginRequest);
+        logger.debug("Mandatory validation completed for {}", merchantLoginRequest);
+        captchaValidator.captchaValueValidation(merchantLoginRequest.getRequestId(), merchantLoginRequest.getCaptchaText());
+        logger.debug("Captcha validation completed for {}", merchantLoginRequest);
+        isUserExist(merchantLoginRequest);
+        logger.debug("User existence check completed for {}", merchantLoginRequest);
+        validateUserStatus(merchantLoginRequest.getUserName());
+        logger.debug("User status check completed for {}", merchantLoginRequest);
+    }
+
+    private void validateUserStatus(String userName) {
+        validationDao.validatedMerchantUser(userName);
+    }
+
+    private void validateMandatoryFields(MerchantLoginRequest merchantLoginRequest) {
+        checkMandatoryField(merchantLoginRequest.getUserName(), "User Name");
+        checkMandatoryField(merchantLoginRequest.getPassword(), "Password");
+        checkMandatoryField(merchantLoginRequest.getCaptchaText(), "Captcha Text");
+        checkMandatoryField(String.valueOf(merchantLoginRequest.getRequestId()), "Captcha Request ID");
+        throwIfErrors();
+    }
+
+    private void isUserExist(MerchantLoginRequest merchantLoginRequest) {
+        boolean merchantUserExistsByUserNameAndPassword = loginDao.isMerchantUserExistsByUserNameAndPassword(merchantLoginRequest.getUserName(), merchantLoginRequest.getPassword());
+        if (!merchantUserExistsByUserNameAndPassword) {
+            errorDtoList.add(ErrorDto.builder().errorCode(NOT_FOUND_ERROR_CODE).errorMessage(LOGIN_USER_NOT_FOUND_ERROR_MESSAGE).build());
+        }
+        throwIfErrors();
+    }
+}
+```
+
+### 4. **LoginDao** (Data Access Layer)
+```java
+package com.epay.merchant.dao;
+
+import com.epay.merchant.entity.LoginPasswordAudit;
+import com.epay.merchant.repository.LoginPasswordAuditRepository;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * LoginDao is responsible for checking if a merchant user exists and saving login audit details.
+ */
+@Component
+@RequiredArgsConstructor
+public class LoginDao {
+
+    private final MerchantUserDao merchantUserDao;
+    private final LoginPasswordAuditRepository loginPasswordAuditRepository;
+
+    /**
+     * Checks if the merchant user exists by username and password.
+     *
+     * @param userName The username to check.
+     * @param password The password to check.
+     * @return True if the user exists, false otherwise.
+     */
+    public boolean isMerchantUserExistsByUserNameAndPassword(String userName, String password) {
+        return merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, password);
+    }
+
+    /**
+     * Saves the login audit details for the given username and request type.
+     *
+     * @param userName   The username for which the audit needs to be saved.
+     * @param requestType The request type (LOGIN).
+     * @param status      The login status (success or failure).
+     * @param reason      The reason for the status (e.g., error message).
+     */
+    public void saveLoginAudit(String userName, RequestType requestType, boolean status, String reason) {
+        UUID userId = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.values())).getId();
+        LoginPasswordAudit loginPasswordAudit = LoginPasswordAudit.builder().userId(userId).requestType(requestType).status(status).reason(reason).build();
+        loginPasswordAuditRepository.save(loginPasswordAudit);
+    }
+}
+```
+
+### Summary:
+1. **`LoginController`**: Handles HTTP requests and delegates to the service layer.
+2. **`LoginService`**: Handles business logic, including user validation, login attempt audit, and failure handling.
+3. **`MerchantLoginValidator`**: Validates the incoming login requests, including mandatory fields, captcha, and user existence.
+4. **`LoginDao`**: Interacts with the database to verify user existence and save login attempts.
+
+This covers all the classes and their complete definitions as per your requirement. Let me know if you need further clarifications!
