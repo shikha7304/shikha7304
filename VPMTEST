@@ -1,166 +1,655 @@
-Here is the revised code with class and method descriptions along with logger integration for the repositories:
+package com.epay.merchant.dao;
 
-1. LoginPasswordAuditRepository
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dto.MerchantEmailDto;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.dto.MerchantUserRoleDto;
+import com.epay.merchant.dto.SmsRequest;
+import com.epay.merchant.entity.*;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.model.request.MerchantUserGetRequest;
+import com.epay.merchant.model.response.MerchantUserResponse;
+import com.epay.merchant.model.response.UserMenuPermissionEntityResponse;
+import com.epay.merchant.model.response.UserProfileResponse;
+import com.epay.merchant.model.response.UserRoleResponse;
+import com.epay.merchant.repository.*;
+import com.epay.merchant.specification.MerchantUserSpecification;
+import com.epay.merchant.util.*;
+import com.epay.merchant.util.enums.EMailType;
+import com.epay.merchant.util.enums.MerchantUserRoles;
+import com.epay.merchant.util.enums.NotificationEntityType;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.transaction.Transactional;
+import jakarta.validation.constraints.NotNull;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Component;
 
-package com.epay.merchant.repository;
+import java.text.MessageFormat;
+import java.util.*;
+import java.util.stream.Collectors;
 
-import com.epay.merchant.entity.LoginPasswordAudit;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.UUID;
-
-/**
- * Class Name: LoginPasswordAuditRepository
- * 
- * Description:
- * Repository interface for performing CRUD operations on the `LoginPasswordAudit` entity.
- * This handles audit information related to user login and password activities.
- * 
- * Author: [Your Name]
- * 
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved.
- * 
- * Version: 1.0
- */
-@Repository
-public interface LoginPasswordAuditRepository extends JpaRepository<LoginPasswordAudit, UUID> {
-
-    Logger LOGGER = LoggerFactory.getLogger(LoginPasswordAuditRepository.class);
-
-    // Add custom query methods here if needed
-}
-
-2. TokenManagementRepository
-
-package com.epay.merchant.repository;
-
-import com.epay.merchant.entity.TokenManagement;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Optional;
-import java.util.UUID;
+import static org.apache.commons.collections4.CollectionUtils.isNotEmpty;
 
 /**
- * Class Name: TokenManagementRepository
- * 
+ * Class Name: MerchantUserDao
+ * *
  * Description:
- * Repository interface for managing `TokenManagement` entity records.
- * Provides methods for fetching and validating token data.
- * 
- * Author: [Your Name]
- * 
+ * *
+ * Author: Vikram Deshpande
+ * <p>
  * Copyright (c) 2024 [State Bank of India]
- * All rights reserved.
- * 
- * Version: 1.0
+ * All rights reserved
+ * *
+ * Version:1.0
  */
-@Repository
-public interface TokenManagementRepository extends JpaRepository<TokenManagement, UUID> {
+@Component
+@RequiredArgsConstructor
+public class MerchantUserDao {
 
-    Logger LOGGER = LoggerFactory.getLogger(TokenManagementRepository.class);
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
 
-    /**
-     * Find a valid token for a specific user ID.
-     *
-     * @param userId UUID of the user.
-     * @return Optional<TokenManagement> containing the token details if found.
-     */
-    @Query("FROM TokenManagement tm WHERE tm.userId = :userId AND tm.isValid = true")
-    Optional<TokenManagement> findTokenByUserIdAndIsValidTrue(@Param("userId") UUID userId);
+    private final MerchantUserRepository merchantUserRepository;
+    private final UserMenuPermissionRepository userMenuPermissionRepository;
+    private final DefaultUserPermissionRepository defaultUserPermissionRepository;
+    private final MenuInfoRepository menuInfoRepository;
+    private final MerchantEntityUserRepository merchantEntityUserRepository;
+    private final PermissionRepository permissionRepository;
+    private final MerchantUserRoleRepository merchantUserRoleRepository;
 
-    /**
-     * Check if a token exists and is valid.
-     *
-     * @param token String token to check.
-     * @return boolean indicating if the token exists and is valid.
-     */
-    boolean existsByTokenAndIsValidTrue(String token);
+    private final MerchantUserRoleDao merchantUserRoleDao;
+    private final NotificationDao notificationDao;
 
-    default void logTokenQuery(UUID userId) {
-        LOGGER.info("Querying valid token for user ID: {}", userId);
+    private final MerchantMapper merchantMapper;
+    private final MerchantConfig merchantConfig;
+    private final PasswordGenerator passwordGenerator;
+
+    private static NotificationManagement buildNotificationManagement(UUID userId) {
+        return NotificationManagement.builder().requestType("UserCreation").entityId(userId).entityName(NotificationEntityType.MERCHANT_USER).build();
     }
 
-    default void logTokenValidation(String token) {
-        LOGGER.info("Validating token: {}", token);
+    /**
+     * Get all the user data for given userName Email Or MobilePhone AndStatus
+     * @param userName String
+     * @param  email String
+     * @param phone  String
+     * @param userStatus UserStatus
+     * @return MerchantUserDto
+     */
+    public MerchantUserDto getByUserNameOrEmailOrMobilePhoneAndStatus(String userName, String email, String phone, List<UserStatus> userStatus) {
+        MerchantUser merchantUser = getMerchantUserByStatus(userName, email, phone, userStatus);
+        return merchantMapper.mapMerchantUserEntityToDto(merchantUser);
     }
+
+    /**
+     * Get all the user data for given userName
+     * @param userName String
+     * @param  userStatus  UserStatus
+     * @return MerchantUserDto
+     */
+    public MerchantUserDto getByUserName(String userName, UserStatus userStatus) {
+        MerchantUser merchantUser = getMerchantUserByStatus(userName, userName, userName, List.of(userStatus));
+        return merchantMapper.mapMerchantUserEntityToDto(merchantUser);
+    }
+
+    /**
+     * Check if the merchant user exists in DB
+     * @param userName String
+     * @param password  String
+     * @return boolean
+     */
+    public boolean isMerchantUserExistByUserNameAndPassword(String userName, String password) {
+        return merchantUserRepository.isMerchantUserExistsByUserNameOrEmailOrMobilePhoneAndPassword(userName, password);
+    }
+
+    /**
+     * List out the UserMenu permission for given userID
+     * @param userName String
+     * @param userStatus UserStatus
+     * @return UserProfileResponse
+     */
+    public UserProfileResponse getMerchantUserProfile(String userName, UserStatus userStatus) {
+        MerchantUser merchantUser = getMerchantUserByStatus(userName, userName, userName, List.of(userStatus));
+        UserProfileResponse userProfileResponse = merchantMapper.mapMerchantUserEntityToProfileResponse(merchantUser);
+        userProfileResponse.setRoleName(getRoleNameByRoleId(merchantUser.getRole()));
+        return userProfileResponse;
+    }
+
+    public String getRoleNameByRoleId(UUID roleId) {
+        Optional<MerchantUserRole> userRole = merchantUserRoleRepository.findById(roleId);
+        if (userRole.isPresent()) {
+            return userRole.get().getRole();
+        }
+        return StringUtils.EMPTY;
+    }
+
+    /**
+     * List out the UserMenu permission for given userID
+     * @param userId UUID
+     * @return List<UserMenuPermissionEntityDetails>
+     */
+    public List<UserMenuPermissionEntityResponse> getUserMenuPermission(UUID userId) {
+        return userMenuPermissionRepository.findUserMenuPermissionByUserId(userId);
+    }
+
+    /**
+     * Save merchant User detail in DB
+     * @param merchantUser MerchantUser
+     */
+    public MerchantUser save(MerchantUser merchantUser) {
+        return merchantUserRepository.save(merchantUser);
+    }
+
+    /**
+     * Check if username,email,phone exists and userStatus is active
+     * @param userName String
+     * @param email String
+     * @param phone String
+     * @param userStatus UserStatus
+     * @return boolean
+     */
+    public boolean existsByUserNameOrEmailOrMobilePhoneAndStatus(String userName, String email, String phone, UserStatus userStatus) {
+        return merchantUserRepository.existsByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, phone, userStatus);
+    }
+
+    public boolean existsByUserNameOrEmailOrMobilePhoneAndStatus(String userName, String email, String phone, List<UserStatus> userStatus) {
+        return merchantUserRepository.existsByUserNameOrEmailOrMobilePhoneAndStatus(userName, email, phone, userStatus);
+    }
+
+    public List<String> getUserNameByEmailOrMobilePhone(String email, String phone) {
+        return merchantUserRepository.getUserNameByEmailOrMobilePhone(email, phone);
+    }
+
+    /**
+     * Check if given user and role exists
+     * @param userName String
+     * @param roles List<String>
+     * @return boolean
+     */
+    public boolean existsByUserNameOrEmailOrMobilePhoneAndRoles(String userName, List<String> roles) {
+        return merchantUserRepository.existsByUserNameOrEmailOrMobilePhoneAndRoles(userName, roles);
+    }
+
+    /**
+     * Check if userId and role exists
+     * @param userId UUID
+     * @param roles List<String>
+     * @return boolean
+     */
+    public boolean existsByUserIdAndRoles(UUID userId, List<String> roles) {
+        return merchantUserRepository.existsByUserIdAndRoles(userId, roles);
+    }
+
+    /**
+     * Setting password details
+     *
+     * @param userName String
+     * @param  password String
+     * @param   userStatus  UserStatus
+     * @return MerchantUserDto
+     */
+    public MerchantUserDto updateMerchantUserForPassword(String userName, String password, List<UserStatus> userStatus) {
+        MerchantUser merchantUser = getMerchantUserByStatus(userName, userName, userName, userStatus);
+        merchantUser.setPassword(password);
+        merchantUser.setLastPasswordChange(DateTimeUtils.getCurrentTimeInMills());
+        merchantUser.setPasswordExpiryTime(DateTimeUtils.getFutureDateByMonth(merchantConfig.getPasswordExpiryMonths()));
+        merchantUser.setStatus(UserStatus.ACTIVE);
+        merchantUser = save(merchantUser);
+        return merchantMapper.mapMerchantUserEntityToDto(merchantUser);
+    }
+
+    /**
+     * Check if user have access to given MID
+     * @param mIds List<String>
+     * @param userName String
+     */
+    public boolean isUserHaveAccessToMId(String userName, List<String> mIds) {
+        boolean isAccessable = merchantUserRepository.isUserHaveAccessOfMerchant(mIds, userName);
+        if (!isAccessable) {
+            isAccessable = merchantUserRepository.isUserHaveAccessOfEntityMerchant(mIds, userName);
+        }
+        return isAccessable;
+    }
+
+    /**
+     * It will save the merchant user details in DB
+     * Assigned Default Menu permission to Merchant User and send notification
+     * @param merchantUserDto MerchantUserDto
+     * @param mIds String
+     */
+    @Transactional
+    public MerchantUserDto saveMerchantUser(MerchantUserDto merchantUserDto, String... mIds) {
+        //Step 1 : Password Generator
+        String password = passwordGenerator.generatePassword();
+
+        //Step 2 : Set Up Default Value
+        setMerchantUserDefaultValues(merchantUserDto, password);
+
+        //Step 3 : Save Merchant User
+        MerchantUser merchantUser = merchantMapper.mapMerchantUserDtoToEntity(merchantUserDto);
+        merchantUser = merchantUserRepository.save(merchantUser);
+
+        //Step 4 : Assigned MIDs to Merchant User
+        if (ArrayUtils.isNotEmpty(mIds)) {
+            assignMerchantToUser(merchantUser.getId(), mIds);
+        }
+
+        //Step 5 : Assigned Default Menu permission to Merchant User
+        createMerchantUserMenuPermissions(merchantUser.getId(), merchantUser.getRole());
+
+        //Step 5 : Send Notification
+        sendNotification(merchantUser, password);
+
+        return merchantMapper.mapMerchantUserEntityToDto(merchantUser);
+    }
+
+    public MerchantUserResponse updateUserStatusByUserName(String userName, UserStatus userStatus, String remarks) {
+        MerchantUser merchantUser = merchantUserRepository.findByUserNameOrEmailOrMobilePhone(userName, userName, userName).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName")));
+        if (merchantUser.getStatus().equals(userStatus)) {
+            throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "New Status", "Current and New Status are same"));
+        }
+        merchantUser.setRemark(MessageFormat.format(MerchantConstant.USER_STATUS_UPDATE, merchantUser.getStatus().name(), userStatus.name()) + "Remark:" + remarks);
+        merchantUser.setStatus(userStatus);
+        return merchantMapper.mapMerchantUserEntityToResponse(merchantUserRepository.save(merchantUser));
+    }
+
+    public boolean isMerchantUserExistForGivenParent(String userName, UUID parentId) {
+        return merchantUserRepository.existsByUserNameOrEmailOrMobilePhoneAndParentUserId(userName, userName, userName, parentId);
+    }
+
+    /**
+     * It will fetch the all user mapped to MID
+     * @param mId String
+     * @param pageable  Pageable
+     */
+    public Page<MerchantUserDto> getAllMerchantUsersByMId(String mId, Pageable pageable) {
+        return merchantUserRepository.findBymId(mId, pageable).map(this::convertEntityToDTO);
+    }
+
+    public MerchantUserDto updateMerchantUser(MerchantUserDto merchantUserDto, boolean isProfileUpdate) {
+        //Step 1 : Map DTO with Entity and Set DB ID
+        MerchantUser merchantUser = setMerchantUser(merchantUserDto, isProfileUpdate);
+
+        //Step 2 : Save Merchant User
+        merchantUser = merchantUserRepository.save(merchantUser);
+
+        return merchantMapper.mapMerchantUserEntityToDto(merchantUser);
+    }
+
+    public String getUserRoleName(UUID roleId) {
+        return merchantUserRoleDao.getRoleNameById(roleId).getRole();
+    }
+
+    public List<UserRoleResponse> getUserRoles() {
+        return merchantUserRoleDao.getAllUserRole();
+    }
+
+    /**
+     * Updates merchant user values for logged in user.
+     *
+     * @param merchantUserDto MerchantUserDto
+     * @param  loginStatus  boolean
+     */
+    public int updateMerchantUserForLogin(MerchantUserDto merchantUserDto, boolean loginStatus) {
+        MerchantUser merchantUser = merchantMapper.mapMerchantUserDtoToEntity(merchantUserDto);
+        if (loginStatus) {
+            merchantUser.setLastSuccessLogin(System.currentTimeMillis());
+            merchantUser.setLoginFailAttempt(0);
+        } else {
+            merchantUser.setLastFailLogin(System.currentTimeMillis());
+            merchantUser.setLoginFailAttempt(merchantUser.getLoginFailAttempt() + 1);
+        }
+        if (merchantUser.getLoginFailAttempt() > merchantConfig.getAllowedLoginFailAttempt() && !UserStatus.BLOCKED.equals(merchantUser.getStatus())) {
+            merchantUser.setStatus(UserStatus.BLOCKED);
+        }
+        merchantUserRepository.save(merchantUser);
+        return merchantUser.getLoginFailAttempt();
+    }
+
+    /**
+     * It will retrieve users by userID and userName passed
+     * @param userId UUID
+     * @param userName String
+     * @param entityId String
+     */
+    public void updateMerchantUserRole(UUID userId, String userName, String entityId) {
+        // Step 1 : Find Merchant User
+        MerchantUser merchantUser = retrieveUser(userId, userName);
+        // Step 2 : Role Alignment
+        Map<UUID, MerchantUserRoleDto> roleMap = merchantUserRoleDao.getUserRoleDtoMap();
+        MerchantUserRoleDto userRole = roleMap.get(merchantUser.getRole());
+        if (MerchantUserRoles.SUPER_ADMIN.name().equals(userRole.getRole())) {
+            // Step 3 : Super Admin Role Alignment
+            log.info("User is a SUPER_ADMIN. Updating entityId for userId: {}", merchantUser.getId());
+            merchantEntityUserRepository.updateEntityIdForUser(merchantUser.getId(), entityId);
+        } else if (MerchantUserRoles.ADMIN.name().equals(userRole.getRole())) {
+            // Step 3 : Move User to Admin to Super Admin Role
+            log.info("User is an ADMIN. Upgrading role and saving entityId for userId: {}", merchantUser.getId());
+            assignedMerchantUserToSuperAdminRole(merchantUser, entityId);
+        }
+    }
+
+    public Page<MerchantUserDto> findMerchantUsers(MerchantUserGetRequest merchantUserGetRequest) {
+        Pageable pageable = PageRequest.of(merchantUserGetRequest.getPage(), merchantUserGetRequest.getSize());
+        String username = EPayIdentityUtil.getUserPrincipal().getUsername();
+        MerchantUserDto merchantUser = getByUserName(username, UserStatus.ACTIVE);
+        Specification<MerchantUser> specification = MerchantUserSpecification.searchUsers(merchantUser.getId(), merchantUserGetRequest.getUserName(), merchantUserGetRequest.getName(), merchantUserGetRequest.getMobilePhone(), merchantUserGetRequest.getFromDate(), merchantUserGetRequest.getToDate(), merchantUserGetRequest.getStatus());
+        return merchantUserRepository.findAll(specification, pageable).map(this::convertEntityToDTO);
+    }
+
+    @Transactional
+    public void assignedMIds(List<String> newMappedMIds, List<String> removedMIds, UUID userId) {
+        if (isNotEmpty(removedMIds)) {
+            merchantEntityUserRepository.deleteByUserIdAndMIds(userId, removedMIds);
+        }
+        if (isNotEmpty(newMappedMIds)) {
+            assignMerchantToUser(userId, newMappedMIds.toArray(new String[0]));
+        }
+    }
+
+    @Transactional
+    public void assignedMenus(List<String> newMenuCode, List<UUID> removedMenus, UUID userId) {
+        if (isNotEmpty(removedMenus)) {
+            userMenuPermissionRepository.deleteByUserIdAndMenuCode(userId, removedMenus);
+        }
+        if (isNotEmpty(newMenuCode)) {
+            List<MenuInfo> newMenuInfo = menuInfoRepository.findByCodeIn(newMenuCode);
+            UUID[] newMenu = newMenuInfo.stream().map(MenuInfo::getId).toArray(UUID[]::new);
+            assignMenusToUser(userId, newMenu);
+        }
+    }
+
+    /**
+     * Retrieve users based on the provided userID and userName.
+     * @param userName String
+     * @param  userId  UUID
+     */
+    private MerchantUser retrieveUser(UUID userId, String userName) {
+        Optional<MerchantUser> merchantUser = ObjectUtils.isNotEmpty(userId) ? merchantUserRepository.findById(userId) : merchantUserRepository.findByUserNameOrEmailOrMobilePhoneAndStatusIn(userName, userName, userName, List.of(UserStatus.ACTIVE));
+        return merchantUser.orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Valid User")));
+    }
+
+    /**
+     * It will assign merchant to super admin role and ensure that it's not null
+     * @param merchantUser MerchantUser
+     * @param entityId String
+     */
+    @Transactional
+    private void assignedMerchantUserToSuperAdminRole(@NotNull MerchantUser merchantUser, String entityId) {
+        //Step 1 : Update User Role to Super Admin
+        UUID superAdminRoleId = merchantUserRoleDao.getSuperAdminRoleId();
+        merchantUser.setRole(superAdminRoleId);
+        merchantUser = merchantUserRepository.save(merchantUser);
+        //Step 2 : Remove assigned MIds
+        merchantEntityUserRepository.deleteByUserId(merchantUser.getId());
+        //Step 3 : Assigned Entity Ids to user
+        MerchantEntityUser newEntityUser = MerchantEntityUser.builder().userId(merchantUser.getId()).entityId(entityId).build();
+        merchantEntityUserRepository.save(newEntityUser);
+        //Step 4 : Update the menu permission as Super Admin
+        updateUserMenuPermission(merchantUser.getId(), superAdminRoleId);
+    }
+
+    /**
+     * This method will update the UserMenu permission
+     * @param roleId UUID
+     * @param  userId  UUID
+     */
+    private void updateUserMenuPermission(UUID userId, UUID roleId) {
+        if (!ObjectUtils.isEmpty(userMenuPermissionRepository.findByUserId(userId))) {
+            userMenuPermissionRepository.deleteByUserId(userId);
+        }
+        createMerchantUserMenuPermissions(userId, roleId);
+    }
+
+    /**
+     * Sending onboarding notification message via email and/or SMS.
+     * @param password String
+     * @param merchantUser  MerchantUser
+     */
+    private void sendNotification(MerchantUser merchantUser, String password) {
+        sendEmail(merchantUser);
+        sendSms(merchantUser);
+        sendPasswordEmail(merchantUser, password);
+    }
+
+    private void sendEmail(MerchantUser merchantUser) {
+        NotificationManagement notificationMgmt = buildNotificationManagement(merchantUser.getId());
+        MerchantEmailDto merchantEmailDto = MerchantEmailDto.builder().toEmail(merchantUser.getEmail()).content(EmailUtil.generateUserCreationContent(merchantUser)).eMailType(EMailType.USER_CREATION).build();
+        notificationDao.sendEmailNotification(merchantEmailDto, notificationMgmt);
+    }
+
+    private void sendSms(MerchantUser merchantUser) {
+        NotificationManagement notificationMgmt = buildNotificationManagement(merchantUser.getId());
+        SmsRequest smsRequest = SmsRequest.builder().mobileNumber(merchantUser.getMobilePhone()).message(MessageFormat.format(SmsUtil.USER_ONBOARDING, merchantUser.getUserName())).build();
+        notificationDao.sendSmsNotification(smsRequest, notificationMgmt);
+    }
+
+    private void sendPasswordEmail(MerchantUser merchantUser, String password) {
+        NotificationManagement notificationMgmt = buildNotificationManagement(merchantUser.getId());
+        MerchantEmailDto merchantEmailDto = MerchantEmailDto.builder().toEmail(merchantUser.getEmail()).content(EmailUtil.generateDefaultContent("Password has been generated successfully,Password is " + password)).eMailType(EMailType.PASSWORD_GENERATION).build();
+        notificationDao.sendEmailNotification(merchantEmailDto, notificationMgmt);
+    }
+
+    private void assignMenusToUser(UUID userId, UUID... menuIds) {
+        List<UserMenuPermission> userMenuPermission = Arrays.stream(menuIds).map(menuId -> UserMenuPermission.builder().userId(userId).menuId(menuId).permissionId(permissionRepository.findByPermission("3").getId()).build()).collect(Collectors.toList());
+        userMenuPermissionRepository.saveAll(userMenuPermission);
+    }
+
+    /**
+     * It will assign merchant to given userid and save it in DB
+     * @param userId String
+     * @param  mIds String
+     */
+    private void assignMerchantToUser(UUID userId, String... mIds) {
+        List<MerchantEntityUser> merchantEntityUsers = Arrays.stream(mIds).map(mId -> MerchantEntityUser.builder().userId(userId).mId(mId).build()).collect(Collectors.toList());
+        merchantEntityUserRepository.saveAll(merchantEntityUsers);
+    }
+
+    /**
+     * Retrieves merchant user details based on the provided username, phone, email or status
+     * @param userName String
+     * @param email String
+     * @param  phone String
+     * @param userStatus UserStatus
+     * @return MerchantUser
+     */
+    private MerchantUser getMerchantUserByStatus(String userName, String email, String phone, List<UserStatus> userStatus) {
+        return merchantUserRepository.findByUserNameOrEmailOrMobilePhoneAndStatusIn(userName, email, phone, userStatus).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, userStatus.toString() + " Merchant User")));
+    }
+
+    /**
+     * Convert MerchantUser entity to MerchantUserDTO
+     * @param merchantUser MerchantUser
+     * @return MerchantUserDto
+     */
+    private MerchantUserDto convertEntityToDTO(MerchantUser merchantUser) {
+        MerchantUserDto merchantUserDto = merchantMapper.mapMerchantUserEntityToDto(merchantUser);
+        merchantUserDto.setRoleName(merchantUserRepository.findUserRoleByUserId(merchantUser.getId()));
+        return merchantUserDto;
+    }
+
+    /**
+     * Creating Merchant User Permission for Admin User
+     *
+     * @param userId UUID
+     */
+    private void createMerchantUserMenuPermissions(final UUID userId, final UUID roleId) {
+        List<DefaultUserPermission> defaultUserPermissions = defaultUserPermissionRepository.findByRoleId(roleId);
+        List<MenuInfo> menuInfos = menuInfoRepository.findAll();
+        List<UserMenuPermission> userMenuPermissions = new ArrayList<>();
+        if (isNotEmpty(menuInfos)) {
+            menuInfos.forEach(menuInfo -> defaultUserPermissions.stream().filter(defaultUserPermission -> defaultUserPermission.getMenuId().equals(menuInfo.getId())).findFirst().ifPresent(defaultUserPermission -> userMenuPermissions.add(UserMenuPermission.builder().permissionId(defaultUserPermission.getPermissionId()).userId(userId).menuId(menuInfo.getId()).build())));
+            userMenuPermissionRepository.saveAll(userMenuPermissions);
+        }
+    }
+
+    /**
+     * Setting default values if it is not present in onboarding request.
+     * @param user MerchantUserDto
+     * @param password String
+     */
+    private void setMerchantUserDefaultValues(MerchantUserDto user, String password) {
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+        MerchantUser merchantUser = getMerchantUserByStatus(userName, userName, userName, List.of(UserStatus.ACTIVE));
+        if (ObjectUtils.isEmpty(user.getRole())) {
+            user.setRole(merchantUserRoleDao.getAdminRoleId().getId());
+        }
+        user.setParentUserId(merchantUser.getId());
+        user.setStatus(UserStatus.ACTIVE);
+        user.setPassword(EncryptionDecryptionUtil.hashValue(password));
+        user.setPasswordExpiryTime(DateTimeUtils.getFutureDateByMonth(merchantConfig.getPasswordExpiryMonths()));
+    }
+
+    private MerchantUser setMerchantUser(MerchantUserDto merchantUser, boolean isProfileUpdate) {
+        MerchantUser dbMerchantUser = merchantUserRepository.findByUserNameAndStatusIn(merchantUser.getUserName(), List.of(UserStatus.ACTIVE)).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Active Merchant User")));
+        dbMerchantUser.setFirstName(merchantUser.getFirstName());
+        dbMerchantUser.setMiddleName(merchantUser.getMiddleName());
+        dbMerchantUser.setLastName(merchantUser.getLastName());
+        dbMerchantUser.setEmail(merchantUser.getEmail());
+        dbMerchantUser.setPrimaryPhone(merchantUser.getPrimaryPhone());
+        dbMerchantUser.setSecondaryPhone(merchantUser.getSecondaryPhone());
+        dbMerchantUser.setMobilePhone(merchantUser.getMobilePhone());
+        dbMerchantUser.setCity(merchantUser.getCity());
+        dbMerchantUser.setCountryCode(merchantUser.getCountryCode());
+        dbMerchantUser.setStateCode(merchantUser.getStateCode());
+        dbMerchantUser.setPinCode(merchantUser.getPinCode());
+        if (!isProfileUpdate) {
+            dbMerchantUser.setRole(merchantUser.getRole());
+        }
+        return dbMerchantUser;
+    }
+
 }
 
-3. MerchantUserRoleRepository
+package com.epay.merchant.dao;
 
-package com.epay.merchant.repository;
-
-import com.epay.merchant.entity.MerchantUserRole;
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.entity.MerchantInfo;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.mapper.MerchantMapper;
+import com.epay.merchant.repository.MerchantInfoRepository;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.MerchantStatus;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Optional;
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
- * Class Name: MerchantUserRoleRepository
- * 
+ * Class Name: MerchantInfoDao
+ * *
  * Description:
- * Repository interface for managing `MerchantUserRole` entity records.
- * Provides methods to fetch roles by role name or ID.
- * 
- * Author: Bhoopendra Rajput
- * 
+ * *
+ * Author: Subhra Goswami
+ * <p>
  * Copyright (c) 2024 [State Bank of India]
- * All rights reserved.
- * 
- * Version: 1.0
+ * All rights reserved
+ * *
+ * Version:1.0
  */
 @Repository
-public interface MerchantUserRoleRepository extends JpaRepository<MerchantUserRole, UUID> {
+@RequiredArgsConstructor
+public class MerchantInfoDao {
 
-    Logger LOGGER = LoggerFactory.getLogger(MerchantUserRoleRepository.class);
-
-    /**
-     * Find a user role by its role name.
-     *
-     * @param role String name of the role.
-     * @return Optional<MerchantUserRole> containing the role details if found.
-     */
-    Optional<MerchantUserRole> findByRole(String role);
+    private final MerchantInfoRepository merchantInfoRepository;
+    private final MerchantMapper mapper;
 
     /**
-     * Find a user role by its ID.
-     *
-     * @param roleId UUID of the role.
-     * @return Optional<MerchantUserRole> containing the role details if found.
+     * It will fetch all the merchant info details
+     * @param pageable Pageable
+     * @return page of {@link MerchantInfoDto}
      */
-    Optional<MerchantUserRole> findById(UUID roleId);
-
-    default void logRoleQuery(String role) {
-        LOGGER.info("Searching for role: {}", role);
+    public Page<MerchantInfoDto> getAllMerchantInfo(Pageable pageable) {
+        return merchantInfoRepository.findAll(pageable).map(this::convertEntityToDTO);
     }
 
-    default void logRoleIdQuery(UUID roleId) {
-        LOGGER.info("Searching for role by ID: {}", roleId);
+    /**
+     * It will fetch all the merchant info details of super admin merchant user
+     * @param userName String
+     * @return page of {@link MerchantInfoDto}
+     */
+    public Page<MerchantInfoDto> getAllAccessMerchantInfoForMerchantUser(String userName, Pageable pageable) {
+        Page<MerchantInfo> merchantInfo = merchantInfoRepository.findAccessMerchantInfoForMerchantUser(userName, pageable);
+        if (CollectionUtils.isEmpty(merchantInfo.getContent())) {
+            merchantInfo = merchantInfoRepository.findAccessMerchantInfoForSuperAdminMerchantUser(userName, pageable);
+        }
+        return merchantInfo.map(this::convertEntityToDTO);
     }
+
+    public List<MerchantInfoDto> getAllAccessMerchantInfoForMerchantUser(String userName) {
+        List<MerchantInfo> merchantInfo = merchantInfoRepository.findAccessMerchantInfoForMerchantUser(userName);
+        if (CollectionUtils.isEmpty(merchantInfo)) {
+            merchantInfo = merchantInfoRepository.findAccessMerchantInfoForSuperAdminMerchantUser(userName);
+        }
+        return mapper.mapMerchantInfoEntityListToDtoList(merchantInfo);
+    }
+
+    public boolean validateMIdAccess(String userName, String mId) {
+        List<MerchantInfo> merchantInfo = merchantInfoRepository.findAccessMerchantInfoForMerchantUser(userName);
+        if (CollectionUtils.isEmpty(merchantInfo)) {
+            merchantInfo = merchantInfoRepository.findAccessMerchantInfoForSuperAdminMerchantUser(userName);
+        }
+        return merchantInfo.stream().anyMatch(merchant -> merchant.getMId().equals(mId));
+    }
+
+    public boolean validateActiveMIdAccess(String userName, String mId) {
+        List<MerchantInfo> merchantInfo = merchantInfoRepository.findAccessMerchantInfoForMerchantUser(userName);
+        if (CollectionUtils.isEmpty(merchantInfo)) {
+            merchantInfo = merchantInfoRepository.findAccessMerchantInfoForSuperAdminMerchantUser(userName);
+        }
+        return merchantInfo.stream().anyMatch(merchant -> merchant.getMId().equals(mId) && MerchantStatus.ACTIVE.name().equals(merchant.getStatus()));
+    }
+
+    public List<MerchantInfoDto> getAllAccessMerchantInfoForMerchantUser(UUID userId) {
+        List<MerchantInfo> merchantInfo = merchantInfoRepository.findAccessMerchantInfoForMerchantUser(userId);
+        if (CollectionUtils.isEmpty(merchantInfo)) {
+            merchantInfo = merchantInfoRepository.findAccessMerchantInfoForSuperAdminMerchantUser(userId);
+        }
+        return mapper.mapMerchantInfoEntityListToDtoList(merchantInfo);
+    }
+
+    public MerchantInfo getMerchantByMIdAndStatus(String mId, String status) {
+        return merchantInfoRepository.findBymIdAndStatus(mId, status).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "ActiveMId")));
+    }
+
+    /**
+     * Check if Mid and status exists
+     * @param mId String
+     * @param status  String
+     * @return boolean
+     */
+    public boolean isExistsByMIdAndStatus(String mId, String status) {
+        return merchantInfoRepository.existsBymIdAndStatus(mId, status);
+    }
+
+    public Map<String, String> getMIdsWithExpiryDays(List<String> validityEndTime) {
+        return merchantInfoRepository.findMIdsWithExpiryDays(validityEndTime).stream().collect(Collectors.toMap(obj -> obj[1].toString(), obj -> obj[0].toString()));
+    }
+
+
+    /**
+     * Convert MerchantInfo Entity to MerchantInfoDto
+     * @param merchantInfo MerchantInfo
+     * @return  MerchantInfoDto
+     */
+    private MerchantInfoDto convertEntityToDTO(MerchantInfo merchantInfo) {
+        return mapper.mapMerchantInfoEntityToMerchantInfoDto(merchantInfo);
+    }
+
 }
-
-Explanation of Updates:
-	1.	Logger Integration:
-	•	Added an org.slf4j.Logger instance in each repository.
-	•	Default methods are provided to log specific repository actions (e.g., querying tokens, validating tokens, searching roles).
-	2.	Class Descriptions:
-	•	Each class includes a detailed description of its purpose, including its role within the application.
-	3.	Method Descriptions:
-	•	Added JavaDoc comments to describe the purpose, parameters, and return values for each method.
-
-Let me know if any further refinements are required!
