@@ -1,3 +1,270 @@
+Below are the class definitions with proper descriptions for each class mentioned in your request:
+
+1. Entity Class: TokenManagement
+
+package com.epay.merchant.entity;
+
+import com.epay.merchant.util.enums.TokenStatus;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.util.UUID;
+
+/**
+ * Class Name: TokenManagement
+ * 
+ * Description: 
+ * This entity represents the `TOKEN_MANAGEMENT` table, 
+ * which stores information about tokens, their status, validity, 
+ * expiration time, and associated user details.
+ * 
+ * Author: [Your Name]
+ * 
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * 
+ * Version: 1.0
+ */
+@EqualsAndHashCode(callSuper = true)
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@Entity
+@Table(name = "TOKEN_MANAGEMENT")
+public class TokenManagement extends AuditEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Version
+    private int version;
+
+    private UUID userId;
+
+    private String token;
+
+    private Long tokenExpiryTime;
+
+    private boolean isValid;
+
+    @Enumerated(EnumType.STRING)
+    private TokenStatus tokenStatus;
+
+    private String remarks;
+}
+
+2. DTO Class: MerchantUserDto
+
+package com.epay.merchant.dto;
+
+import com.epay.merchant.util.enums.UserStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.io.Serializable;
+import java.util.UUID;
+
+/**
+ * Class Name: MerchantUserDto
+ * 
+ * Description: 
+ * This DTO is used to transfer merchant user data between 
+ * different layers of the application. It includes essential 
+ * user details like name, email, phone numbers, role, and status.
+ * 
+ * Author: Bhoopendra Rajput
+ * 
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * 
+ * Version: 1.0
+ */
+@Data
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@AllArgsConstructor
+@NoArgsConstructor
+public class MerchantUserDto implements Serializable {
+
+    @JsonIgnore
+    private UUID id;
+
+    @JsonIgnore
+    private UUID parentUserId;
+
+    @JsonIgnore
+    private int version;
+
+    private String userName;
+    private String firstName;
+    private String middleName;
+    private String lastName;
+    private String email;
+    private String primaryPhone;
+    private String secondaryPhone;
+    private String mobilePhone;
+    private String officePhone;
+
+    @JsonProperty("country")
+    private String countryCode;
+
+    @JsonProperty("state")
+    private String stateCode;
+
+    @JsonProperty("pincode")
+    private String pinCode;
+
+    private String city;
+    private String remark;
+
+    @JsonIgnore
+    private UUID role;
+
+    private String roleName;
+
+    private UserStatus status;
+
+    @JsonIgnore
+    private String password;
+
+    @JsonIgnore
+    private Long passwordExpiryTime;
+
+    @JsonIgnore
+    private int loginFailAttempt;
+
+    private String createdBy;
+    private Long createdAt;
+    private String updatedBy;
+    private Long updatedAt;
+}
+
+3. Configuration Class: MerchantConfig
+
+package com.epay.merchant.config;
+
+import lombok.Data;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Class Name: MerchantConfig
+ * 
+ * Description: 
+ * This configuration class manages application-level properties, including 
+ * settings for CAPTCHA, token expiry, user password policies, SMS gateway, 
+ * and email configurations.
+ * 
+ * Author: V1017903 (Bhushan Wadekar)
+ * 
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * 
+ * Version: 1.0
+ */
+@Data
+@Configuration
+public class MerchantConfig {
+
+    @Value("${kaptcha.border}")
+    private String border;
+
+    @Value("${kaptcha.textproducer.font.color}")
+    private String fontColor;
+
+    @Value("${kaptcha.textproducer.char.space}")
+    private String charSpace;
+
+    @Value("${kaptcha.image.width}")
+    private String imageWidth;
+
+    @Value("${kaptcha.image.height}")
+    private String imageHeight;
+
+    @Value("${kaptcha.textproducer.font.size}")
+    private String fontSize;
+
+    @Value("${kaptcha.textproducer.char.length}")
+    private String charLength;
+
+    @Value("${captcha.expiry.time.minutes:5}")
+    private int expiryTime;
+
+    @Value("${merchant.user.password.expiry.months:3}")
+    private int passwordExpiryMonths;
+
+    @Value("${otp.expiry.time.minutes:5}")
+    private int otpExpiryTime;
+
+    @Value("${merchant.encryption.key.expiry.time.days:30}")
+    private int encryptionKeyExpiryTime;
+
+    @Value("${merchant.api.key.expiry.time.month:12}")
+    private int apiKeyExpiryTime;
+
+    @Value("${merchant.user.password.key}")
+    private String decryptionKey;
+
+    @Value("${merchant.user.login.allowed.fail.attempt:3}")
+    private int allowedLoginFailAttempt;
+
+    @Value("${token.expiry.time.minutes:30}")
+    private int tokenExpiryTime;
+
+    @Value("${theme.logo.dimension.height:100}")
+    private int logoHeight;
+
+    @Value("${theme.logo.dimension.width:100}")
+    private int logoWidth;
+
+    @Value("${theme.logo.size.max:16KB}")
+    private String logoMaxSize;
+
+    @Value("${external.api.sms.gateway.base.path}")
+    private String smsBasePath;
+
+    @Value("${external.api.sms.gateway.user}")
+    private String smsUserName;
+
+    @Value("${external.api.sms.gateway.password}")
+    private String smsPassword;
+
+    @Value("${external.api.sms.body.content.type:text}")
+    private String smsContentType;
+
+    @Value("${external.api.sms.body.sender.id:SBIBNK}")
+    private String smsSenderId;
+
+    @Value("${external.api.sms.body.int.flag:0}")
+    private int smsIntFlag;
+
+    @Value("${external.api.sms.body.charging:0}")
+    private int smsCharging;
+
+    @Value("${external.api.sms.gateway.url:/bmg/sms/epaypgotpdom}")
+    private String smsURL;
+
+    @Value("${email.recipient:}")
+    private String recipient;
+
+    @Value("${email.from}")
+    private String from;
+}
+
+These descriptions should help document the purpose and usage of each class effectively. Let me know if further modifications are required!
+
+
+
+
+
+
 package com.epay.merchant.dao;
 
 import com.epay.merchant.dto.MerchantUserDto;
