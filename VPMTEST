@@ -1,3 +1,69 @@
+package com.epay.merchant.dao;
+
+import com.epay.merchant.entity.LoginPasswordAudit;
+import com.epay.merchant.repository.LoginPasswordAuditRepository;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * LoginDao is responsible for checking if a merchant user exists and saving login audit details.
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class LoginDao {
+
+    private final MerchantUserDao merchantUserDao;
+    private final LoginPasswordAuditRepository loginPasswordAuditRepository;
+
+    /**
+     * Checks if the merchant user exists by username and password.
+     *
+     * @param userName The username to check.
+     * @param password The password to check.
+     * @return True if the user exists, false otherwise.
+     */
+    public boolean isMerchantUserExistsByUserNameAndPassword(String userName, String password) {
+        log.info("Checking if merchant user exists for username: {}", userName);
+        boolean exists = merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, password);
+        log.info("Merchant user exists: {} for username: {}", exists, userName);
+        return exists;
+    }
+
+    /**
+     * Saves the login audit details for the given username and request type.
+     *
+     * @param userName   The username for which the audit needs to be saved.
+     * @param requestType The request type (LOGIN).
+     * @param status      The login status (success or failure).
+     * @param reason      The reason for the status (e.g., error message).
+     */
+    public void saveLoginAudit(String userName, RequestType requestType, boolean status, String reason) {
+        log.info("Saving login audit for username: {}, requestType: {}, status: {}, reason: {}", userName, requestType, status, reason);
+        try {
+            UUID userId = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.values())).getId();
+            LoginPasswordAudit loginPasswordAudit = LoginPasswordAudit.builder()
+                    .userId(userId)
+                    .requestType(requestType)
+                    .status(status)
+                    .reason(reason)
+                    .build();
+            loginPasswordAuditRepository.save(loginPasswordAudit);
+            log.info("Login audit saved successfully for userId: {}", userId);
+        } catch (Exception e) {
+            log.error("Error saving login audit for username: {}, reason: {}", userName, e.getMessage(), e);
+        }
+    }
+}
+
+
+
 It seems like you're asking for the full class definitions for the mentioned classes. Here's the complete breakdown of the class definitions, including the methods and the logger where necessary:
 
 ### 1. **LoginController** (Controller Layer)
