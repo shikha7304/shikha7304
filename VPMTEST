@@ -1,410 +1,63 @@
 package com.epay.merchant.dao;
 
 import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.entity.MerchantUserRole;
-import com.epay.merchant.entity.TokenManagement;
-import com.epay.merchant.repository.MerchantUserRoleRepository;
-import com.epay.merchant.repository.TokenManagementRepository;
-import com.epay.merchant.util.enums.TokenStatus;
+import com.epay.merchant.entity.MerchantUser;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.repository.MerchantUserRepository;
+import com.epay.merchant.util.EPayIdentityUtil;
+import com.epay.merchant.util.ErrorConstants;
 import com.epay.merchant.util.enums.UserStatus;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-/**
- * Class Name: TokenDao
- *
- * Description: 
- * TokenDao is responsible for interacting with the database to manage token-related operations 
- * and merchant user details. It acts as a Data Access Object (DAO) to handle CRUD operations 
- * for token management and user login status updates. The class encapsulates methods for 
- * saving tokens, retrieving user details, validating tokens, and managing token status.
- * 
- * Responsibilities:
- * - Save initial token details for a user during the token generation process.
- * - Validate the existence and status of a token.
- * - Retrieve merchant user details based on username, email, or mobile number.
- * - Manage token expiration, invalidation, and status updates.
- * - Fetch merchant user roles based on role IDs.
- * - Update merchant user login status in the database.
- * 
- * Author: Shikha Sharma
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * 
- * Version: 1.0
- */
-
-@Component
-@RequiredArgsConstructor
-public class TokenDao {
-
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-    private final TokenManagementRepository tokenManagementRepository;
-    private final MerchantUserDao merchantUserDao;
-    private final MerchantUserRoleRepository userRolesRepository;
-
-    public TokenManagement saveInitialToken(UUID userId) {
-        log.info("Saving initial token for userId: {}", userId);
-        return tokenManagementRepository.save(
-                TokenManagement.builder()
-                        .tokenStatus(TokenStatus.GENERATION_IN_PROGRESS)
-                        .userId(userId)
-                        .remarks(TokenStatus.GENERATION_IN_PROGRESS.remarks)
-                        .build()
-        );
-    }
-
-    public boolean isValidTokenExist(String token) {
-        log.info("Checking if valid token exists for token: {}", token);
-        boolean exists = tokenManagementRepository.existsByTokenAndIsValidTrue(token);
-        log.info("Valid token existence for token {}: {}", token, exists);
-        return exists;
-    }
-
-    public void saveToken(List<TokenManagement> tokenManagement) {
-        log.info("Saving token list with size: {}", tokenManagement.size());
-        tokenManagementRepository.saveAll(tokenManagement);
-        log.info("Token list saved successfully.");
-    }
-
-    public Optional<TokenManagement> findTokenByUserIdAndIsValidTrue(UUID userId) {
-        log.info("Finding valid token for userId: {}", userId);
-        Optional<TokenManagement> token = tokenManagementRepository.findTokenByUserIdAndIsValidTrue(userId);
-        log.info("Valid token found for userId {}: {}", userId, token.isPresent());
-        return token;
-    }
-
-    public MerchantUserDto getMerchantUserDto(String userName) {
-        log.info("Fetching merchant user details for userName: {}", userName);
-        MerchantUserDto merchantUser = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(
-                userName, userName, userName, List.of(UserStatus.ACTIVE));
-        log.info("Merchant user details fetched for userName: {}", userName);
-        return merchantUser;
-    }
-
-    public MerchantUserDto getMerchantUserDto(String userName, List<UserStatus> userStatus) {
-        log.info("Fetching merchant user details for userName: {}, with user status: {}", userName, userStatus);
-        MerchantUserDto merchantUser = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(
-                userName, userName, userName, userStatus);
-        log.info("Merchant user details fetched for userName: {}, with user status: {}", userName, userStatus);
-        return merchantUser;
-    }
-
-    public String getMerchantUserRoleName(UUID roleId) {
-        log.info("Fetching merchant user role name for roleId: {}", roleId);
-        String roleName = userRolesRepository.findById(roleId)
-                .map(MerchantUserRole::getRole)
-                .orElse("USER");
-        log.info("Role name fetched for roleId {}: {}", roleId, roleName);
-        return roleName;
-    }
-
-    public int updateMerchantUserForLogin(MerchantUserDto merchantUserDto, boolean loginStatus) {
-        log.info("Updating login status for userName: {}, loginStatus: {}", merchantUserDto.getUserName(), loginStatus);
-        int updateCount = merchantUserDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
-        log.info("Updated login status for userName: {}, rows affected: {}", merchantUserDto.getUserName(), updateCount);
-        return updateCount;
-    }
-}
-
-
-
-package com.epay.merchant.service;
-
-import com.epay.merchant.config.MerchantConfig;
-import com.epay.merchant.dao.TokenDao;
-import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.entity.TokenManagement;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.util.DateTimeUtils;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.TokenStatus;
-import com.epay.merchant.util.enums.UserStatus;
-import com.sbi.epay.authentication.model.UserTokenRequest;
-import com.sbi.epay.authentication.service.AuthenticationService;
-import com.sbi.epay.authentication.util.enums.TokenType;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Class Name: TokenService
+ * Class Name: ValidationDao
  * *
- * Description: TokenService is responsible for generating user token
+ * Description:
  * *
- * Author: Shikha Sharma
+ * Author: Ravi Rathore
  * <p>
  * Copyright (c) 2024 [State Bank of India]
  * All rights reserved
  * *
  * Version:1.0
  */
-
-@Service
-@RequiredArgsConstructor
-public class TokenService {
-
-    final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-    private final AuthenticationService authenticationService;
-    private final TokenDao tokenDao;
-    private final MerchantConfig merchantConfig;
-
-    /** @method
-     * This method will generate the user token and update the merchant user login status in DB
-     * @param userName String
-     * @return Token String
-     */
-    @Transactional
-    public String generateUserToken(String userName) {
-        log.info("Starting token generation for user: {}", userName);
-        // Step 1 : Get the User
-        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
-
-        // Step 2 : Save Initial Token Request
-        TokenManagement tokenManagement = tokenDao.saveInitialToken(merchantUserDto.getId());
-
-        // Step 3 : Generate User Token Request
-        String token = generateUserToken(tokenManagement, merchantUserDto);
-
-        //Step 4 : Update Merchant User Login Status
-        tokenDao.updateMerchantUserForLogin(merchantUserDto, true);
-        log.info("Updated login status to active for user: {}", userName);
-        return token;
-
-    }
-
-    /**
-     *This method will update the login status detail for a given userName
-     * @param userName String
-     * @param loginStatus  boolean
-     */
-    public int updateMerchantUserForLogin(String userName, boolean loginStatus) {
-        log.info("Updating login status for user: {}, loginStatus: {}", userName, loginStatus);
-        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName, List.of(UserStatus.values()));
-        if(UserStatus.ACTIVE.equals(merchantUserDto.getStatus())) {
-            log.info("User is active. Updating login status in DB for user: {}", userName);
-            return tokenDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
-        }
-        log.info("User is not active. Skipping login status update for user: {}", userName);
-        return 0;
-    }
-
-    /**
-     * Invalidates the token for the specified username.
-     * @param userName Username of the merchant user.
-     * @return Integer representing success or failure status.
-     */
-    public int invalidateUserToken(String userName) {
-        log.info("Invalidating token for user: {}", userName);
-        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
-        Optional<TokenManagement> validToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUserDto.getId());
-        if (validToken.isPresent()) {
-            TokenManagement tokenManagement = validToken.get();
-            tokenManagement.setValid(false);
-            tokenDao.saveToken(List.of(tokenManagement));
-            log.info("Successfully invalidated token for user: {}", userName);
-            return MerchantConstant.RESPONSE_SUCCESS;
-        }
-        log.info("No valid token found to invalidate for user: {}", userName);
-        return MerchantConstant.RESPONSE_FAILURE;
-    }
-
-    /**
-     * It will call the authentication utility to generate the token
-     * @param tokenManagement TokenManagement
-     * @param merchantUser MerchantUserDto
-     * @return  Token
-     */
-    @Transactional
-    private String generateUserToken(TokenManagement tokenManagement, MerchantUserDto merchantUser) {
-        try {
-            log.info("Going to call authentication utility to generate the token for userId: {}", merchantUser.getUserName());
-            List<TokenManagement> tokenManagements = new ArrayList<>();
-            updateExistingToken(merchantUser, tokenManagements);
-            String token = generateUserToken(tokenManagement, merchantUser, tokenManagements);
-            tokenDao.saveToken(tokenManagements);
-            log.info("Token successfully generated for user: {}", merchantUser.getUserName());
-            return token;
-        } catch (Exception e) {
-            // Handle token generation failure
-            log.error("Token generation failed for userId: {}, Exception: {}", merchantUser.getUserName(), e.getMessage());
-            tokenManagement.setTokenStatus(TokenStatus.GENERATION_FAIL);
-            tokenManagement.setRemarks(TokenStatus.GENERATION_FAIL.remarks + " : " + e.getMessage());
-            tokenDao.saveToken(List.of(tokenManagement));
-            tokenDao.updateMerchantUserForLogin(merchantUser, false);
-            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "Token"));
-        }
-    }
-
-    /**
-     * This method generates the user token for a given user
-     * @param merchantUser MerchantUserDto
-     * @param tokenManagement TokenManagement
-     * @param tokenManagements List<TokenManagement>
-     * @return  token
-     */
-    private String generateUserToken(TokenManagement tokenManagement, MerchantUserDto merchantUser, List<TokenManagement> tokenManagements) {
-        String token = authenticationService.generateUserToken(buildUserTokenRequest(merchantUser));
-        tokenManagement.setToken(token);
-        tokenManagement.setTokenStatus(TokenStatus.GENERATED);
-        tokenManagement.setTokenExpiryTime(DateTimeUtils.addMinutes(merchantConfig.getTokenExpiryTime() - 1));
-        tokenManagement.setValid(true);
-        tokenManagement.setRemarks(TokenStatus.GENERATED.remarks);
-        tokenManagements.add(tokenManagement);
-        return token;
-    }
-
-    /**
-     * This method checks if a valid token exists for a given user
-     * if a valid token is found, its invalidate the existing token by updating its status expiry time and validity.
-     * The updated token is then added to the provided token management list.
-     * @param merchantUser MerchantUserDto
-     * @param tokenManagements List<TokenManagement>
-     */
-    private void updateExistingToken(MerchantUserDto merchantUser, List<TokenManagement> tokenManagements) {
-        log.info("Checking for existing valid tokens for user: {}", merchantUser.getUserName());
-        Optional<TokenManagement> existingToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUser.getId());
-        if (existingToken.isPresent()) {
-            TokenManagement existingTokenData = existingToken.get();
-            existingTokenData.setTokenStatus(TokenStatus.INVALIDATED);
-            existingTokenData.setTokenExpiryTime(System.currentTimeMillis());
-            existingTokenData.setValid(false);
-            existingTokenData.setRemarks(TokenStatus.INVALIDATED.remarks);
-            tokenManagements.add(existingTokenData);
-        }
-    }
-
-    /**
-     * This method builds a UserTokenRequest object for the given merchant user
-     * It sets the token type, username, password, roles and expiration time for the token
-     * @param merchantUser MerchantUserDto
-     * @return  tokenRequest object containing the details for token generation
-     */
-    private UserTokenRequest buildUserTokenRequest(MerchantUserDto merchantUser) {
-        log.info("Building UserTokenRequest for user: {}", merchantUser.getUserName());
-        UserTokenRequest tokenRequest = new UserTokenRequest();
-        tokenRequest.setTokenType(TokenType.USER);
-        tokenRequest.setUsername(merchantUser.getUserName());
-        tokenRequest.setPassword(merchantUser.getPassword());
-        tokenRequest.setRoles(List.of(tokenDao.getMerchantUserRoleName(merchantUser.getRole())));
-        tokenRequest.setExpirationTime(DateTimeUtils.addMinutes(merchantConfig.getTokenExpiryTime() - 1));
-        log.info("UserTokenRequest built successfully for user: {}", merchantUser.getUserName());
-        return tokenRequest;
-    }
-
-}
-package com.epay.merchant.dao;
-
-import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.entity.MerchantUserRole;
-import com.epay.merchant.entity.TokenManagement;
-import com.epay.merchant.repository.MerchantUserRoleRepository;
-import com.epay.merchant.repository.TokenManagementRepository;
-import com.epay.merchant.util.enums.TokenStatus;
-import com.epay.merchant.util.enums.UserStatus;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
 @Component
 @RequiredArgsConstructor
-public class TokenDao {
+public class ValidationDao {
 
-    private final TokenManagementRepository tokenManagementRepository;
     private final MerchantUserDao merchantUserDao;
-    private final MerchantUserRoleRepository userRolesRepository;
+    private final MerchantInfoDao merchantInfoDao;
 
     /**
-     * Captures the token generation process status as "GENERATION_IN_PROGRESS" and
-     * saves the initial token details in the database.
-     * @param  userId UUID
-     */
-    public TokenManagement saveInitialToken(UUID userId) {
-        return tokenManagementRepository.save(TokenManagement.builder().tokenStatus(TokenStatus.GENERATION_IN_PROGRESS).userId(userId).remarks(TokenStatus.GENERATION_IN_PROGRESS.remarks).build());
-    }
-
-    /**
-     * This method will check if token is valid and exists
-     * @param  token String
+     * Check if the user exists in DB
+     *  @param userName String
      * @return boolean
      */
-    public boolean isValidTokenExist(String token) {
-        return tokenManagementRepository.existsByTokenAndIsValidTrue(token);
+    public boolean validatedMerchantUser(String userName) {
+        MerchantUserDto merchantUser = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.values()));
+        if(!UserStatus.ACTIVE.equals(merchantUser.getStatus())){
+            throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE,
+                    MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Merchant User","User is "+merchantUser.getStatus()));
+        }
+        return true;
     }
 
-    /**
-     * Saves the token in the DB
-     * @param  tokenManagement List<TokenManagement>
-     */
-    public void saveToken(List<TokenManagement> tokenManagement) {
-        tokenManagementRepository.saveAll(tokenManagement);
+    public boolean validatedMId(String userName, String mId) {
+        return merchantInfoDao.validateMIdAccess(userName, mId);
     }
 
-    /**
-     * This method will find the user by ID and return data based on status and if Userid matches
-     * @param  userId UUID
-     * @return TokenManagement
-     */
-    public Optional<TokenManagement> findTokenByUserIdAndIsValidTrue(UUID userId) {
-        return tokenManagementRepository.findTokenByUserIdAndIsValidTrue(userId);
-    }
-
-    /**
-     * This method fetches the merchant user details  based on the provided userName,email or mobile number
-     * @param  userName String
-     * @return MerchantUserDto
-     */
-    public MerchantUserDto getMerchantUserDto(String userName) {
-        return merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.ACTIVE));
-    }
-
-    /**
-     * This method fetches the merchant user details  based on the provided userName and status
-     * @param  userName String
-     * @param userStatus List<UserStatus>
-     * @return MerchantUserDto
-     */
-    public MerchantUserDto getMerchantUserDto(String userName, List<UserStatus> userStatus) {
-        return merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, userStatus);
-    }
-
-    /**
-     * This method fetches the role name of a merchant user based on the provided role ID.
-     * @param  roleId UUID
-     * @return USER or name of the user's role
-     */
-    public String getMerchantUserRoleName(UUID roleId) {
-        return userRolesRepository.findById(roleId).map(MerchantUserRole::getRole).orElse("USER");
-    }
-
-    /**
-     * This method will update the user login status in the DB
-     * @param merchantUserDto MerchantUserDto
-     * @param loginStatus boolean
-     */
-    public int updateMerchantUserForLogin(MerchantUserDto merchantUserDto, boolean loginStatus) {
-        return merchantUserDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
+    public boolean validatedActiveMId(String userName, String mId) {
+        return merchantInfoDao.validateActiveMIdAccess(userName, mId);
     }
 
 }
+
+
+
 package com.epay.merchant.entity;
 
 import com.epay.merchant.util.enums.TokenStatus;
