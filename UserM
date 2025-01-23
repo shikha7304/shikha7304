@@ -1,586 +1,767 @@
-Description
+package com.epay.merchant.controller;
 
-For merchant, we need to create View Profile mechanism so that user can use it to either login or reset or change password using OTP.
-
-API Details
-Method: GET
-API Endpoint: /v1/merchant/user/profile
-Access Type: Open API 
-
-Request Header:
-
-
-
-{
-  "Authorization": Bearer Token
-}
-
-
-
-
-
-Authorization Token: token contains valid userName.
-
-
-Success Response Body
-
-{
-  "data": [
-    {
-       "userName": String,
-       "firstName": String,
-       "middleName": String,
-       "lastName": String,
-       "email": String,
-       "mobilePhone": String,
-       "role": String
-       "created_date": DATE,
-       "active_status" : String
-    }
-   ],
-  "status":1,
-  "count": 1,
-  "total": 1
-}
-
-
-Failure Response Body :
-
-              
-               {
-   "errors": [
-      {
-         "errorCode":"ERROR_CODE ",
-         "errorMessage":"ERROR_MSG",
-          "reason":"ERROR_REASON"
-      },
-    ],
-   "status":0
-}
-
-Authentication utility i need to use 
-
-package com.sbi.epay.authentication.filter;
-
-import java.io.IOException;
-import java.text.MessageFormat;
-import java.text.ParseException;
-import java.util.List;
-import java.util.UUID;
-
-import com.sbi.epay.authentication.common.ErrorConstants;
-import com.sbi.epay.authentication.exception.AuthenticationException;
-import com.sbi.epay.authentication.model.EPayPrincipal;
-import com.sbi.epay.authentication.model.JwtAuthenticationToken;
-import com.sbi.epay.authentication.service.AuthenticationUserService;
-import com.sbi.epay.authentication.service.JwtAuthenticationProvider;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.service.LoginService;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
-import io.jsonwebtoken.JwtException;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
-import org.springframework.lang.NonNull;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
-import org.springframework.web.filter.OncePerRequestFilter;
-
-import com.sbi.epay.authentication.service.JwtService;
-
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Class Name: JwtFilter
+ * Class Name: ValidationController
  * *
- * Description: JWT Filter for handling authentication based on JWT tokens. This filter checks for the presence of a JWT in the Authorization header
- * and authenticates the user if the token is valid. JwtFilter is a custom filter that processes incoming HTTP requests to validate JWT tokens.
- * It extends OncePerRequestFilter to ensure it is invoked once per request.
+ * Description: Login User
  * *
- * Author: V1018217(Nirvay K. Bikram)
+ * Author: Ravi Rathore
+ * <p>
  * Copyright (c) 2024 [State Bank of India]
  * All rights reserved
  * *
  * Version:1.0
  */
 
-@Component
+@RestController
+@RequestMapping("/login")
 @RequiredArgsConstructor
-public class JwtFilter extends OncePerRequestFilter {
-    private static final LoggerUtility loggerUtility = LoggerFactoryUtility.getLogger(JwtFilter.class);
-    private final JwtService jwtService;
-    private final AuthenticationUserService authenticationUserService;
+public class LoginController {
 
-    private final String AUTHORIZATION = "Authorization";
-    private final String BEARER = "Bearer ";
-    private List<String> whitelistURLs;
-    @Value("${whitelisted.endpoints}")
-    public void setWhitelistURLs( List<String> whitelistURLs) {
-        this.whitelistURLs = whitelistURLs;
-    }
+    private final LoginService loginService;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
     /**
-     * This method filters incoming requests to extract and validate the JWT token.
-     * If the token is valid, it sets the authentication in the security context.
-     *
-     * @param request     The incoming HTTP request.
-     * @param response    The outgoing HTTP response.
-     * @param filterChain The filter chain to continue processing.
+     * Handles merchant user login request by validating user credentials
+     * @param merchantLoginRequest MerchantLoginRequest
+     * @return {merchantResponse containing authenticated user, success status and token }
      */
-    @Override
-    protected void doFilterInternal(@NonNull HttpServletRequest request,
-                                    @NonNull HttpServletResponse response,
-                                    @NonNull FilterChain filterChain) {
-        try {
-            String correlationId = request.getHeader("X-Correlation-ID");
-            if (StringUtils.isEmpty(correlationId)) {
-                correlationId = UUID.randomUUID().toString();
-            }
-            LoggerFactoryUtility.putMDC("requestId", correlationId);
-
-            final String authHeader = request.getHeader("Authorization");
-            String requestUri = request.getRequestURI();
-
-            if (whiteListingCheck(request, response, filterChain, authHeader, requestUri)) return;
-
-            mandatoryCheck(authHeader, requestUri);
-
-            if (loginAPICall(request, response, filterChain, authHeader)) return;
-
-            authentication(request, authHeader);
-
-            filterChain.doFilter(request, response);
-        } catch (Exception exception) {
-            LoggerFactoryUtility.clearMDCContext();
-        }
+    @PostMapping
+    @Operation(summary = "Merchant User Login API", description = "Merchant User Validation during Login via userName,Email or MobileNumber fields and captcha info")
+    public MerchantResponse<Object> login(@RequestBody MerchantLoginRequest merchantLoginRequest) {
+        log.info("Received request for merchant login {}", merchantLoginRequest);
+        return loginService.merchantLogin(merchantLoginRequest);
     }
-
-    private void authentication(HttpServletRequest request, String authHeader) throws ParseException {
-        final String jwt = authHeader.substring(7);
-        final String userName = jwtService.getUsernameFromToken(jwt);
-        if (StringUtils.isNotEmpty(userName) && SecurityContextHolder.getContext().getAuthentication() == null) {
-            EPayPrincipal authenticateUser = authenticationUserService.loadUserByUserName(userName)
-                    .orElseThrow(() -> new AuthenticationException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName")));
-            if ( jwtService.isTokenValid(jwt, authenticateUser)) {
-                SecurityContext context = SecurityContextHolder.createEmptyContext();
-                JwtAuthenticationToken jwtAuthenticationToken = new JwtAuthenticationToken(jwt);
-                jwtAuthenticationToken.setAuthenticated(true);
-                JwtAuthenticationProvider jwtAuthenticationProvider = new JwtAuthenticationProvider(jwtService);
-                Authentication authenticate = jwtAuthenticationProvider.authenticate(jwtAuthenticationToken);
-                context.setAuthentication(authenticate);
-                SecurityContextHolder.setContext(context);
-            }
-        }
-    }
-
-    private static boolean loginAPICall(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain, String authHeader) throws IOException, ServletException {
-        if (StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer ")) {
-            filterChain.doFilter(request, response);
-            return true;
-        }
-        return false;
-    }
-
-    private static void mandatoryCheck(String authHeader, String requestUri) {
-        if ((StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer "))
-                && (!StringUtils.endsWith(requestUri, "/token") || !StringUtils.endsWith(requestUri, "/login"))){
-            throw new JwtException("Token is required.");
-        }
-    }
-
-    private boolean whiteListingCheck(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain, String authHeader, String requestUri) throws IOException, ServletException {
-        if ((StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer "))){
-            String withoutContext = requestUri.replaceFirst(request.getContextPath(),"");
-            for(String whitelistURL : whitelistURLs){
-                if(withoutContext.startsWith(whitelistURL)){
-                    filterChain.doFilter(request, response);
-                    return true;
-                }
-            }
-        }
-        if ((StringUtils.isEmpty(authHeader) || !StringUtils.startsWith(authHeader, "Bearer ")) && request.getMethod().equalsIgnoreCase(HttpMethod.OPTIONS.name())) {
-            filterChain.doFilter(request, response);
-            return true;
-        }
-        return false;
-    }
-
 }
-
-
-package com.sbi.epay.authentication.service;
-
-import com.sbi.epay.authentication.common.AppConfig;
-import com.sbi.epay.authentication.model.*;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.time.DateUtils;
-import org.springframework.stereotype.Component;
-
-import java.security.Key;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Function;
-
-/**
- * Class Name: JwtService
- * *
- * Description: Service Class for generating and validating JSON Web Tokens (JWT).
- * * This class provides methods to create signed JWTs using various inputs, including username/password, API keys, and hashed values.
- * *
- * Author: V1018217(Nirvay K. Bikram)
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-@Component
-@RequiredArgsConstructor
-public class JwtService {
-    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(JwtService.class);
-    private final AppConfig appConfig;
-
-    /**
-     * Generates a JWT token with the specified claims, secret key, and expiration time.
-     *
-     * @param claims         A map of claims to include in the token.
-     * @param userName       The secret key used to sign the token.
-     * @param expirationTime The expiration time of the token in milliseconds.
-     * @return A signed JWT token as a string.
-     */
-    private String generateToken(Map<String, Object> claims, String userName, int expirationTime) {
-        logger.info("ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, secret key, and expiration time.");
-        return Jwts.builder().claims(claims).subject(userName) // Subject (e.g., user ID)
-                .issuedAt(new Date(System.currentTimeMillis()))// Issued time
-                .expiration(DateUtils.addHours(new Date(), expirationTime))
-                .signWith(SignatureAlgorithm.HS512, appConfig.getSecretKey()) // Use the HS512 algorithm
-                .compact();
-
-
-    }
-
-    /**
-     * Generates a JWT token using a username, expirationTime and role.
-     *
-     * @param userTokenRequest
-     * @returnA signed JWT token as a string.
-     */
-    public String generateUserLoginToken(UserTokenRequest userTokenRequest) {
-        logger.info("ClassName - JwtService,MethodName - generateTokenWithUsernamePassword, Generates a JWT token using a username, expirationTime and role.");
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(EPayPlatformJwtClaimsSet.USERNAME, userTokenRequest.getUsername());
-        claims.put(EPayPlatformJwtClaimsSet.ROLE, userTokenRequest.getRoles());
-        claims.put(EPayPlatformJwtClaimsSet.TYPE, userTokenRequest.getTokenType());
-        return generateToken(claims, appConfig.getSecretKey(), userTokenRequest.getExpirationTime());
-    }
-
-    /**
-     * Generates a JWT token for a payment.
-     *
-     * @param paymentTokenRequest
-     * @returnA signed JWT token as a string.
-     */
-    public String generatePaymentToken(PaymentTokenRequest paymentTokenRequest) {
-        logger.info("ClassName - JwtService,MethodName - generateTokenWithUsernamePassword, Generates a JWT token using a username, expirationTime and role.");
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(EPayPlatformJwtClaimsSet.USERNAME, paymentTokenRequest.getSbiOrderReferenceNumber());
-        claims.put(EPayPlatformJwtClaimsSet.ROLE, paymentTokenRequest.getRoles());
-        claims.put(EPayPlatformJwtClaimsSet.TYPE, paymentTokenRequest.getTokenType());
-        claims.put(EPayPlatformJwtClaimsSet.ORDER_NUMBER, paymentTokenRequest.getSbiOrderReferenceNumber());
-        claims.put(EPayPlatformJwtClaimsSet.ATRN_NUMBER, paymentTokenRequest.getAtrnNumber());
-        claims.put(EPayPlatformJwtClaimsSet.MID, paymentTokenRequest.getMid());
-        return generateToken(claims, appConfig.getSecretKey(), paymentTokenRequest.getExpirationTime());
-    }
-
-    /**
-     * Generates a JWT token using an API key , role, expirationTime and secret.
-     *
-     * @param accessTokenRequest
-     * @return A signed JWT token as a string.
-     */
-    public String generateAccessToken(AccessTokenRequest accessTokenRequest) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(EPayPlatformJwtClaimsSet.USERNAME, accessTokenRequest.getMid());
-        claims.put(EPayPlatformJwtClaimsSet.MID, accessTokenRequest.getMid());
-        claims.put(EPayPlatformJwtClaimsSet.ROLE, accessTokenRequest.getRoles());
-        claims.put(EPayPlatformJwtClaimsSet.TYPE, accessTokenRequest.getTokenType());
-        return generateToken(claims, accessTokenRequest.getMid(), accessTokenRequest.getExpirationTime());
-    }
-
-    /**
-     * Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.
-     *
-     * @param transactionTokenRequest
-     * @return A signed JWT token as a string.
-     */
-    public String generateTransactionToken(TransactionTokenRequest transactionTokenRequest) {
-        logger.info("ClassName - JwtService,MethodName - generateTokenWithHash, Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.");
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(EPayPlatformJwtClaimsSet.ORDER_NUMBER, transactionTokenRequest.getSbiOrderReferenceNumber());
-        claims.put(EPayPlatformJwtClaimsSet.MID, transactionTokenRequest.getMid());
-        claims.put(EPayPlatformJwtClaimsSet.USERNAME, transactionTokenRequest.getSbiOrderReferenceNumber());
-        claims.put(EPayPlatformJwtClaimsSet.ROLE, transactionTokenRequest.getRoles());
-        claims.put(EPayPlatformJwtClaimsSet.TYPE, transactionTokenRequest.getTokenType());
-        return generateToken(claims, appConfig.getSecretKey(), transactionTokenRequest.getExpirationTime());
-    }
-
-
-    /**
-     * Get all claims from token. and @Param token
-     *
-     * @param token as a String
-     * @return Claims of the token
-     */
-    public Claims getAllClaimsFromToken(String token) {
-        logger.info("ClassName - JwtService,MethodName - getAllClaimsFromToken, getting all claims from token.");
-        return Jwts.parser().setSigningKey(getSignKey()).build().parseClaimsJws(token).getBody();
-    }
-
-    /**
-     * Get SigningKey
-     *
-     * @return signed key
-     */
-    private Key getSignKey() {
-        logger.info("ClassName - JwtService,MethodName - getSignKey, getting SigningKey.");
-        byte[] keyBytes = Decoders.BASE64.decode(appConfig.getSecretKey());
-        return Keys.hmacShaKeyFor(keyBytes);
-
-    }
-
-
-    /**
-     * Get username from token
-     *
-     * @param token as a String
-     * @return String username from token
-     */
-    public String getUsernameFromToken(String token) {
-        logger.info("ClassName - JwtService,MethodName - getUsernameFromToken, username from token.");
-        final Claims claims = getAllClaimsFromToken(token);
-        return claims.get(EPayPlatformJwtClaimsSet.USERNAME) == null ? null : String.valueOf(claims.get(EPayPlatformJwtClaimsSet.USERNAME));
-    }
-
-
-    /**
-     * Get Claims from Token
-     *
-     * @param token
-     * @param claimsResolver
-     * @param <T>
-     * @return All Claims from the token
-     */
-    private <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
-        logger.info("ClassName - JwtService,MethodName - getClaimFromToken, Claims from token.");
-        final Claims claims = getAllClaimsFromToken(token);
-        return claimsResolver.apply(claims);
-    }
-
-
-    /**
-     * Get expiration time from token
-     *
-     * @param token is as String
-     * @return Boolean true if token is expired otherwise false.
-     */
-    private Boolean isTokenExpired(String token) {
-        logger.info("ClassName - JwtService,MethodName - isTokenExpired, getting expiration time from token.");
-        final Date expiration = getExpirationDateFromToken(token);
-        return expiration.before(new Date());
-    }
-
-    /**
-     * Getting expiration time from token.
-     *
-     * @param token
-     * @return Date from token
-     */
-    protected Date getExpirationDateFromToken(String token) {
-        logger.info("ClassName - JwtService,MethodName - getExpirationDateFromToken, getting expiration time from token.");
-        return getClaimFromToken(token, Claims::getExpiration);
-
-    }
-
-    /**
-     * Validate token using user details and expiration time.
-     *
-     * @param token
-     * @param authenticateUser
-     * @return Boolean if username and expiration is valid then return true else return false.
-     */
-    public boolean isTokenValid(String token, EPayPrincipal authenticateUser) {
-        final String userName = getUsernameFromToken(token);
-        return (userName.equals(authenticateUser.getUsername())) && !isTokenExpired(token);
-    }
-
-    /**
-     * <p>
-     * Get role from JWT token
-     *
-     * @param token
-     * @return String Role from token
-     */
-    private String getRoleFromToken(String token) {
-        logger.info("ClassName - JwtService,MethodName - getApiKeyFromToken, getting role from JWT token.");
-        final Claims claims = getAllClaimsFromToken(token);
-        return claims.get(EPayPlatformJwtClaimsSet.ROLE) == null ? null : String.valueOf(claims.get(EPayPlatformJwtClaimsSet.ROLE));
-    }
-
-
-}
-
-
-
-
-
-serviceclass
 
 package com.epay.merchant.service;
 
-import com.epay.merchant.dao.MerchantDAO;
-import com.epay.merchant.entity.MerchantUser;
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dto.ErrorDto;
 import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.model.UserProfileResponse;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.model.request.MerchantLoginRequest;
 import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.AppConstants;
 import com.epay.merchant.util.ErrorConstants;
-import com.sbi.epay.authentication.service.JwtService;
-import lombok.AllArgsConstructor;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.MerchantLoginValidator;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.text.MessageFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import static com.epay.merchant.util.MerchantConstant.SUCCESS_MESSAGE;
+
+/**
+ * Class Name: LoginService
+ * *
+ * Description: Validate the UserName and Password to login
+ * *
+ * Author: Ravi Rathore
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
 
 @Service
-@AllArgsConstructor
-public class MerchantUserProfileService {
+@RequiredArgsConstructor
+public class LoginService {
 
-    private final JwtService jwtService;
-    private final MerchantDAO merchantDAO;
-    public MerchantResponse<UserProfileResponse> getProfileResponse(String authHeader) {
+    private final MerchantLoginValidator merchantLoginValidator;
+    private final TokenService tokenService;
+    private final LoginDao loginDao;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
 
-
-        String userName = jwtService.getUsernameFromToken(authHeader);
-
-        MerchantUser merchantUser = merchantDAO.getMerchantUserByUserNameOrEmailOrMobile(userName)
-                .orElseThrow((() -> new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "UserName", "Not Found"))));
-
-
-        UserProfileResponse userProfileResponse = UserProfileResponse.<UserProfileResponse>builder()
-                .userName(merchantUser.getUserName())
-                .firstName(merchantUser.getFirstName())
-                .middleName(merchantUser.getMiddleName())
-                .lastName(merchantUser.getLastName())
-                .email(merchantUser.getEmail())
-                .mobilePhone(merchantUser.getMobilePhone())
-                .role(merchantUser.getRole())// need to check string or UUID
-                .created_date(merchantUser.getCreatedAt())
-                .active_status(merchantUser.getStatus())
-                .build();
-
-        return MerchantResponse.<UserProfileResponse>builder()
-                .status(AppConstants.RESPONSE_SUCCESS)
-                .data(List.of(userProfileResponse))
-                .count(1L)
-                .total(1L)
-                .build();
+    /**
+     * Validates the user based on the provided validation request.
+     * @param merchantLoginRequest The login validation request containing user login details with captcha.
+     * @return MerchantResponse containing success or failure details.
+     */
+    public MerchantResponse<Object> merchantLogin(MerchantLoginRequest merchantLoginRequest) {
+        log.info("Started merchantLogin for userName: {}", merchantLoginRequest.getUserName());
+        try {
+            log.info("validating Merchant login request for userName : {}", merchantLoginRequest.getUserName());
+            merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest);
+            loginDao.saveLoginAudit(merchantLoginRequest.getUserName(), RequestType.LOGIN, true, MessageFormat.format(SUCCESS_MESSAGE, "Logged In User Found"));
+            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, "Logged In User Found"))).build();
+        } catch (ValidationException e) {
+            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
+                throw e;
+            });
+            log.error("Login Validation Failed for userName {} with error {}", merchantLoginRequest.getUserName(), e.getErrorMessages().toString());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")), e.getErrorMessages());
+        } catch (MerchantException e) {
+            log.error("Login Failed for userName {} ", merchantLoginRequest.getUserName());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessage(), List.of(ErrorDto.builder().errorCode(e.getErrorCode()).errorMessage(e.getErrorMessage()).build()));
+        } catch (Exception e) {
+            log.error("Login Failed for userName {} ", merchantLoginRequest.getUserName(), e.getMessage());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getLocalizedMessage(), List.of(ErrorDto.builder().errorCode(ErrorConstants.GENERIC_ERROR_CODE).errorMessage(e.getLocalizedMessage()).build()));
+        }
     }
+    /**
+     * It will handle the login failure logic.
+     * MerchantResponse failure and save Login Audit details
+     * @param userName String
+     * @param e String
+     * @param errors List<ErrorDto>
+     */
+    private MerchantResponse<Object> handleLoginFailure(String userName, String e, List<ErrorDto> errors) {
+        log.info("Started handleLoginFailure for userName: {}",userName);
+        int loginFailureCount = 0;
+        if (StringUtils.isNotEmpty(userName)) {
+            try {
+                log.info("Updating login failure count for userName: {}",userName);
+                loginFailureCount = tokenService.updateMerchantUserForLogin(userName, false);
+                if(loginFailureCount > 0) {
+                    log.info("Saving login audit for userName: {},loginFailureCount :{}",userName,loginFailureCount);
+                    loginDao.saveLoginAudit(userName, RequestType.LOGIN, false, e);
+                }
+            } catch (MerchantException ex) {
+                log.error("Error in handleLoginFailure for userName {}", userName, ex.getErrorMessages());
+            } catch (Exception ex) {
+                log.error("Error in handleLoginFailure for userName {}", userName, ex.getMessage());
+            }
+        }
+        if(loginFailureCount > 0) {
+            log.info("Returning  response with  login failure count :{} for userName ;{}",loginFailureCount,userName);
+            return MerchantResponse.builder().data(List.of(Map.of("loginFailAttempt", loginFailureCount))).status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
+        } else {
+            log.info("Returning  failure response for userName ;{}",userName);
+            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
+        }
+    }
+
 }
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dao.ValidationDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+
+import static com.epay.merchant.util.ErrorConstants.LOGIN_USER_NOT_FOUND_ERROR_MESSAGE;
+import static com.epay.merchant.util.ErrorConstants.NOT_FOUND_ERROR_CODE;
+
+@Component
+@RequiredArgsConstructor
+public class MerchantLoginValidator extends BaseValidator {
+
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+
+    private final LoginDao loginDao;
+    private final ValidationDao validationDao;
+    private final CaptchaValidator captchaValidator;
+
+    /**
+     * Validates the merchant login request, including mandatory fields,user existence and captcha validation
+     *
+     * @param merchantLoginRequest MerchantLoginRequest
+     */
+    public void validateMerchantLoginRequest(MerchantLoginRequest merchantLoginRequest) {
+        logger.debug("Merchant validation start for {}", merchantLoginRequest);
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(merchantLoginRequest);
+        logger.debug("Mandatory validation completed for {}", merchantLoginRequest);
+        captchaValidator.captchaValueValidation(merchantLoginRequest.getRequestId(), merchantLoginRequest.getCaptchaText());
+        logger.debug("captcha validation completed for {}", merchantLoginRequest);
+        isUserExist(merchantLoginRequest);
+        logger.debug("user check validation completed for {}", merchantLoginRequest);
+        validateUserStatus(merchantLoginRequest.getUserName());
+        logger.debug("user status check completed for {}", merchantLoginRequest);
+    }
+
+    private void validateUserStatus(String userName) {
+        validationDao.validatedMerchantUser(userName);
+    }
+
+    /**
+     * Validates the all the mandatory fields in the merchantLoginRequest
+     *
+     * @param merchantLoginRequest MerchantLoginRequest
+     */
+    private void validateMandatoryFields(MerchantLoginRequest merchantLoginRequest) {
+        checkMandatoryField(merchantLoginRequest.getUserName(), "User Name");
+        checkMandatoryField(merchantLoginRequest.getPassword(), "Password");
+        checkMandatoryField(merchantLoginRequest.getCaptchaText(), "Captcha Text");
+        checkMandatoryField(String.valueOf(merchantLoginRequest.getRequestId()), "Captcha Text");
+        throwIfErrors();
+    }
+
+    /**
+     * Validates if the user exists based on the provided login request
+     *
+     * @param merchantLoginRequest MerchantLoginRequest
+     */
+    private void isUserExist(MerchantLoginRequest merchantLoginRequest) {
+        boolean merchantUserExistsByUserNameAndPassword = loginDao.isMerchantUserExistsByUserNameAndPassword(merchantLoginRequest.getUserName(), merchantLoginRequest.getPassword());
+        if (!merchantUserExistsByUserNameAndPassword) {
+            errorDtoList.add(ErrorDto.builder().errorCode(NOT_FOUND_ERROR_CODE).errorMessage(LOGIN_USER_NOT_FOUND_ERROR_MESSAGE).build());
+        }
+        throwIfErrors();
+    }
 
 
+}
+package com.epay.merchant.dao;
 
-package com.epay.merchant.model;
+import com.epay.merchant.entity.LoginPasswordAudit;
+import com.epay.merchant.repository.LoginPasswordAuditRepository;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.*;
-
-import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
-@AllArgsConstructor
-@Getter
-@Setter
-@Builder
-@NoArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class UserProfileResponse {
+@Component
+@RequiredArgsConstructor
+public class LoginDao {
 
-    private String userName;
-    private String firstName;
-    private String middleName;
-    private String lastName;
-    private String email;
-    private String mobilePhone;
-    private UUID role;
-    private Long created_date;
-    private String active_status;
+    private final MerchantUserDao merchantUserDao;
+    private final LoginPasswordAuditRepository loginPasswordAuditRepository;
+
+    /**
+     * It will check if the user already exists or not for given userName and password
+     * @param userName String
+     * @param password String
+     * @return Boolean
+       */
+    public boolean isMerchantUserExistsByUserNameAndPassword(String userName, String password) {
+        return merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, password);
+    }
+    /**
+     * It will fetch the active user and save login details in audit table
+     * @param userName String
+     * @param requestType RequestType
+     * @param status boolean
+     * @param reason String
+     */
+    public void saveLoginAudit(String userName, RequestType requestType, boolean status, String reason) {
+        UUID userId = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.values())).getId();
+        LoginPasswordAudit loginPasswordAudit = LoginPasswordAudit.builder().userId(userId).requestType(requestType).status(status).reason(reason).build();
+        loginPasswordAuditRepository.save(loginPasswordAudit);
+    }
+
 
 }
+package com.epay.merchant.service;
 
-
-
-
-package com.epay.merchant.controller;
-
-import com.epay.merchant.model.UserProfileResponse;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.service.MerchantUserProfileService;
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.TokenDao;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.entity.TokenManagement;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.util.DateTimeUtils;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.TokenStatus;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.service.AuthenticationService;
+import com.sbi.epay.authentication.util.enums.TokenType;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.stereotype.Service;
 
-@RestController
-@RequestMapping("/v1/merchant/user")
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+@Service
 @RequiredArgsConstructor
-public class ViewProfileController {
+public class TokenService {
 
-    private final MerchantUserProfileService merchantUserProfileService;
+    final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final AuthenticationService authenticationService;
+    private final TokenDao tokenDao;
+    private final MerchantConfig merchantConfig;
 
-    @GetMapping("/profile")
-    public MerchantResponse<UserProfileResponse> getProfileResponse(@RequestHeader("Authorization") String authHeader) {
-        return merchantUserProfileService.getProfileResponse(authHeader);
+    /**
+     * This method will generate the user token and update the merchant user login status in DB
+     * @param userName String
+     * @return Token String
+     */
+    @Transactional
+    public String generateUserToken(String userName) {
+        log.info("Starting token generation for user: {}", userName);
+        // Step 1 : Get the User
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
+
+        // Step 2 : Save Initial Token Request
+        TokenManagement tokenManagement = tokenDao.saveInitialToken(merchantUserDto.getId());
+
+        // Step 3 : Generate User Token Request
+        String token = generateUserToken(tokenManagement, merchantUserDto);
+
+        //Step 4 : Update Merchant User Login Status
+        tokenDao.updateMerchantUserForLogin(merchantUserDto, true);
+        log.info("Updated login status to active for user: {}", userName);
+        return token;
+
+    }
+
+    /**
+     *This method will update the login status detail for a given userName
+     * @param userName String
+     * @param loginStatus  boolean
+     */
+    public int updateMerchantUserForLogin(String userName, boolean loginStatus) {
+        log.info("Updating login status for user: {}, loginStatus: {}", userName, loginStatus);
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName, List.of(UserStatus.values()));
+        if(UserStatus.ACTIVE.equals(merchantUserDto.getStatus())) {
+            log.info("User is active. Updating login status in DB for user: {}", userName);
+            return tokenDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
+        }
+        log.info("User is not active. Skipping login status update for user: {}", userName);
+        return 0;
+    }
+
+    /**
+     * Invalidates the token for the specified username.
+     * @param userName Username of the merchant user.
+     * @return Integer representing success or failure status.
+     */
+    public int invalidateUserToken(String userName) {
+        log.info("Invalidating token for user: {}", userName);
+        MerchantUserDto merchantUserDto = tokenDao.getMerchantUserDto(userName);
+        Optional<TokenManagement> validToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUserDto.getId());
+        if (validToken.isPresent()) {
+            TokenManagement tokenManagement = validToken.get();
+            tokenManagement.setValid(false);
+            tokenDao.saveToken(List.of(tokenManagement));
+            log.info("Successfully invalidated token for user: {}", userName);
+            return MerchantConstant.RESPONSE_SUCCESS;
+        }
+        log.info("No valid token found to invalidate for user: {}", userName);
+        return MerchantConstant.RESPONSE_FAILURE;
+    }
+
+    /**
+     * It will call the authentication utility to generate the token
+     * @param tokenManagement TokenManagement
+     * @param merchantUser MerchantUserDto
+     * @return  Token
+     */
+    @Transactional
+    private String generateUserToken(TokenManagement tokenManagement, MerchantUserDto merchantUser) {
+        try {
+            log.info("Going to call authentication utility to generate the token for userId: {}", merchantUser.getUserName());
+            List<TokenManagement> tokenManagements = new ArrayList<>();
+            updateExistingToken(merchantUser, tokenManagements);
+            String token = generateUserToken(tokenManagement, merchantUser, tokenManagements);
+            tokenDao.saveToken(tokenManagements);
+            log.info("Token successfully generated for user: {}", merchantUser.getUserName());
+            return token;
+        } catch (Exception e) {
+            // Handle token generation failure
+            log.error("Token generation failed for userId: {}, Exception: {}", merchantUser.getUserName(), e.getMessage());
+            tokenManagement.setTokenStatus(TokenStatus.GENERATION_FAIL);
+            tokenManagement.setRemarks(TokenStatus.GENERATION_FAIL.remarks + " : " + e.getMessage());
+            tokenDao.saveToken(List.of(tokenManagement));
+            tokenDao.updateMerchantUserForLogin(merchantUser, false);
+            throw new MerchantException(ErrorConstants.GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, "Token"));
+        }
+    }
+
+    /**
+     * This method generates the user token for a given user
+     * @param merchantUser MerchantUserDto
+     * @param tokenManagement TokenManagement
+     * @param tokenManagements List<TokenManagement>
+     * @return  token
+     */
+    private String generateUserToken(TokenManagement tokenManagement, MerchantUserDto merchantUser, List<TokenManagement> tokenManagements) {
+        String token = authenticationService.generateUserToken(buildUserTokenRequest(merchantUser));
+        tokenManagement.setToken(token);
+        tokenManagement.setTokenStatus(TokenStatus.GENERATED);
+        tokenManagement.setTokenExpiryTime(DateTimeUtils.addMinutes(merchantConfig.getTokenExpiryTime() - 1));
+        tokenManagement.setValid(true);
+        tokenManagement.setRemarks(TokenStatus.GENERATED.remarks);
+        tokenManagements.add(tokenManagement);
+        return token;
+    }
+
+    /**
+     * This method checks if a valid token exists for a given user
+     * if a valid token is found, its invalidate the existing token by updating its status expiry time and validity.
+     * The updated token is then added to the provided token management list.
+     * @param merchantUser MerchantUserDto
+     * @param tokenManagements List<TokenManagement>
+     */
+    private void updateExistingToken(MerchantUserDto merchantUser, List<TokenManagement> tokenManagements) {
+        log.info("Checking for existing valid tokens for user: {}", merchantUser.getUserName());
+        Optional<TokenManagement> existingToken = tokenDao.findTokenByUserIdAndIsValidTrue(merchantUser.getId());
+        if (existingToken.isPresent()) {
+            TokenManagement existingTokenData = existingToken.get();
+            existingTokenData.setTokenStatus(TokenStatus.INVALIDATED);
+            existingTokenData.setTokenExpiryTime(System.currentTimeMillis());
+            existingTokenData.setValid(false);
+            existingTokenData.setRemarks(TokenStatus.INVALIDATED.remarks);
+            tokenManagements.add(existingTokenData);
+        }
+    }
+
+    /**
+     * This method builds a UserTokenRequest object for the given merchant user
+     * It sets the token type, username, password, roles and expiration time for the token
+     * @param merchantUser MerchantUserDto
+     * @return  tokenRequest object containing the details for token generation
+     */
+    private UserTokenRequest buildUserTokenRequest(MerchantUserDto merchantUser) {
+        log.info("Building UserTokenRequest for user: {}", merchantUser.getUserName());
+        UserTokenRequest tokenRequest = new UserTokenRequest();
+        tokenRequest.setTokenType(TokenType.USER);
+        tokenRequest.setUsername(merchantUser.getUserName());
+        tokenRequest.setPassword(merchantUser.getPassword());
+        tokenRequest.setRoles(List.of(tokenDao.getMerchantUserRoleName(merchantUser.getRole())));
+        tokenRequest.setExpirationTime(DateTimeUtils.addMinutes(merchantConfig.getTokenExpiryTime() - 1));
+        log.info("UserTokenRequest built successfully for user: {}", merchantUser.getUserName());
+        return tokenRequest;
     }
 
 }
+package com.epay.merchant.config;
 
-
-
-package com.epay.merchant.dto;
-
-import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.AllArgsConstructor;
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Configuration;
 
-import java.io.Serializable;
-import java.util.Date;
-
+/**
+ * Class Name: MerchantConfig
+ * *
+ * Description:
+ * *
+ * Author: V1017903(bhushan wadekar)
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
 
 @Data
-@AllArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class UserProfileDto implements Serializable {
+@Configuration
+public class MerchantConfig {
 
+    @Value("${kaptcha.border}")
+    private String border;
+
+    @Value("${kaptcha.textproducer.font.color}")
+    private String fontColor;
+
+    @Value("${kaptcha.textproducer.char.space}")
+    private String charSpace;
+
+    @Value("${kaptcha.image.width}")
+    private String imageWidth;
+
+    @Value("${kaptcha.image.height}")
+    private String imageHeight;
+
+    @Value("${kaptcha.textproducer.font.size}")
+    private String fontSize;
+
+    @Value("${kaptcha.textproducer.char.length}")
+    private String charLength;
+
+    @Value("${captcha.expiry.time.minutes:5}")
+    private int expiryTime;
+
+    @Value("${merchant.user.password.expiry.months:3}")
+    private int passwordExpiryMonths;
+
+    @Value("${otp.expiry.time.minutes:5}")
+    private int otpExpiryTime;
+
+    @Value("${merchant.encryption.key.expiry.time.days:30}")
+    private int encryptionKeyExpiryTime;
+
+    @Value("${merchant.api.key.expiry.time.month:12}")
+    private int apiKeyExpiryTime;
+
+    @Value("${merchant.user.password.key}")
+    private String decryptionKey;
+
+    @Value("${merchant.user.login.allowed.fail.attempt:3}")
+    private int allowedLoginFailAttempt;
+
+    @Value("${token.expiry.time.minutes:30}")
+    private int tokenExpiryTime;
+
+    @Value("${theme.logo.dimension.height:100}")
+    private int logoHeight;
+
+    @Value("${theme.logo.dimension.width:100}")
+    private int logoWidth;
+
+    @Value("${theme.logo.size.max:16KB}")
+    private String logoMaxSize;
+
+    @Value("${external.api.sms.gateway.base.path}")
+    private String smsBasePath;
+
+    @Value("${external.api.sms.gateway.user}")
+    private String smsUserName;
+
+    @Value("${external.api.sms.gateway.password}")
+    private String smsPassword;
+
+    @Value("${external.api.sms.body.content.type:text}")
+    private String smsContentType;
+
+    @Value("${external.api.sms.body.sender.id:SBIBNK}")
+    private String smsSenderId;
+
+    @Value("${external.api.sms.body.int.flag:0}")
+    private int smsIntFlag;
+
+    @Value("${external.api.sms.body.charging:0}")
+    private int smsCharging;
+
+    @Value("${external.api.sms.gateway.url:/bmg/sms/epaypgotpdom}")
+    private String smsURL;
+
+    @Value("${email.recipient:}")
+    private String recipient;
+
+    @Value("${email.from}")
+    private String from;
+}
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.entity.MerchantUserRole;
+import com.epay.merchant.entity.TokenManagement;
+import com.epay.merchant.repository.MerchantUserRoleRepository;
+import com.epay.merchant.repository.TokenManagementRepository;
+import com.epay.merchant.util.enums.TokenStatus;
+import com.epay.merchant.util.enums.UserStatus;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Component
+@RequiredArgsConstructor
+public class TokenDao {
+
+    private final TokenManagementRepository tokenManagementRepository;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantUserRoleRepository userRolesRepository;
+
+    /**
+     * Captures the token generation process status as "GENERATION_IN_PROGRESS" and
+     * saves the initial token details in the database.
+     * @param  userId UUID
+     */
+    public TokenManagement saveInitialToken(UUID userId) {
+        return tokenManagementRepository.save(TokenManagement.builder().tokenStatus(TokenStatus.GENERATION_IN_PROGRESS).userId(userId).remarks(TokenStatus.GENERATION_IN_PROGRESS.remarks).build());
+    }
+
+    /**
+     * This method will check if token is valid and exists
+     * @param  token String
+     * @return boolean
+     */
+    public boolean isValidTokenExist(String token) {
+        return tokenManagementRepository.existsByTokenAndIsValidTrue(token);
+    }
+
+    /**
+     * Saves the token in the DB
+     * @param  tokenManagement List<TokenManagement>
+     */
+    public void saveToken(List<TokenManagement> tokenManagement) {
+        tokenManagementRepository.saveAll(tokenManagement);
+    }
+
+    /**
+     * This method will find the user by ID and return data based on status and if Userid matches
+     * @param  userId UUID
+     * @return TokenManagement
+     */
+    public Optional<TokenManagement> findTokenByUserIdAndIsValidTrue(UUID userId) {
+        return tokenManagementRepository.findTokenByUserIdAndIsValidTrue(userId);
+    }
+
+    /**
+     * This method fetches the merchant user details  based on the provided userName,email or mobile number
+     * @param  userName String
+     * @return MerchantUserDto
+     */
+    public MerchantUserDto getMerchantUserDto(String userName) {
+        return merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.ACTIVE));
+    }
+
+    /**
+     * This method fetches the merchant user details  based on the provided userName and status
+     * @param  userName String
+     * @param userStatus List<UserStatus>
+     * @return MerchantUserDto
+     */
+    public MerchantUserDto getMerchantUserDto(String userName, List<UserStatus> userStatus) {
+        return merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, userStatus);
+    }
+
+    /**
+     * This method fetches the role name of a merchant user based on the provided role ID.
+     * @param  roleId UUID
+     * @return USER or name of the user's role
+     */
+    public String getMerchantUserRoleName(UUID roleId) {
+        return userRolesRepository.findById(roleId).map(MerchantUserRole::getRole).orElse("USER");
+    }
+
+    /**
+     * This method will update the user login status in the DB
+     * @param merchantUserDto MerchantUserDto
+     * @param loginStatus boolean
+     */
+    public int updateMerchantUserForLogin(MerchantUserDto merchantUserDto, boolean loginStatus) {
+        return merchantUserDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
+    }
+
+}
+package com.epay.merchant.entity;
+
+import com.epay.merchant.util.enums.TokenStatus;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.util.UUID;
+
+@EqualsAndHashCode(callSuper = true)
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+@Entity
+@Table(name = "TOKEN_MANAGEMENT")
+public class TokenManagement extends AuditEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+    @Version
+    private int version;
+    private UUID userId;
+    private String token;
+    private Long tokenExpiryTime;
+    private boolean isValid;
+    @Enumerated(EnumType.STRING)
+    private TokenStatus tokenStatus;
+    private String remarks;
+
+}
+package com.epay.merchant.dto;
+
+import com.epay.merchant.util.enums.UserStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.io.Serializable;
+import java.util.UUID;
+
+/**
+ * Class Name: MerchantUserDto
+ * *
+ * Description:
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Data
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+@AllArgsConstructor
+@NoArgsConstructor
+public class MerchantUserDto implements Serializable {
+    @JsonIgnore
+    private UUID id;
+    @JsonIgnore
+    private UUID parentUserId;
+    @JsonIgnore
+    private int version;
     private String userName;
     private String firstName;
     private String middleName;
     private String lastName;
     private String email;
+    private String primaryPhone;
+    private String secondaryPhone;
     private String mobilePhone;
-    private String role;
-    private Date created_date;
-    private String active_status;
+    private String officePhone;
+    @JsonProperty("country")
+    private String countryCode;
+    @JsonProperty("state")
+    private String stateCode;
+    @JsonProperty("pincode")
+    private String pinCode;
+    private String city;
+    private String remark;
+    @JsonIgnore
+    private UUID role;
+    private String roleName;
+    private UserStatus status;
+    @JsonIgnore
+    private String password;
+    @JsonIgnore
+    private Long passwordExpiryTime;
+    @JsonIgnore
+    private int loginFailAttempt;
+    private String createdBy;
+    private Long createdAt;
+    private String updatedBy;
+    private Long updatedAt;
+}
+package com.epay.merchant.repository;
+
+import com.epay.merchant.entity.LoginPasswordAudit;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.UUID;
+
+public interface LoginPasswordAuditRepository extends JpaRepository<LoginPasswordAudit, UUID> {
 }
