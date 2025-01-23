@@ -1,1 +1,166 @@
+Here is the revised code with class and method descriptions along with logger integration for the repositories:
 
+1. LoginPasswordAuditRepository
+
+package com.epay.merchant.repository;
+
+import com.epay.merchant.entity.LoginPasswordAudit;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.UUID;
+
+/**
+ * Class Name: LoginPasswordAuditRepository
+ * 
+ * Description:
+ * Repository interface for performing CRUD operations on the `LoginPasswordAudit` entity.
+ * This handles audit information related to user login and password activities.
+ * 
+ * Author: [Your Name]
+ * 
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved.
+ * 
+ * Version: 1.0
+ */
+@Repository
+public interface LoginPasswordAuditRepository extends JpaRepository<LoginPasswordAudit, UUID> {
+
+    Logger LOGGER = LoggerFactory.getLogger(LoginPasswordAuditRepository.class);
+
+    // Add custom query methods here if needed
+}
+
+2. TokenManagementRepository
+
+package com.epay.merchant.repository;
+
+import com.epay.merchant.entity.TokenManagement;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Class Name: TokenManagementRepository
+ * 
+ * Description:
+ * Repository interface for managing `TokenManagement` entity records.
+ * Provides methods for fetching and validating token data.
+ * 
+ * Author: [Your Name]
+ * 
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved.
+ * 
+ * Version: 1.0
+ */
+@Repository
+public interface TokenManagementRepository extends JpaRepository<TokenManagement, UUID> {
+
+    Logger LOGGER = LoggerFactory.getLogger(TokenManagementRepository.class);
+
+    /**
+     * Find a valid token for a specific user ID.
+     *
+     * @param userId UUID of the user.
+     * @return Optional<TokenManagement> containing the token details if found.
+     */
+    @Query("FROM TokenManagement tm WHERE tm.userId = :userId AND tm.isValid = true")
+    Optional<TokenManagement> findTokenByUserIdAndIsValidTrue(@Param("userId") UUID userId);
+
+    /**
+     * Check if a token exists and is valid.
+     *
+     * @param token String token to check.
+     * @return boolean indicating if the token exists and is valid.
+     */
+    boolean existsByTokenAndIsValidTrue(String token);
+
+    default void logTokenQuery(UUID userId) {
+        LOGGER.info("Querying valid token for user ID: {}", userId);
+    }
+
+    default void logTokenValidation(String token) {
+        LOGGER.info("Validating token: {}", token);
+    }
+}
+
+3. MerchantUserRoleRepository
+
+package com.epay.merchant.repository;
+
+import com.epay.merchant.entity.MerchantUserRole;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Class Name: MerchantUserRoleRepository
+ * 
+ * Description:
+ * Repository interface for managing `MerchantUserRole` entity records.
+ * Provides methods to fetch roles by role name or ID.
+ * 
+ * Author: Bhoopendra Rajput
+ * 
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved.
+ * 
+ * Version: 1.0
+ */
+@Repository
+public interface MerchantUserRoleRepository extends JpaRepository<MerchantUserRole, UUID> {
+
+    Logger LOGGER = LoggerFactory.getLogger(MerchantUserRoleRepository.class);
+
+    /**
+     * Find a user role by its role name.
+     *
+     * @param role String name of the role.
+     * @return Optional<MerchantUserRole> containing the role details if found.
+     */
+    Optional<MerchantUserRole> findByRole(String role);
+
+    /**
+     * Find a user role by its ID.
+     *
+     * @param roleId UUID of the role.
+     * @return Optional<MerchantUserRole> containing the role details if found.
+     */
+    Optional<MerchantUserRole> findById(UUID roleId);
+
+    default void logRoleQuery(String role) {
+        LOGGER.info("Searching for role: {}", role);
+    }
+
+    default void logRoleIdQuery(UUID roleId) {
+        LOGGER.info("Searching for role by ID: {}", roleId);
+    }
+}
+
+Explanation of Updates:
+	1.	Logger Integration:
+	•	Added an org.slf4j.Logger instance in each repository.
+	•	Default methods are provided to log specific repository actions (e.g., querying tokens, validating tokens, searching roles).
+	2.	Class Descriptions:
+	•	Each class includes a detailed description of its purpose, including its role within the application.
+	3.	Method Descriptions:
+	•	Added JavaDoc comments to describe the purpose, parameters, and return values for each method.
+
+Let me know if any further refinements are required!
