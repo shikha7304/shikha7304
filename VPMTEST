@@ -1,3 +1,121 @@
+package com.epay.merchant.dao;
+
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.entity.MerchantUserRole;
+import com.epay.merchant.entity.TokenManagement;
+import com.epay.merchant.repository.MerchantUserRoleRepository;
+import com.epay.merchant.repository.TokenManagementRepository;
+import com.epay.merchant.util.enums.TokenStatus;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Class Name: TokenDao
+ *
+ * Description: 
+ * TokenDao is responsible for interacting with the database to manage token-related operations 
+ * and merchant user details. It acts as a Data Access Object (DAO) to handle CRUD operations 
+ * for token management and user login status updates. The class encapsulates methods for 
+ * saving tokens, retrieving user details, validating tokens, and managing token status.
+ * 
+ * Responsibilities:
+ * - Save initial token details for a user during the token generation process.
+ * - Validate the existence and status of a token.
+ * - Retrieve merchant user details based on username, email, or mobile number.
+ * - Manage token expiration, invalidation, and status updates.
+ * - Fetch merchant user roles based on role IDs.
+ * - Update merchant user login status in the database.
+ * 
+ * Author: Shikha Sharma
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * 
+ * Version: 1.0
+ */
+
+@Component
+@RequiredArgsConstructor
+public class TokenDao {
+
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final TokenManagementRepository tokenManagementRepository;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantUserRoleRepository userRolesRepository;
+
+    public TokenManagement saveInitialToken(UUID userId) {
+        log.info("Saving initial token for userId: {}", userId);
+        return tokenManagementRepository.save(
+                TokenManagement.builder()
+                        .tokenStatus(TokenStatus.GENERATION_IN_PROGRESS)
+                        .userId(userId)
+                        .remarks(TokenStatus.GENERATION_IN_PROGRESS.remarks)
+                        .build()
+        );
+    }
+
+    public boolean isValidTokenExist(String token) {
+        log.info("Checking if valid token exists for token: {}", token);
+        boolean exists = tokenManagementRepository.existsByTokenAndIsValidTrue(token);
+        log.info("Valid token existence for token {}: {}", token, exists);
+        return exists;
+    }
+
+    public void saveToken(List<TokenManagement> tokenManagement) {
+        log.info("Saving token list with size: {}", tokenManagement.size());
+        tokenManagementRepository.saveAll(tokenManagement);
+        log.info("Token list saved successfully.");
+    }
+
+    public Optional<TokenManagement> findTokenByUserIdAndIsValidTrue(UUID userId) {
+        log.info("Finding valid token for userId: {}", userId);
+        Optional<TokenManagement> token = tokenManagementRepository.findTokenByUserIdAndIsValidTrue(userId);
+        log.info("Valid token found for userId {}: {}", userId, token.isPresent());
+        return token;
+    }
+
+    public MerchantUserDto getMerchantUserDto(String userName) {
+        log.info("Fetching merchant user details for userName: {}", userName);
+        MerchantUserDto merchantUser = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(
+                userName, userName, userName, List.of(UserStatus.ACTIVE));
+        log.info("Merchant user details fetched for userName: {}", userName);
+        return merchantUser;
+    }
+
+    public MerchantUserDto getMerchantUserDto(String userName, List<UserStatus> userStatus) {
+        log.info("Fetching merchant user details for userName: {}, with user status: {}", userName, userStatus);
+        MerchantUserDto merchantUser = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(
+                userName, userName, userName, userStatus);
+        log.info("Merchant user details fetched for userName: {}, with user status: {}", userName, userStatus);
+        return merchantUser;
+    }
+
+    public String getMerchantUserRoleName(UUID roleId) {
+        log.info("Fetching merchant user role name for roleId: {}", roleId);
+        String roleName = userRolesRepository.findById(roleId)
+                .map(MerchantUserRole::getRole)
+                .orElse("USER");
+        log.info("Role name fetched for roleId {}: {}", roleId, roleName);
+        return roleName;
+    }
+
+    public int updateMerchantUserForLogin(MerchantUserDto merchantUserDto, boolean loginStatus) {
+        log.info("Updating login status for userName: {}, loginStatus: {}", merchantUserDto.getUserName(), loginStatus);
+        int updateCount = merchantUserDao.updateMerchantUserForLogin(merchantUserDto, loginStatus);
+        log.info("Updated login status for userName: {}, rows affected: {}", merchantUserDto.getUserName(), updateCount);
+        return updateCount;
+    }
+}
+
+
+
 package com.epay.merchant.service;
 
 import com.epay.merchant.config.MerchantConfig;
