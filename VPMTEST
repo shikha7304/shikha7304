@@ -1,5 +1,80 @@
+@Test
+void testDownloadMerchantUserReport() {
+    // Mock the principal and authentication
+    when(mockPrincipal.getUsername()).thenReturn("testUser");
+    SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
+    when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
 
-    @Test
+    // Mock the DAO method to return a MerchantUserDto
+    MerchantUserDto mockMerchantUser = MerchantUserDto.builder()
+            .id("123")
+            .userName("testUser")
+            .status("ACTIVE")
+            .build();
+    when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE)).thenReturn(mockMerchantUser);
+
+    // Mock repository to return a list of MerchantUser entities
+    List<MerchantUser> mockMerchantUsers = List.of(
+            MerchantUser.builder()
+                    .id("123")
+                    .userName("Test")
+                    .firstName("John")
+                    .lastName("Doe")
+                    .email("john.doe@example.com")
+                    .mobilePhone("1234567890")
+                    .status("ACTIVE")
+                    .build()
+    );
+    when(merchantUserRepository.findAll(any(Specification.class))).thenReturn(mockMerchantUsers);
+
+    // Mock mapper to convert entities to DTOs
+    List<MerchantUserDto> mockMerchantUserDtos = List.of(
+            MerchantUserDto.builder()
+                    .id("123")
+                    .userName("Test")
+                    .firstName("John")
+                    .lastName("Doe")
+                    .email("john.doe@example.com")
+                    .mobilePhone("1234567890")
+                    .status("ACTIVE")
+                    .build()
+    );
+    when(merchantMapper.mapMerchantUserEntityListToDtoList(mockMerchantUsers)).thenReturn(mockMerchantUserDtos);
+
+    // Mock file generator service
+    doNothing().when(fileGeneratorService).downloadFile(
+            any(HttpServletResponse.class),
+            eq(ReportFormat.CSV),
+            eq(mockMerchantUserDtos)
+    );
+
+    // Prepare the request
+    MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
+    merchantUserRequestList.setUserName("Test");
+    merchantUserRequestList.setStatus("ACTIVE");
+
+    // Execute the method under test
+    assertDoesNotThrow(() -> {
+        new MerchantUserService(
+            merchantUserDao,
+            merchantUserRepository,
+            merchantMapper,
+            fileGeneratorService
+        ).downloadMerchantUserReport(response, merchantUserRequestList);
+    });
+
+    // Verify interactions
+    verify(merchantUserDao).getByUserName("testUser", UserStatus.ACTIVE);
+    verify(merchantUserRepository).findAll(any(Specification.class));
+    verify(merchantMapper).mapMerchantUserEntityListToDtoList(mockMerchantUsers);
+    verify(fileGeneratorService).downloadFile(response, ReportFormat.CSV, mockMerchantUserDtos);
+}
+
+
+
+
+
+@Test
     void testDownloadMerchantUserReport()
     {
         when(mockPrincipal.getUsername()).thenReturn("testUser");
