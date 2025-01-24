@@ -1,4 +1,20 @@
-   public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
+   @Test
+    void testDownloadMerchantUserReport()
+    {
+        when(mockPrincipal.getUsername()).thenReturn("testUser");
+        SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
+        when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
+        when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE))
+                .thenThrow(new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE,
+                        MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "testUser")));
+        MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
+        merchantUserRequestList.setUserName("Test");
+        merchantUserRequestList.setStatus("ACTIVE");
+        when(merchantUserDao.getMerchantUsers(any())).thenReturn(any());
+        doNothing().when(fileGeneratorService).downloadFile(response, ReportFormat.CSV, Collections.singletonList(MerchantUserDto.builder().userName("test").build()));
+    }
+
+public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
         log.info("Fetching list of merchant users {} ",merchantUserRequestList);
         String username = EPayIdentityUtil.getUserPrincipal().getUsername();
         MerchantUserDto merchantUser = merchantUserDao.getByUserName(username, UserStatus.ACTIVE);
