@@ -1,4 +1,62 @@
-   @Test
+@Test
+void testDownloadMerchantUserReport() {
+    // Mock authentication and user principal
+    when(mockPrincipal.getUsername()).thenReturn("testUser");
+    SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
+    when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
+
+    // Mock the DAO method to return a valid MerchantUserDto
+    MerchantUserDto mockMerchantUser = MerchantUserDto.builder()
+            .id("123")
+            .userName("testUser")
+            .status("ACTIVE")
+            .build();
+    when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE)).thenReturn(mockMerchantUser);
+
+    // Mock the DAO method to return a list of MerchantUserDto
+    List<MerchantUserDto> mockMerchantUserList = List.of(
+            MerchantUserDto.builder()
+                    .id("123")
+                    .userName("Test")
+                    .firstName("John")
+                    .lastName("Doe")
+                    .email("john.doe@example.com")
+                    .mobilePhone("1234567890")
+                    .status("ACTIVE")
+                    .build()
+    );
+    when(merchantUserDao.getMerchantUsers(any())).thenReturn(mockMerchantUserList);
+
+    // Mock the file generator service
+    doNothing().when(fileGeneratorService).downloadFile(
+            any(HttpServletResponse.class),
+            eq(ReportFormat.CSV),
+            eq(mockMerchantUserList)
+    );
+
+    // Prepare the request
+    MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
+    merchantUserRequestList.setUserName("Test");
+    merchantUserRequestList.setStatus("ACTIVE");
+
+    // Execute the method under test
+    assertDoesNotThrow(() -> {
+        new MerchantUserService(
+            merchantUserDao, 
+            fileGeneratorService
+        ).downloadMerchantUserReport(response, merchantUserRequestList);
+    });
+
+    // Verify interactions
+    verify(merchantUserDao).getByUserName("testUser", UserStatus.ACTIVE);
+    verify(merchantUserDao).getMerchantUsers(any());
+    verify(fileGeneratorService).downloadFile(response, ReportFormat.CSV, mockMerchantUserList);
+}
+
+
+
+
+@Test
     void testDownloadMerchantUserReport()
     {
         when(mockPrincipal.getUsername()).thenReturn("testUser");
