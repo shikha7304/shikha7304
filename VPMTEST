@@ -1,3 +1,6 @@
+public ReportingResponse<String> generateMerchantFeesInvoice(HttpServletResponse response, @Parameter(description = "MID of the merchant for generating merchant fees invoice", required = true) @PathVariable String mId, @RequestBody List<String> reportDate)
+
+
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
