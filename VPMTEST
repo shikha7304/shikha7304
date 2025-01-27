@@ -1,242 +1,64 @@
-@Test
-void testDownloadMerchantUserReport() {
-    // Mock the principal and authentication
-    when(mockPrincipal.getUsername()).thenReturn("testUser");
-    SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
-    when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
+package com.epay.reporting.config;
 
-    // Mock the DAO method to return a MerchantUserDto
-    MerchantUserDto mockMerchantUser = MerchantUserDto.builder()
-            .id("123")
-            .userName("testUser")
-            .status("ACTIVE")
-            .build();
-    when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE)).thenReturn(mockMerchantUser);
-
-    // Mock repository to return a list of MerchantUser entities
-    List<MerchantUser> mockMerchantUsers = List.of(
-            MerchantUser.builder()
-                    .id("123")
-                    .userName("Test")
-                    .firstName("John")
-                    .lastName("Doe")
-                    .email("john.doe@example.com")
-                    .mobilePhone("1234567890")
-                    .status("ACTIVE")
-                    .build()
-    );
-    when(merchantUserRepository.findAll(any(Specification.class))).thenReturn(mockMerchantUsers);
-
-    // Mock mapper to convert entities to DTOs
-    List<MerchantUserDto> mockMerchantUserDtos = List.of(
-            MerchantUserDto.builder()
-                    .id("123")
-                    .userName("Test")
-                    .firstName("John")
-                    .lastName("Doe")
-                    .email("john.doe@example.com")
-                    .mobilePhone("1234567890")
-                    .status("ACTIVE")
-                    .build()
-    );
-    when(merchantMapper.mapMerchantUserEntityListToDtoList(mockMerchantUsers)).thenReturn(mockMerchantUserDtos);
-
-    // Mock file generator service
-    doNothing().when(fileGeneratorService).downloadFile(
-            any(HttpServletResponse.class),
-            eq(ReportFormat.CSV),
-            eq(mockMerchantUserDtos)
-    );
-
-    // Prepare the request
-    MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
-    merchantUserRequestList.setUserName("Test");
-    merchantUserRequestList.setStatus("ACTIVE");
-
-    // Execute the method under test
-    assertDoesNotThrow(() -> {
-        new MerchantUserService(
-            merchantUserDao,
-            merchantUserRepository,
-            merchantMapper,
-            fileGeneratorService
-        ).downloadMerchantUserReport(response, merchantUserRequestList);
-    });
-
-    // Verify interactions
-    verify(merchantUserDao).getByUserName("testUser", UserStatus.ACTIVE);
-    verify(merchantUserRepository).findAll(any(Specification.class));
-    verify(merchantMapper).mapMerchantUserEntityListToDtoList(mockMerchantUsers);
-    verify(fileGeneratorService).downloadFile(response, ReportFormat.CSV, mockMerchantUserDtos);
-}
-
-
-
-
-
-    @Test
-    void testDownloadMerchantUserReport()
-    {
-        when(mockPrincipal.getUsername()).thenReturn("testUser");
-        SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
-        when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
-        MerchantUserDto mockMerchantUser = MerchantUserDto.builder().id(UUID.randomUUID()).userName("testUser").status(UserStatus.ACTIVE).build();
-        when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE)).thenReturn(mockMerchantUser);
-        List<MerchantUserDto> mockMerchantUserList = List.of(MerchantUserDto.builder().id(UUID.randomUUID()).userName("Test").firstName("John").lastName("Doe").email("john.doe@example.com").mobilePhone("1234567890").status(UserStatus.ACTIVE).build());
-        when(merchantUserRepository.findAll((Specification<MerchantUser>))).thenReturn(mockMerchantUser);
-        when(merchantMapper.mapMerchantUserEntityListToDtoList()).thenReturn(mockMerchantUserList);
-
-        when(merchantUserDao.getMerchantUsers(any())).thenReturn(mockMerchantUserList);
-        doNothing().when(fileGeneratorService).downloadFile(response, ReportFormat.CSV, mockMerchantUserList);
-        MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
-        merchantUserRequestList.setUserName("Test");
-        merchantUserRequestList.setStatus("ACTIVE");
-        verify(merchantUserDao).getByUserName("testUser", UserStatus.ACTIVE);
-        verify(merchantUserDao).getMerchantUsers(any());
-     /*   verify(fileGeneratorService).downloadFile(response, ReportFormat.CSV, mockMerchantUserList);*/
-    }
-
-
-
-
-@Test
-    void testDownloadMerchantUserReport()
-    {
-        when(mockPrincipal.getUsername()).thenReturn("testUser");
-        SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
-        when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
-        when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE))
-                .thenThrow(new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE,
-                        MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "testUser")));
-        MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
-        merchantUserRequestList.setUserName("Test");
-        merchantUserRequestList.setStatus("ACTIVE");
-        when(merchantUserDao.getMerchantUsers(any())).thenReturn(any());
-        doNothing().when(fileGeneratorService).downloadFile(response, ReportFormat.CSV, Collections.singletonList(MerchantUserDto.builder().userName("test").build()));
-    }
-
-public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
-        log.info("Fetching list of merchant users {} ",merchantUserRequestList);
-        String username = EPayIdentityUtil.getUserPrincipal().getUsername();
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(username, UserStatus.ACTIVE);
-        List<MerchantUserDto> merchantUserResponseList = merchantUserDao.getMerchantUsers(merchantUserRequestList);
-        log.info("Returning list of merchant users {}", merchantUserResponseList);
-        fileGeneratorService.downloadFile(response, ReportFormat.CSV, merchantUserResponseList);
-        log.info("Generated CSV file containing list of merchant user");
-    }
-
-    public List<MerchantUserDto> getMerchantUsers(MerchantUserRequestList merchantUserRequestList) {
-        String username = EPayIdentityUtil.getUserPrincipal().getUsername();
-        MerchantUserDto merchantUser = getByUserName(username, UserStatus.ACTIVE);
-        Specification<MerchantUser> specification = MerchantUserSpecification.searchUsers(merchantUser.getId(), merchantUserRequestList.getUserName(), merchantUserRequestList.getName(), merchantUserRequestList.getMobilePhone(),merchantUserRequestList.getFromDate(),merchantUserRequestList.getToDate(),merchantUserRequestList.getStatus());
-        List<MerchantUser> merchantUsers=merchantUserRepository.findAll(specification);
-        return merchantMapper.mapMerchantUserEntityListToDtoList(merchantUsers);
-    }
-
-package com.epay.merchant.service;
-
-
-import com.epay.merchant.dao.MerchantUserDao;
-import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.entity.MerchantUserRole;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.repository.MerchantUserRoleRepository;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.Report;
-import com.epay.merchant.util.enums.ReportFormat;
-import com.epay.merchant.util.file.generator.FileGenerator;
-import com.epay.merchant.util.file.model.FileModel;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.stereotype.Service;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.info.BuildProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.text.MessageFormat;
-import java.util.List;
 import java.util.Map;
 
-@Service
-@RequiredArgsConstructor
-public class FileGeneratorService {
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-    private static int DEFAULT_BUFFER_SIZE = 8192;
-    private final   FileGenerator fileGenerator;
-    private final MerchantUserRoleRepository merchantUserRoleRepository ;
+@Configuration
+public class SwaggerConfig {
+    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(SwaggerConfig.class);
+    @Value("${spring.application.name}")
+    private String appName;
+    @Value("${git.commit.id:unknown}")
+    private String gitCommitId;
+    @Value("${git.commit.id.abbrev:unknown}")
+    private String gitCommitIdAbbr;
+    @Value("${git.commit.time:unknown}")
+    private String gitCommitTime;
+    @Value("${git.branch:unknown}")
+    private String gitBranch;
 
-    /**
-     * Building content type and setting file in response.
-     * @param httpResponse HttpServletResponse
-     * @param reportFormat ReportFormat
-     * @param merchantUserDtos List<MerchantUserDto>
-     */
-    public  void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat,List<MerchantUserDto>merchantUserDtos) {
-        String contentType = "text/csv";
-        String filename="merchant_users.csv";
-        setFileResponse(httpResponse, contentType,filename,merchantUserDtos);
-    }
-
-    public  FileModel buildFileModel(ReportFormat reportFormat, List<String> header, List<List<Object>> fileData, Map<String, Object> pdfFileData) {
-        return fileGenerator.buildFileModel(reportFormat, header, fileData, pdfFileData);
-    }
-
-    public File fileGenerator(ReportFormat reportFormat, Report report, String userName, FileModel fileModel) {
-        return fileGenerator.fileGenerator(reportFormat, report, userName, fileModel);
-    }
-    /**
-     * TODO: Temp code: it will replace from S3 code.
-     * @param filePath String
-     * @return InputStream
-     */
-    private InputStream getFileContent(String filePath) {
-        try {
-            return new FileInputStream(filePath);
-        } catch (IOException e) {
-            log.error("Unable to read file {}", filePath, e);
-            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, filePath));
-        }
-    }
-
-    /**
-     * Setting file name, content type and content in http servlet response.
-     * @param response HttpServletResponse
-     * @param contentType String
-     * @param fileName String
-     */
-    protected void setFileResponse(HttpServletResponse response, String contentType, String fileName,  List<MerchantUserDto> merchantUserResponseList) {
-        // Set the response headers for a downloadable file
-        response.setContentType(contentType);
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,"attachment;filename=\"" + fileName + "\"");
-        // Write the file content to the response output stream
-        try {
-           //use the writer to write  the csv content
-            var writer = response.getWriter();
-            writer.write("User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n");
-
-            for (MerchantUserDto user : merchantUserResponseList) {
-                String roleName=merchantUserRoleRepository.findById(user.getRole()).map(MerchantUserRole::getRole).orElse("Unknown Role");
-
-                String csvRow = user.getId() + ","
-                        + user.getUserName() + ","
-                        + user.getFirstName() + " " + user.getLastName()+ ","
-                        + user.getEmail() + ","
-                        + user.getMobilePhone() + ","
-                        + roleName + ","
-                        + user.getCreatedAt() + ","
-                        + user.getStatus() + "\n";
-                response.getWriter().write(csvRow);
-            }
-                writer.flush();
-        }
-        catch (IOException e) {
-            log.error("Error in setting file content in response", e);
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE,
-                    MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
-        }
+    @Bean
+    public OpenAPI customAPI(BuildProperties buildProperties) {
+        return new OpenAPI() .components(new Components()
+                        .addSecuritySchemes("BearerAuth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                        )
+                )
+                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"))
+                .info(new io.swagger.v3.oas.models.info.Info()
+                        .title(appName)
+                        .version(buildProperties.getVersion() + "-" + gitCommitIdAbbr)
+                        .description("API for " + appName)
+                        .contact(new Contact().name("Info").email("info.sbiepay@sbi.co.in"))
+                        .license(new License().name("SBI ePay").url("https://www.sbiepay.sbi/"))
+                        .extensions(Map.of("x-git-commit-id", gitCommitId,
+                                "x-git-commit-time", gitCommitTime,
+                                "x-git-branch", gitBranch)));
     }
 }
+{
+  "status": 0,
+  "errors": [
+    {
+      "errorCode": "401",
+      "errorMessage": "JWT Token is required"
+    }
+  ]
+}
+
+http://localhost:9096/reporting/v1/swagger-ui/index.html
