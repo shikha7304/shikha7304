@@ -15,6 +15,89 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.Map;
 
+/**
+ * Swagger Configuration for API Documentation with JWT Authentication.
+ */
+@Configuration
+public class SwaggerConfig {
+    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(SwaggerConfig.class);
+
+    @Value("${spring.application.name}")
+    private String appName;
+
+    @Value("${git.commit.id:unknown}")
+    private String gitCommitId;
+
+    @Value("${git.commit.id.abbrev:unknown}")
+    private String gitCommitIdAbbr;
+
+    @Value("${git.commit.time:unknown}")
+    private String gitCommitTime;
+
+    @Value("${git.branch:unknown}")
+    private String gitBranch;
+
+    /**
+     * Configure OpenAPI with JWT Bearer Authentication Scheme.
+     * 
+     * @param buildProperties Build properties for versioning.
+     * @return Configured OpenAPI instance.
+     */
+    @Bean
+    public OpenAPI customAPI(BuildProperties buildProperties) {
+        log.info("Initializing Swagger configuration for application: {}", appName);
+
+        return new OpenAPI()
+                .components(new Components()
+                        .addSecuritySchemes("BearerAuth",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.HTTP)
+                                        .scheme("bearer")
+                                        .bearerFormat("JWT")
+                        )
+                )
+                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"))
+                .info(new io.swagger.v3.oas.models.info.Info()
+                        .title(appName)
+                        .version(buildProperties.getVersion() + "-" + gitCommitIdAbbr)
+                        .description("API documentation for " + appName)
+                        .contact(new Contact()
+                                .name("Info")
+                                .email("info.sbiepay@sbi.co.in"))
+                        .license(new License()
+                                .name("SBI ePay")
+                                .url("https://www.sbiepay.sbi/"))
+                        .extensions(Map.of(
+                                "x-git-commit-id", gitCommitId,
+                                "x-git-commit-time", gitCommitTime,
+                                "x-git-branch", gitBranch
+                        )));
+    }
+}
+
+
+
+
+
+
+
+package com.epay.reporting.config;
+
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.info.BuildProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
+
 @Configuration
 public class SwaggerConfig {
     private static final LoggerUtility log = LoggerFactoryUtility.getLogger(SwaggerConfig.class);
