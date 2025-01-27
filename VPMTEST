@@ -1,3 +1,32 @@
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    /**
+     * Security filter chain configuration.
+     */
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+                .authorizeHttpRequests()
+                // Allow Swagger UI and API docs without authentication
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                // Require authentication for other endpoints
+                .anyRequest().authenticated()
+                .and()
+                .oauth2ResourceServer()
+                .jwt(); // Enable JWT authentication
+        return http.build();
+    }
+}
+
+
+
 package com.epay.reporting.config;
 
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
