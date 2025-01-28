@@ -1,3 +1,85 @@
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+
+@Service
+@RequiredArgsConstructor
+public class FileGeneratorService {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private static int DEFAULT_BUFFER_SIZE = 8192;
+    private final FileGenerator fileGenerator;
+    private final MerchantUserRoleRepository merchantUserRoleRepository;
+
+    // DateTimeFormatter for formatting the timestamp
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm:ss a");
+
+    /**
+     * Setting file name, content type, and content in HTTP servlet response.
+     *
+     * @param response                 HttpServletResponse
+     * @param contentType              String
+     * @param fileName                 String
+     * @param merchantUserResponseList List of MerchantUserDto
+     */
+    protected void setFileResponse(HttpServletResponse response, String contentType, String fileName, List<MerchantUserDto> merchantUserResponseList) {
+        // Set the response headers for a downloadable file
+        response.setContentType(contentType);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=\"" + fileName + "\"");
+
+        // Write the file content to the response output stream
+        try {
+            var writer = response.getWriter();
+            writer.write("User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n");
+
+            for (MerchantUserDto user : merchantUserResponseList) {
+                String roleName = merchantUserRoleRepository.findById(user.getRole())
+                        .map(MerchantUserRole::getRole)
+                        .orElse("Unknown Role");
+
+                // Format the createdAt field
+                String formattedDate = formatCreatedAt(user.getCreatedAt());
+
+                String csvRow = user.getId() + ","
+                        + user.getUserName() + ","
+                        + user.getFirstName() + " " + user.getLastName() + ","
+                        + user.getEmailMasked() + ","
+                        + user.getMobilePhoneMasked() + ","
+                        + roleName + ","
+                        + formattedDate + ","
+                        + user.getStatus() + "\n";
+                writer.write(csvRow);
+            }
+
+            writer.flush();
+        } catch (IOException e) {
+            log.error("Error in setting file content in response", e);
+            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE,
+                    MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
+        }
+    }
+
+    /**
+     * Converts a timestamp (in milliseconds) to a formatted date string.
+     *
+     * @param timestamp long
+     * @return Formatted date string (e.g., 27 Aug 2025 11:00:45 PM)
+     */
+    private String formatCreatedAt(Long timestamp) {
+        if (timestamp == null) {
+            return "N/A"; // Handle null timestamp
+        }
+        LocalDateTime dateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault());
+        return dateTime.format(DATE_FORMATTER);
+    }
+}
+
+
+
+
+
+
+
 package com.epay.merchant.service;
 
 
