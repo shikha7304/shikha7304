@@ -1,179 +1,110 @@
-public ReportingResponse<String> generateMerchantFeesInvoice(HttpServletResponse response, @Parameter(description = "MID of the merchant for generating merchant fees invoice", required = true) @PathVariable String mId, @RequestBody List<String> reportDate)
+package com.epay.merchant.service;
 
 
-import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.web.SecurityFilterChain;
-
-@Configuration
-@EnableWebSecurity
-public class SecurityConfig {
-
-    /**
-     * Security filter chain configuration.
-     */
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.csrf().disable()
-                .authorizeHttpRequests()
-                // Allow Swagger UI and API docs without authentication
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                // Require authentication for other endpoints
-                .anyRequest().authenticated()
-                .and()
-                .oauth2ResourceServer()
-                .jwt(); // Enable JWT authentication
-        return http.build();
-    }
-}
-
-
-
-package com.epay.reporting.config;
-
+import com.epay.merchant.dao.MerchantUserDao;
+import com.epay.merchant.dto.MerchantUserDto;
+import com.epay.merchant.entity.MerchantUserRole;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.repository.MerchantUserRoleRepository;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.enums.Report;
+import com.epay.merchant.util.enums.ReportFormat;
+import com.epay.merchant.util.file.generator.FileGenerator;
+import com.epay.merchant.util.file.model.FileModel;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
-import io.swagger.v3.oas.models.Components;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.License;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.info.BuildProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.text.MessageFormat;
+import java.util.List;
 import java.util.Map;
 
-/**
- * Swagger Configuration for API Documentation with JWT Authentication.
- */
-@Configuration
-public class SwaggerConfig {
-    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(SwaggerConfig.class);
-
-    @Value("${spring.application.name}")
-    private String appName;
-
-    @Value("${git.commit.id:unknown}")
-    private String gitCommitId;
-
-    @Value("${git.commit.id.abbrev:unknown}")
-    private String gitCommitIdAbbr;
-
-    @Value("${git.commit.time:unknown}")
-    private String gitCommitTime;
-
-    @Value("${git.branch:unknown}")
-    private String gitBranch;
+@Service
+@RequiredArgsConstructor
+public class FileGeneratorService {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private static int DEFAULT_BUFFER_SIZE = 8192;
+    private final   FileGenerator fileGenerator;
+    private final MerchantUserRoleRepository merchantUserRoleRepository ;
 
     /**
-     * Configure OpenAPI with JWT Bearer Authentication Scheme.
-     * 
-     * @param buildProperties Build properties for versioning.
-     * @return Configured OpenAPI instance.
+     * Building content type and setting file in response.
+     * @param httpResponse HttpServletResponse
+     * @param reportFormat ReportFormat
+     * @param merchantUserDtos List<MerchantUserDto>
      */
-    @Bean
-    public OpenAPI customAPI(BuildProperties buildProperties) {
-        log.info("Initializing Swagger configuration for application: {}", appName);
+    public  void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat,List<MerchantUserDto>merchantUserDtos) {
+        String contentType = "text/csv";
+        String filename="merchant_users.csv";
+        setFileResponse(httpResponse, contentType,filename,merchantUserDtos);
+    }
 
-        return new OpenAPI()
-                .components(new Components()
-                        .addSecuritySchemes("BearerAuth",
-                                new SecurityScheme()
-                                        .type(SecurityScheme.Type.HTTP)
-                                        .scheme("bearer")
-                                        .bearerFormat("JWT")
-                        )
-                )
-                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"))
-                .info(new io.swagger.v3.oas.models.info.Info()
-                        .title(appName)
-                        .version(buildProperties.getVersion() + "-" + gitCommitIdAbbr)
-                        .description("API documentation for " + appName)
-                        .contact(new Contact()
-                                .name("Info")
-                                .email("info.sbiepay@sbi.co.in"))
-                        .license(new License()
-                                .name("SBI ePay")
-                                .url("https://www.sbiepay.sbi/"))
-                        .extensions(Map.of(
-                                "x-git-commit-id", gitCommitId,
-                                "x-git-commit-time", gitCommitTime,
-                                "x-git-branch", gitBranch
-                        )));
+    public  FileModel buildFileModel(ReportFormat reportFormat, List<String> header, List<List<Object>> fileData, Map<String, Object> pdfFileData) {
+        return fileGenerator.buildFileModel(reportFormat, header, fileData, pdfFileData);
+    }
+
+    public File fileGenerator(ReportFormat reportFormat, Report report, String userName, FileModel fileModel) {
+        return fileGenerator.fileGenerator(reportFormat, report, userName, fileModel);
+    }
+    /**
+     * TODO: Temp code: it will replace from S3 code.
+     * @param filePath String
+     * @return InputStream
+     */
+    private InputStream getFileContent(String filePath) {
+        try {
+            return new FileInputStream(filePath);
+        } catch (IOException e) {
+            log.error("Unable to read file {}", filePath, e);
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, filePath));
+        }
+    }
+
+    /**
+     * Setting file name, content type and content in http servlet response.
+     * @param response HttpServletResponse
+     * @param contentType String
+     * @param fileName String
+     */
+    protected void setFileResponse(HttpServletResponse response, String contentType, String fileName,  List<MerchantUserDto> merchantUserResponseList) {
+        // Set the response headers for a downloadable file
+        response.setContentType(contentType);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,"attachment;filename=\"" + fileName + "\"");
+        // Write the file content to the response output stream
+        try {
+           //use the writer to write  the csv content
+            var writer = response.getWriter();
+            writer.write("User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n");
+
+            for (MerchantUserDto user : merchantUserResponseList) {
+                String roleName=merchantUserRoleRepository.findById(user.getRole()).map(MerchantUserRole::getRole).orElse("Unknown Role");
+
+                String csvRow = user.getId() + ","
+                        + user.getUserName() + ","
+                        + user.getFirstName() + " " + user.getLastName()+ ","
+                        + user.getEmailMasked() + ","
+                        + user.getMobilePhoneMasked() + ","
+                        + roleName + ","
+                        + user.getCreatedAt() + ","
+                        + user.getStatus() + "\n";
+                response.getWriter().write(csvRow);
+            }
+                writer.flush();
+        }
+        catch (IOException e) {
+            log.error("Error in setting file content in response", e);
+            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE,
+                    MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
+        }
     }
 }
 
 
-
-
-
-
-
-package com.epay.reporting.config;
-
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import io.swagger.v3.oas.models.Components;
-import io.swagger.v3.oas.models.OpenAPI;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.info.License;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.info.BuildProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-import java.util.Map;
-
-@Configuration
-public class SwaggerConfig {
-    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(SwaggerConfig.class);
-    @Value("${spring.application.name}")
-    private String appName;
-    @Value("${git.commit.id:unknown}")
-    private String gitCommitId;
-    @Value("${git.commit.id.abbrev:unknown}")
-    private String gitCommitIdAbbr;
-    @Value("${git.commit.time:unknown}")
-    private String gitCommitTime;
-    @Value("${git.branch:unknown}")
-    private String gitBranch;
-
-    @Bean
-    public OpenAPI customAPI(BuildProperties buildProperties) {
-        return new OpenAPI() .components(new Components()
-                        .addSecuritySchemes("BearerAuth",
-                                new SecurityScheme()
-                                        .type(SecurityScheme.Type.HTTP)
-                                        .scheme("bearer")
-                                        .bearerFormat("JWT")
-                        )
-                )
-                .addSecurityItem(new SecurityRequirement().addList("BearerAuth"))
-                .info(new io.swagger.v3.oas.models.info.Info()
-                        .title(appName)
-                        .version(buildProperties.getVersion() + "-" + gitCommitIdAbbr)
-                        .description("API for " + appName)
-                        .contact(new Contact().name("Info").email("info.sbiepay@sbi.co.in"))
-                        .license(new License().name("SBI ePay").url("https://www.sbiepay.sbi/"))
-                        .extensions(Map.of("x-git-commit-id", gitCommitId,
-                                "x-git-commit-time", gitCommitTime,
-                                "x-git-branch", gitBranch)));
-    }
-}
-{
-  "status": 0,
-  "errors": [
-    {
-      "errorCode": "401",
-      "errorMessage": "JWT Token is required"
-    }
-  ]
-}
-
-http://localhost:9096/reporting/v1/swagger-ui/index.html
+this is + user.getCreatedAt() + "," is in long format but i want date in 27 aug 2025 11:00:45 PM
