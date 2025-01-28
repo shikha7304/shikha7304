@@ -1,4 +1,27 @@
- public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
+private List<Object> convertToListOfObject(String roleName, MerchantUserDto user) {
+    List<Object> objectList = new ArrayList<>();
+    objectList.add(StringUtils.isEmpty(String.valueOf(user.getId())) ? StringUtils.EMPTY : user.getId());
+    objectList.add(StringUtils.isEmpty(user.getUserName()) ? StringUtils.EMPTY : user.getUserName());
+
+    // Concatenate first name and last name
+    String fullName = (StringUtils.isEmpty(user.getFirstName()) ? StringUtils.EMPTY : user.getFirstName()) + 
+                      (StringUtils.isEmpty(user.getLastName()) ? "" : " " + user.getLastName());
+    objectList.add(StringUtils.isEmpty(fullName.trim()) ? StringUtils.EMPTY : fullName);
+
+    objectList.add(StringUtils.isEmpty(user.getEmailMasked()) ? StringUtils.EMPTY : user.getEmailMasked());
+    objectList.add(ObjectUtils.isEmpty(user.getMobilePhoneMasked()) ? StringUtils.EMPTY : user.getMobilePhoneMasked());
+    objectList.add(StringUtils.isEmpty(roleName) ? StringUtils.EMPTY : roleName);
+    objectList.add(Objects.isNull(user.getCreatedAt()) ? StringUtils.EMPTY : toDateTimeFormat(user.getCreatedAt()));
+    objectList.add(ObjectUtils.isEmpty(user.getStatus()) ? StringUtils.EMPTY : user.getStatus());
+    return objectList;
+}
+
+
+
+
+
+
+public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
         log.info("Fetching list of merchant users {} ", merchantUserRequestList);
         final Map<UUID, MerchantUserRoleDto> roleMap = merchantUserRoleDao.getUserRoleDtoMap();
         List<MerchantUserDto> merchantUserResponseList = merchantUserDao.getMerchantUsers(merchantUserRequestList);
