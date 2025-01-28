@@ -1,27 +1,31 @@
-private List<Object> convertToListOfObject(String roleName, MerchantUserDto user) {
-    List<Object> objectList = new ArrayList<>();
-    objectList.add(StringUtils.isEmpty(String.valueOf(user.getId())) ? StringUtils.EMPTY : user.getId());
-    objectList.add(StringUtils.isEmpty(user.getUserName()) ? StringUtils.EMPTY : user.getUserName());
+@Test
+    void testDownloadMerchantUserReport()
+    {
+        when(mockPrincipal.getUsername()).thenReturn("testUser");
+        SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
+        when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
+        MerchantUserDto mockMerchantUser = MerchantUserDto.builder().id(UUID.randomUUID()).userName("testUser").status(UserStatus.ACTIVE).build();
+        when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE)).thenReturn(mockMerchantUser);
+        List<MerchantUserDto> mockMerchantUserList = List.of(MerchantUserDto.builder().id(UUID.randomUUID()).userName("Test").firstName("John").lastName("Doe").email("john.doe@example.com").mobilePhone("1234567890").status(UserStatus.ACTIVE).build());
+        MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
+        merchantUserRequestList.setUserName("Test");
+        merchantUserRequestList.setStatus("ACTIVE");
+        List<MerchantUserDto> merchantUserDto = new ArrayList<>();
+        merchantUserDto.add(MerchantUserDto.builder().userName("user9").status(UserStatus.ACTIVE).build());
+        //List<List<Object>> objectList = Arrays.asList(merchantUserDto);
+        when(merchantUserDao.getMerchantUsers(merchantUserRequestList)).thenReturn(mockMerchantUserList);
+        doNothing().when(csvGenerator).downloadCsvFile(response, "Merchant_user.csv",List.of("User ID", "Name", "Email", "Mobile No.", "User Type", "Creation Date", "Status"),List.of(Collections.singletonList(merchantUserDto)));
+        MerchantUserRoleDto merchantUserRoleDto = new MerchantUserRoleDto();
+        merchantUserRoleDto.setId(UUID.randomUUID());
+        merchantUserRoleDto.setRole("USER");
+        when(merchantUserRoleDao.getUserRoleDtoMap()).thenReturn(any(),any());
+        merchantUserService.downloadMerchantUserReport(response,merchantUserRequestList);
+        verify(merchantUserDao).getByUserName("testUser", UserStatus.ACTIVE);
+        verify(merchantUserDao).getMerchantUsers(any());
+        //verify(csvGenerator).downloadFile(response, ReportFormat.CSV, mockMerchantUserList);
+    }
 
-    // Concatenate first name and last name
-    String fullName = (StringUtils.isEmpty(user.getFirstName()) ? StringUtils.EMPTY : user.getFirstName()) + 
-                      (StringUtils.isEmpty(user.getLastName()) ? "" : " " + user.getLastName());
-    objectList.add(StringUtils.isEmpty(fullName.trim()) ? StringUtils.EMPTY : fullName);
-
-    objectList.add(StringUtils.isEmpty(user.getEmailMasked()) ? StringUtils.EMPTY : user.getEmailMasked());
-    objectList.add(ObjectUtils.isEmpty(user.getMobilePhoneMasked()) ? StringUtils.EMPTY : user.getMobilePhoneMasked());
-    objectList.add(StringUtils.isEmpty(roleName) ? StringUtils.EMPTY : roleName);
-    objectList.add(Objects.isNull(user.getCreatedAt()) ? StringUtils.EMPTY : toDateTimeFormat(user.getCreatedAt()));
-    objectList.add(ObjectUtils.isEmpty(user.getStatus()) ? StringUtils.EMPTY : user.getStatus());
-    return objectList;
-}
-
-
-
-
-
-
-public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
+ public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
         log.info("Fetching list of merchant users {} ", merchantUserRequestList);
         final Map<UUID, MerchantUserRoleDto> roleMap = merchantUserRoleDao.getUserRoleDtoMap();
         List<MerchantUserDto> merchantUserResponseList = merchantUserDao.getMerchantUsers(merchantUserRequestList);
@@ -30,83 +34,11 @@ public void downloadMerchantUserReport(HttpServletResponse response, MerchantUse
         csvGenerator.downloadCsvFile(response, "merchant_users", USER_DOWNLOAD_HEADER, fileData);
         log.info("Generated CSV file containing list of merchant user");
     }
-    /**
-     * Converting OrderReport to List of its field values.
-     *
-     * @param roleName String
-     * @param user {@link MerchantUserDto}
-     * @return List
-     */
-    private List<Object> convertToListOfObject(String roleName, MerchantUserDto user) {
-        List<Object> objectList = new ArrayList<>();
-        objectList.add(StringUtils.isEmpty(String.valueOf(user.getId())) ? StringUtils.EMPTY : user.getId());
-        objectList.add(StringUtils.isEmpty(user.getUserName()) ? StringUtils.EMPTY : user.getUserName());
-        objectList.add(StringUtils.isEmpty(user.getFirstName()) ? StringUtils.EMPTY : user.getFirstName());//user.getLastName()
-        objectList.add(StringUtils.isEmpty(user.getEmailMasked() ) ? StringUtils.EMPTY : user.getEmailMasked() );
-        objectList.add(ObjectUtils.isEmpty(user.getMobilePhoneMasked()) ? StringUtils.EMPTY : user.getMobilePhoneMasked());
-        objectList.add(StringUtils.isEmpty(roleName) ? StringUtils.EMPTY : roleName);
-        objectList.add(Objects.isNull(user.getCreatedAt()) ? StringUtils.EMPTY : toDateTimeFormat(user.getCreatedAt()));
-        objectList.add(ObjectUtils.isEmpty(user.getStatus()) ? StringUtils.EMPTY : user.getStatus());
-        return objectList;
+
+ public Map<UUID, MerchantUserRoleDto> getUserRoleDtoMap() {
+        return getMerchantUserRoles().stream().collect(Collectors.toMap(MerchantUserRoleDto::getId, role -> role));
     }
-
-package com.epay.merchant.util.file.generator;
-
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.util.ErrorConstants;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import jakarta.servlet.http.HttpServletResponse;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter;
-import org.apache.commons.text.StringEscapeUtils;
-import org.springframework.http.HttpHeaders;
-import org.springframework.stereotype.Component;
-
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.text.MessageFormat;
-import java.util.List;
-
-@Component
-public class CSVGenerator {
-
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    /**
-     *
-     * @param response HttpServletResponse
-     * @param fileName String
-     * @param headerName headerName
-     * @param rows List
-     */
-    public void downloadCsvFile(HttpServletResponse response, String fileName, List<String> headerName, List<List<Object>> rows) {
-        try {
-            writeCSV(headerName, rows, response.getOutputStream());
-            response.setContentType("text/csv");
-            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, StringEscapeUtils.escapeJava("attachment;filename=" + fileName + "_" + System.currentTimeMillis() + ".csv"));
-        } catch (Exception e) {
-            log.error("Error occurred during CSV File downloading : {}", e.getMessage());
-            throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
-        }
+ public List<MerchantUserRoleDto> getMerchantUserRoles() {
+        List<MerchantUserRole> merchantUserRoles = merchantUserRoleRepository.findAll();
+        return mapper.mapMerchantUserRoleListEntityToListDto(merchantUserRoles);
     }
-
-    /**
-     * Writing CSV header and rows in output stream.
-     * @param headers List
-     * @param rows List
-     * @param outputStream OutputStream
-     */
-    private void writeCSV(List<String> headers, List<List<Object>> rows, OutputStream outputStream) {
-        CSVFormat csvFormat = CSVFormat.DEFAULT.builder().setHeader(headers.toArray(String[]::new)).build();
-        try (CSVPrinter csvPrinter = new CSVPrinter(new OutputStreamWriter(outputStream), csvFormat)) {
-            for (List<Object> row : rows) {
-                for (Object value : row)
-                    csvPrinter.print(value);
-            }
-        } catch (Exception e) {
-            log.error("Failed to write in CSV: ", e);
-            throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
-        }
-    }
-}
