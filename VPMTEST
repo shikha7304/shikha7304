@@ -1,4 +1,62 @@
 @Test
+void testDownloadMerchantUserReport() {
+    // Mock principal
+    when(mockPrincipal.getUsername()).thenReturn("testUser");
+    SecurityContextHolder.getContext().setAuthentication(mock(Authentication.class));
+    when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mockPrincipal);
+
+    // Mock merchant user
+    MerchantUserDto mockMerchantUser = MerchantUserDto.builder()
+            .id(UUID.randomUUID())
+            .userName("testUser")
+            .status(UserStatus.ACTIVE)
+            .build();
+    when(merchantUserDao.getByUserName("testUser", UserStatus.ACTIVE)).thenReturn(mockMerchantUser);
+
+    // Mock merchant user list
+    List<MerchantUserDto> mockMerchantUserList = List.of(
+            MerchantUserDto.builder()
+                    .id(UUID.randomUUID())
+                    .userName("Test")
+                    .firstName("John")
+                    .lastName("Doe")
+                    .email("john.doe@example.com")
+                    .mobilePhone("1234567890")
+                    .status(UserStatus.ACTIVE)
+                    .role(UUID.randomUUID()) // Add role ID
+                    .build()
+    );
+    MerchantUserRequestList merchantUserRequestList = new MerchantUserRequestList();
+    merchantUserRequestList.setUserName("Test");
+    merchantUserRequestList.setStatus("ACTIVE");
+    when(merchantUserDao.getMerchantUsers(merchantUserRequestList)).thenReturn(mockMerchantUserList);
+
+    // Mock role map
+    UUID roleId = mockMerchantUserList.get(0).getRole(); // Fetch role ID from the mocked user
+    MerchantUserRoleDto merchantUserRoleDto = new MerchantUserRoleDto();
+    merchantUserRoleDto.setId(roleId);
+    merchantUserRoleDto.setRole("USER");
+    Map<UUID, MerchantUserRoleDto> roleMap = Map.of(roleId, merchantUserRoleDto);
+    when(merchantUserRoleDao.getUserRoleDtoMap()).thenReturn(roleMap);
+
+    // Mock CSV generator
+    doNothing().when(csvGenerator).downloadCsvFile(eq(response), eq("merchant_users"), eq(USER_DOWNLOAD_HEADER), any());
+
+    // Call the method
+    merchantUserService.downloadMerchantUserReport(response, merchantUserRequestList);
+
+    // Verify interactions
+    verify(merchantUserDao).getByUserName("testUser", UserStatus.ACTIVE);
+    verify(merchantUserDao).getMerchantUsers(merchantUserRequestList);
+    verify(csvGenerator).downloadCsvFile(eq(response), eq("merchant_users"), eq(USER_DOWNLOAD_HEADER), any());
+}
+
+
+
+
+
+
+@Test
     void testDownloadMerchantUserReport()
     {
         when(mockPrincipal.getUsername()).thenReturn("testUser");
