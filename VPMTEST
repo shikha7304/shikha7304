@@ -1,4 +1,40 @@
-     */
+public void downloadCsvFile(HttpServletResponse response, String fileName, List<String> headerName, List<List<Object>> rows) {
+    try {
+        response.setContentType("text/csv");
+        response.setCharacterEncoding("UTF-8"); // Ensure proper encoding
+        String formattedFileName = fileName + "_" + System.currentTimeMillis() + ".csv";
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + formattedFileName + "\"");
+
+        writeCSV(headerName, rows, response.getOutputStream());
+        response.flushBuffer(); // Ensure the response is properly flushed
+    } catch (Exception e) {
+        log.error("Error occurred during CSV File downloading: {}", e.getMessage());
+        throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE,
+                MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
+    }
+}
+
+private void writeCSV(List<String> headers, List<List<Object>> rows, OutputStream outputStream) {
+    CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
+            .setHeader(headers.toArray(new String[0])) // Ensure headers are set
+            .setSkipHeaderRecord(false) // Ensure headers are included
+            .build();
+
+    try (CSVPrinter csvPrinter = new CSVPrinter(new OutputStreamWriter(outputStream, "UTF-8"), csvFormat)) {
+        for (List<Object> row : rows) {
+            csvPrinter.printRecord(row); // Print each row properly
+        }
+        csvPrinter.flush();
+    } catch (Exception e) {
+        log.error("Failed to write in CSV: ", e);
+        throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, 
+                MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
+    }
+}
+
+
+
+*/
     public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
         log.info("Fetching list of merchant users {} ", merchantUserRequestList);
         Map<UUID, MerchantUserRoleDto> roleMap = merchantUserRoleDao.getUserRoleDtoMap();
