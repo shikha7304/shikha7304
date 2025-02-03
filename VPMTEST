@@ -1,3 +1,79 @@
+@startuml
+
+skinparam classBorderColor Black
+skinparam classFontColor Black
+skinparam shadowing false
+skinparam classBackgroundColor White  // Default Background for Uncolored Classes
+
+class CustomerController << (C,White) >> #Orange {
+    - customerService: CustomerService
+    + createCustomer(customerRequest: CustomerRequest): TransactionResponse<OrderResponse>
+    + getCustomer(String customerId): TransactionResponse<CustomerResponse>
+    + updateCustomerStatus(String customerId, String status): TransactionResponse<CustomerResponse>
+}
+
+class CustomerService << (C,White) >> #Green {
+    - customerValidator: CustomerValidator
+    - customerDao: CustomerDAO
+    - UniqueIDGenerator: uniqueIDGenerator
+    - EncryptionDecryptionUtil: encryptionDecryptionUtil
+    - ObjectMapper: objectMapper
+    + saveCustomer(String customerRequest, String): CustomerResponse
+    + getCustomerByCustomerId(UUID customerId): CustomerResponse
+    + updateCustomerStatus(String customerId, String status): CustomerResponse
+}
+
+class CustomerValidator << (C,White) >> #Cyan {
+    + validateCustomerRequest(CustomerRequest customerRequest)
+    + validateUniqueCustomer(CustomerDto customerDto)
+    + validateMandatoryFields(CustomerDto customerDto)
+    + validateFieldsValue(CustomerDto customerDto)
+}
+
+class CustomerDAO << (C,White) >> #DarkCyan {
+    - customerRepository: CustomerRepository
+    + getCustomerByCustomerId(String customerId): Optional<CustomerDto> 
+    + saveCustomer(CustomerDto customerDto): CustomerDto
+    + updateCustomerStatus(UUID customerId, String status): CustomerDto
+}
+
+class CustomerRepository << (C,White) >> #Blue {
+    + findByCustomerId(String customerId): Optional<Customer>
+    + saveCustomer(Customer customer): Customer
+    + updateCustomerStatus(String status): Customer
+    + existsByCustomerId(String customerId): boolean
+}
+
+class Customer << (C,White) >> #Yellow {
+    - id: UUID
+    - name: String
+    - email: String
+    - phone: String
+    - status: String
+    - createdAt: Date
+    - updatedAt: Date
+    + getId(): UUID
+    + getName(): String
+    + getEmail(): String
+    + getPhone(): String
+    + getStatus(): String
+}
+
+CustomerController --> CustomerService
+CustomerService --> CustomerValidator
+CustomerService --> CustomerDAO
+CustomerService --> EncryptionDecryptionUtil
+CustomerDAO --> CustomerRepository
+CustomerDAO --> Customer
+
+@enduml
+
+
+
+
+
+
+
 public void downloadCsvFile(HttpServletResponse response, String fileName, List<String> headerName, List<List<Object>> rows) {
     try {
         response.setContentType("text/csv");
