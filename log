@@ -1,3 +1,41 @@
+@ExceptionHandler(HttpMessageNotReadableException.class)
+public ResponseEntity<Object> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+    Throwable cause = ex.getCause();
+    
+    if (cause instanceof InvalidFormatException invalidFormatException && 
+        invalidFormatException.getTargetType() == UUID.class) {
+        
+        String formattedMessage = MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Request ID", "Invalid UUID format");
+        
+        ErrorDto errorDto = ErrorDto.builder()
+                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                .errorMessage(formattedMessage)
+                .build();
+
+        return ResponseEntity.ok().body(MerchantResponse.builder()
+                .status(MerchantConstant.RESPONSE_FAILURE)
+                .errors(List.of(errorDto))
+                .build());
+    }
+
+    // Default error response if it's not related to UUID format
+    ErrorDto errorDto = ErrorDto.builder()
+            .errorCode(ErrorConstants.GENERIC_ERROR_CODE)
+            .errorMessage("Invalid request format.")
+            .build();
+
+    return ResponseEntity.badRequest().body(MerchantResponse.builder()
+            .status(MerchantConstant.RESPONSE_FAILURE)
+            .errors(List.of(errorDto))
+            .build());
+}
+
+
+
+
+
+
+
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ErrorConstants {
