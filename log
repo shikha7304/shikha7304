@@ -9,3 +9,194 @@ Expected response
 Status should be displayed 200 OK and also show proper error message for invalid request id.
 
 what all changes we need to do to achive this expected response as per my code 
+
+
+
+
+The issue is caused by Spring Boot’s default deserialization mechanism when parsing the requestId. The error occurs because the given requestId is not a valid UUID format. By default, Spring Boot fails to parse invalid UUIDs and returns a 400 Bad Request with an internal JSON parse error.
+
+Steps to Achieve Expected Response (200 OK with Proper Error Message)
+
+1. Modify the DTO to Handle Invalid UUIDs Gracefully
+	•	Instead of directly mapping requestId to a UUID field, use String and validate manually.
+
+Before (Current Implementation)
+
+public class CaptchaRequestDto {
+    private UUID requestId;
+    private String requestType;
+}
+
+After (Updated Implementation)
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+
+@Data
+public class CaptchaRequestDto {
+    
+    @NotBlank(message = "Request ID cannot be blank")
+    private String requestId;
+
+    @NotBlank(message = "Request Type cannot be blank")
+    private String requestType;
+}
+
+2. Add a Custom Validator for UUID Format
+	•	Since requestId is now a String, we need to validate if it is a properly formatted UUID.
+
+Create a Utility Class for Validation
+
+import java.util.UUID;
+
+public class ValidationUtil {
+    public static boolean isValidUUID(String requestId) {
+        try {
+            UUID.fromString(requestId);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+}
+
+3. Update Controller to Validate the Request ID
+
+Modify the controller method to validate requestId before processing the request.
+
+Before (Current Implementation)
+
+@PostMapping("/merchant/v1/captcha")
+public ResponseEntity<?> generateCaptcha(@RequestBody CaptchaRequestDto captchaRequest) {
+    // Process request directly
+}
+
+After (Updated Implementation)
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/merchant/v1")
+public class CaptchaController {
+
+    @PostMapping("/captcha")
+    public ResponseEntity<?> generateCaptcha(@RequestBody CaptchaRequestDto captchaRequest) {
+        if (!ValidationUtil.isValidUUID(captchaRequest.getRequestId())) {
+            return ResponseEntity.ok(new ErrorResponse("Invalid Request ID format. It should be a valid UUID."));
+        }
+
+        // Proceed with normal captcha generation logic
+        return ResponseEntity.ok(new SuccessResponse("Captcha generated successfully"));
+    }
+}
+
+4. Define a Custom Error Response Class
+
+Create a consistent error response format.
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+@Data
+@AllArgsConstructor
+public class ErrorResponse {
+    private String errorMessage;
+}
+
+5. Expected Behavior After Fix
+
+Input (Invalid requestId)
+
+{
+    "requestType": "LOGIN",
+    "requestId": "31529ddf-ce3f-4547-a4c4-e741c893b81g"
+}
+
+Response (200 OK)
+
+{
+    "errorMessage": "Invalid Request ID format. It should be a valid UUID."
+}
+
+Summary of Changes
+	1.	Changed requestId in DTO from UUID to String to prevent automatic parsing errors.
+	2.	Added a UUID format validation utility (ValidationUtil).
+	3.	Updated the controller to validate requestId manually and return a proper error message.
+	4.	Created a consistent error response format (ErrorResponse class).
+	5.	Now, the API will always return 200 OK with a proper error message instead of 400 Bad Request
+Would you like me to adjust the error structure to match your existing error format?
+
+
+
+Yes, you can achieve the expected behavior with minimum changes by using a custom exception handler and keeping the DTO unchanged. Here’s what you need to do:
+
+Minimal Changes to Fix the Issue
+
+1. Keep DTO as it is (No Change)
+
+public class CaptchaRequestDto {
+    private UUID requestId;
+    private String requestType;
+}
+
+2. Add a Global Exception Handler to Catch the UUID Parsing Error
+
+Spring Boot throws a MethodArgumentNotValidException or HttpMessageNotReadableException when it fails to deserialize an invalid UUID. We can handle this globally.
+
+Create or Modify Global Exception Handler
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(InvalidFormatException.class)
+    public ResponseEntity<?> handleInvalidUUIDException(InvalidFormatException ex) {
+        if (ex.getTargetType() == UUID.class) {
+            return ResponseEntity.ok(new ErrorResponse("Invalid Request ID format. It should be a valid UUID."));
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("Invalid request format."));
+    }
+}
+
+3. Define a Simple Error Response Class
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+@Data
+@AllArgsConstructor
+public class ErrorResponse {
+    private String errorMessage;
+}
+
+Expected Behavior After Fix
+
+Input (Invalid requestId)
+
+{
+    "requestType": "LOGIN",
+    "requestId": "31529ddf-ce3f-4547-a4c4-e741c893b81g"
+}
+
+Response (200 OK)
+
+{
+    "errorMessage": "Invalid Request ID format. It should be a valid UUID."
+}
+
+Why Is This the Minimal Change Approach?
+
+✅ No changes to DTO – requestId remains UUID.
+✅ No changes to controller – Existing logic remains intact.
+✅ Just one centralized exception handler – It catches UUID parsing errors and returns a 200 OK with a proper message.
+
+This should work without modifying the existing request-handling logic. Let me know if you need further refinements!
+
+
