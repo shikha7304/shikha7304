@@ -368,11 +368,13 @@ public class MerchantExceptionHandler extends ResponseEntityExceptionHandler {
      * @return ResponseEntity
      */
     @ExceptionHandler(InvalidFormatException.class)
-    public ResponseEntity<?> handleInvalidUUIDException(InvalidFormatException ex) {
+    public ResponseEntity<Object> handleInvalidUUIDException(InvalidFormatException ex) {
+
         if (ex.getTargetType() == UUID.class) {
-            ErrorDto errorDto = ErrorDto.builder().errorCode(ex.getErrorCode()).errorMessage(ex.getErrorMessage()).build();
+         ErrorDto  errorDto = ErrorDto.builder().errorCode(ErrorConstants.INVALID_ERROR_CODE).errorMessage(ErrorConstants.INVALID_ERROR_MESSAGE).build();
         }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ErrorConstants.INVALID_ERROR_CODE).;
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(MerchantResponse.builder().status(MerchantConstant.RESPONSE_FAILURE).errors(List.of(errorDto)).build());
+
     }
 
 }
