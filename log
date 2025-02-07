@@ -1,3 +1,46 @@
+@Override
+protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                HttpHeaders headers, HttpStatus status,
+                                                                WebRequest request) {
+    Throwable cause = ex.getCause();
+    // Check if the root cause is an InvalidFormatException for a UUID
+    if (cause instanceof InvalidFormatException invalidFormatException &&
+        invalidFormatException.getTargetType() == UUID.class) {
+
+        String formattedMessage = MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE,
+                                                       "Request ID", "Invalid UUID format");
+        ErrorDto errorDto = ErrorDto.builder()
+                                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                                    .errorMessage(formattedMessage)
+                                    .build();
+
+        MerchantResponse response = MerchantResponse.builder()
+                                                    .status(MerchantConstant.RESPONSE_FAILURE)
+                                                    .errors(List.of(errorDto))
+                                                    .build();
+        // Return 200 OK as per your requirement
+        return ResponseEntity.ok(response);
+    }
+
+    // Default handling for other JSON parse errors
+    ErrorDto errorDto = ErrorDto.builder()
+                                .errorCode(ErrorConstants.GENERIC_ERROR_CODE)
+                                .errorMessage("Invalid request format. Please check the request body.")
+                                .build();
+
+    MerchantResponse response = MerchantResponse.builder()
+                                                .status(MerchantConstant.RESPONSE_FAILURE)
+                                                .errors(List.of(errorDto))
+                                                .build();
+    return ResponseEntity.badRequest().body(response);
+}
+
+
+
+
+
+
+
 @ExceptionHandler(HttpMessageNotReadableException.class)
 public ResponseEntity<Object> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
     Throwable cause = ex.getCause();
