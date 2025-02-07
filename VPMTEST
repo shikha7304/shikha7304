@@ -1,3 +1,93 @@
+Below is an example user story for the “Generate Report Alert on Report Generation” task. This story mirrors the level of detail provided in the captcha implementation user story while focusing on consuming the reporting service and generating an alert message.
+
+User Story Title:
+Generate Alert Notification on Report Generation
+
+User Story Description:
+As a merchant, I want the system to automatically generate an alert notification when a report is successfully generated so that I am promptly notified and can download the report without delay.
+
+Business Value:
+This feature ensures that merchants are immediately aware when reports are available for download, improving responsiveness and operational efficiency.
+
+Acceptance Criteria:
+	1.	Alert Generation Trigger:
+	•	When the reporting service completes a report generation, it publishes a message (e.g., via Kafka) containing report details.
+	•	The system consumes this message using the ReportAlertListener.
+	2.	Data Consumption and Processing:
+	•	The consumed message is deserialized into a ReportAlertDto which includes:
+	•	mId (merchant identifier)
+	•	reportName (name of the generated report)
+	•	Both fields are mandatory; if any are missing, the system logs an appropriate error and does not attempt to generate an alert.
+	3.	Alert Creation:
+	•	The AlertService.generateAlertForReport(ReportAlertDto reportAlertDto) method is invoked.
+	•	Inside the service, the AlertDao.generateAlertForReport(reportAlertDto) method:
+	•	Retrieves the alert configuration from the AlertMaster repository using a constant value (e.g., MerchantConstant.REPORT_GENERATION).
+	•	Constructs an alert message by formatting the alert description from AlertMaster with the reportName from the DTO.
+	•	Generates a unique alert identifier (using a utility method such as MerchantUtil.generateUnique12DigitNumber()).
+	•	Persists the alert details in the ALERT_MANAGEMENT database table.
+	4.	Success Scenario:
+	•	A log entry is created stating that an alert has been generated for the given report and merchant.
+	•	The alert record is stored in the database with the correct details (alert ID, description, unique identifier, mId, etc.).
+	•	The overall system flow continues without interruption.
+	5.	Failure Scenario:
+	•	If the alert master record for “Report Generation” is not found, a MerchantException is thrown with an appropriate error code and message.
+	•	All errors during alert generation (such as JSON parsing issues, data access exceptions, etc.) are logged and handled gracefully.
+	6.	Logging and Traceability:
+	•	Every step from message consumption, alert generation, to database persistence must be logged.
+	•	The logs should include key data points such as reportName, mId, and the generated alert identifier.
+
+API / Integration Details:
+	•	Messaging:
+	•	The system listens to the Kafka topic defined by ${spring.kafka.topic.alert}.
+	•	The ReportAlertListener consumes messages, deserializes them into ReportAlertDto objects, and delegates alert generation to the AlertService.
+	•	Data Structures:
+	•	ReportAlertDto:
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ReportAlertDto {
+    private String mId;
+    private String reportName;
+}
+
+
+	•	Alert Generation Flow:
+	•	The alert DAO retrieves the master alert configuration using the report generation constant.
+	•	An AlertManagement entity is created with:
+	•	alertId from AlertMaster
+	•	alertDescription (formatted with the report name)
+	•	A unique alertIdentifier
+	•	isViewed set to false
+	•	Associated mId
+	•	The new alert is saved via the alertManagementRepository.
+
+Testing Checklist:
+	•	Verify that a Kafka message with valid mId and reportName triggers the alert generation flow.
+	•	Confirm that an alert record is persisted in the ALERT_MANAGEMENT table with the expected details.
+	•	Test edge cases such as:
+	•	Missing or invalid reportName or mId.
+	•	Duplicate messages (ensuring unique alert identifiers).
+	•	Error handling when the alert master record is not found.
+	•	Check that all alert generation events are properly logged with sufficient details for debugging.
+	•	Validate unit test coverage is at least 90% for all alert-related components (DAO, Service, Listener).
+
+Developer Checklist:
+	•	Implement the AlertDao.generateAlertForReport(ReportAlertDto reportAlertDto) method.
+	•	Implement the AlertService.generateAlertForReport(ReportAlertDto reportAlertDto) method.
+	•	Configure and test the Kafka listener (ReportAlertListener) to consume messages.
+	•	Ensure that all alert events are logged using LoggerUtility.
+	•	Write and execute unit tests to achieve at least 90% code coverage.
+	•	Validate database schema changes (e.g., ALERT_MANAGEMENT table, unique alert identifier column).
+
+This user story covers the functional requirements, API/integration details, acceptance criteria, testing, and developer checklists needed to implement the report alert functionality. Adjust the details (e.g., naming conventions, error codes) as necessary to align with your existing project standards.
+
+
+
+
+
+
 Description
 
 For a merchant, we need to implement captcha mechanism during login, reset password functionality to prevent unauthorized access and ensure enhanced security for an application.
