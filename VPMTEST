@@ -1,183 +1,81 @@
-@startuml
-
-skinparam classBorderColor Black
-skinparam classFontColor Black
-skinparam shadowing false
-skinparam classBackgroundColor White  // Default Background for Uncolored Classes
-
-class CustomerController << (C,White) >> #Orange {
-    - customerService: CustomerService
-    + createCustomer(customerRequest: CustomerRequest): TransactionResponse<OrderResponse>
-    + getCustomer(String customerId): TransactionResponse<CustomerResponse>
-    + updateCustomerStatus(String customerId, String status): TransactionResponse<CustomerResponse>
-}
-
-class CustomerService << (C,White) >> #Green {
-    - customerValidator: CustomerValidator
-    - customerDao: CustomerDAO
-    - UniqueIDGenerator: uniqueIDGenerator
-    - EncryptionDecryptionUtil: encryptionDecryptionUtil
-    - ObjectMapper: objectMapper
-    + saveCustomer(String customerRequest, String): CustomerResponse
-    + getCustomerByCustomerId(UUID customerId): CustomerResponse
-    + updateCustomerStatus(String customerId, String status): CustomerResponse
-}
-
-class CustomerValidator << (C,White) >> #Cyan {
-    + validateCustomerRequest(CustomerRequest customerRequest)
-    + validateUniqueCustomer(CustomerDto customerDto)
-    + validateMandatoryFields(CustomerDto customerDto)
-    + validateFieldsValue(CustomerDto customerDto)
-}
-
-class CustomerDAO << (C,White) >> #DarkCyan {
-    - customerRepository: CustomerRepository
-    + getCustomerByCustomerId(String customerId): Optional<CustomerDto> 
-    + saveCustomer(CustomerDto customerDto): CustomerDto
-    + updateCustomerStatus(UUID customerId, String status): CustomerDto
-}
-
-class CustomerRepository << (C,White) >> #Blue {
-    + findByCustomerId(String customerId): Optional<Customer>
-    + saveCustomer(Customer customer): Customer
-    + updateCustomerStatus(String status): Customer
-    + existsByCustomerId(String customerId): boolean
-}
-
-class Customer << (C,White) >> #Yellow {
-    - id: UUID
-    - name: String
-    - email: String
-    - phone: String
-    - status: String
-    - createdAt: Date
-    - updatedAt: Date
-    + getId(): UUID
-    + getName(): String
-    + getEmail(): String
-    + getPhone(): String
-    + getStatus(): String
-}
-
-CustomerController --> CustomerService
-CustomerService --> CustomerValidator
-CustomerService --> CustomerDAO
-CustomerService --> EncryptionDecryptionUtil
-CustomerDAO --> CustomerRepository
-CustomerDAO --> Customer
-
-@enduml
-
-
-
-
-
-
-
-public void downloadCsvFile(HttpServletResponse response, String fileName, List<String> headerName, List<List<Object>> rows) {
-    try {
-        response.setContentType("text/csv");
-        response.setCharacterEncoding("UTF-8"); // Ensure proper encoding
-        String formattedFileName = fileName + "_" + System.currentTimeMillis() + ".csv";
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + formattedFileName + "\"");
-
-        writeCSV(headerName, rows, response.getOutputStream());
-        response.flushBuffer(); // Ensure the response is properly flushed
-    } catch (Exception e) {
-        log.error("Error occurred during CSV File downloading: {}", e.getMessage());
-        throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE,
-                MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
+public class AlertDao 
+/**
+     * GenerateAlertForReport - sending alert for generated Report
+     * @param reportAlertDto ReportAlertDto
+     */
+    public void generateAlertForReport(ReportAlertDto reportAlertDto) {
+        AlertMaster alertMasterData = alertMasterRepository.findByName(MerchantConstant.REPORT_GENERATION).orElseThrow(()-> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Report Name")));
+        AlertManagement alertManagement = AlertManagement.builder().alertId(alertMasterData.getId()).alertDescription(MessageFormat.format(alertMasterData.getDescription(), reportAlertDto.getReportName())).alertIdentifier(MerchantUtil.generateUnique12DigitNumber()).isViewed(false).mId(reportAlertDto.getMId()).build();
+        log.info("generated Alert for ReportName: {}, mid : {}",reportAlertDto.getReportName(),reportAlertDto.getMId());
+        alertManagementRepository.save(alertManagement);
     }
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ReportAlertDto {
+    private String mId;
+    private String reportName;
 }
-
-private void writeCSV(List<String> headers, List<List<Object>> rows, OutputStream outputStream) {
-    CSVFormat csvFormat = CSVFormat.DEFAULT.builder()
-            .setHeader(headers.toArray(new String[0])) // Ensure headers are set
-            .setSkipHeaderRecord(false) // Ensure headers are included
-            .build();
-
-    try (CSVPrinter csvPrinter = new CSVPrinter(new OutputStreamWriter(outputStream, "UTF-8"), csvFormat)) {
-        for (List<Object> row : rows) {
-            csvPrinter.printRecord(row); // Print each row properly
-        }
-        csvPrinter.flush();
-    } catch (Exception e) {
-        log.error("Failed to write in CSV: ", e);
-        throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, 
-                MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
-    }
-}
-
-
-
-*/
-    public void downloadMerchantUserReport(HttpServletResponse response, MerchantUserRequestList merchantUserRequestList) {
-        log.info("Fetching list of merchant users {} ", merchantUserRequestList);
-        Map<UUID, MerchantUserRoleDto> roleMap = merchantUserRoleDao.getUserRoleDtoMap();
-        List<MerchantUserDto> merchantUserResponseList = merchantUserDao.getMerchantUsers(merchantUserRequestList);
-        log.info("Returning list of merchant users {}", merchantUserResponseList);
-        List<List<Object>> fileData = merchantUserResponseList.stream().map(user -> convertToListOfObject(roleMap.get(user.getRole()).getRole(), user)).toList();
-        csvGenerator.downloadCsvFile(response, "merchant_users", USER_DOWNLOAD_HEADER, fileData);
-        log.info("Generated CSV file containing list of merchant user");
-    }
-
-package com.epay.merchant.util.file.generator;
-
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.util.ErrorConstants;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import jakarta.servlet.http.HttpServletResponse;
-import org.apache.commons.csv.CSVFormat;
-import org.apache.commons.csv.CSVPrinter;
-import org.apache.commons.text.StringEscapeUtils;
-import org.springframework.http.HttpHeaders;
-import org.springframework.stereotype.Component;
-
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.text.MessageFormat;
-import java.util.List;
 
 @Component
-public class CSVGenerator {
-
+@RequiredArgsConstructor
+public class ReportAlertListener {
     private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final ObjectMapper objectMapper;
+    private final AlertService alertService;
 
-    /**
-     *
-     * @param response HttpServletResponse
-     * @param fileName String
-     * @param headerName headerName
-     * @param rows List
-     */
-    public void downloadCsvFile(HttpServletResponse response, String fileName, List<String> headerName, List<List<Object>> rows) {
+    @KafkaListener(topics = "${spring.kafka.topic.alert}")
+    public void onAlert(ConsumerRecord<String, String> consumerRecord) {
+        log.debug("alert request received for key : {} and value : {}", consumerRecord.key(), consumerRecord.value());
         try {
-            writeCSV(headerName, rows, response.getOutputStream());
-            response.setContentType("text/csv");
-            response.setHeader(HttpHeaders.CONTENT_DISPOSITION,"attachment;filename=" + fileName + "_" + System.currentTimeMillis() + ".csv");
-        } catch (Exception e) {
-            log.error("Error occurred during CSV File downloading : {}", e.getMessage());
-            throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
-        }
-    }
-
-    /**
-     * Writing CSV header and rows in output stream.
-     * @param headers List
-     * @param rows List
-     * @param outputStream OutputStream
-     */
-    private void writeCSV(List<String> headers, List<List<Object>> rows, OutputStream outputStream) {
-        CSVFormat csvFormat = CSVFormat.DEFAULT.builder().setHeader(headers.toArray(String[]::new)).build();
-        try (CSVPrinter csvPrinter = new CSVPrinter(new OutputStreamWriter(outputStream), csvFormat)) {
-            for (List<Object> row : rows) {
-                for (Object value : row)
-                    csvPrinter.print(value);
-            }
-        } catch (Exception e) {
-            log.error("Failed to write in CSV: ", e);
-            throw new MerchantException(ErrorConstants.FILE_GENERATION_ERROR_CODE, MessageFormat.format(ErrorConstants.FILE_GENERATION_ERROR_MESSAGE, "csv", e.getMessage()));
+            MDC.put(EPayAuthenticationConstant.CORRELATION_ID, String.valueOf(UUID.randomUUID()));
+            MDC.put(EPayAuthenticationConstant.SCENARIO, "reportAlertListener");
+            ReportAlertDto reportAlertDto = objectMapper.readValue(consumerRecord.value(), ReportAlertDto.class);
+            alertService.generateAlertForReport(reportAlertDto);
+        } catch (MerchantException e) {
+            log.error("MerchantException while processing kafka listening message[key:{} and value: {}], error: {}", consumerRecord.key(), consumerRecord.value(), e.getErrorMessage());
+        } catch (JsonProcessingException e) {
+            log.error("Json parsing error while processing kafka listening message[key:{} and value: {}], error: {}", consumerRecord.key(), consumerRecord.value(), e.getMessage());
         }
     }
 }
+@@ public interface AlertManagementRepository extends JpaRepository<AlertManagement
+    @Query("UPDATE AlertManagement a SET a.isViewed = true WHERE a.mId = :mId AND a.alertIdentifier = :alertIdentifier")
+    void updateAlertViewStatus(@Param("mId") String mId, @Param("alertIdentifier") long alertIdentifier);
+
+@@ -19,5 +20,6 @@ import java.util.UUID;
+public interface AlertMasterRepository extends JpaRepository<AlertMaster, UUID> {
+
+    List<AlertMaster> findAllByName(String name);
+    
+
+    Optional<AlertMaster> findByName(String reportName);
+}
+aLERTSERVICE
+
+    /**
+     * Update the report Status after it got downloaded
+     *
+     * @return
+     */
+    public void generateAlertForReport(ReportAlertDto reportAlertDto) {
+        log.info("Updating reportStatus '{}'  for mID '{}'", reportAlertDto.getReportName(), reportAlertDto.getMId());
+        alertDao.generateAlertForReport(reportAlertDto);
+    }
+merchantconstant
+ public static final String REPORT_GENERATION = "Report Generation";
+
+REATE TABLE ALERT_MANAGEMENT (
+ALTER TABLE ALERT_MANAGEMENT ADD ALERT_DESCRIPTION VARCHAR2(500);
+
+-- changeset Subhra:4
+ALTER TABLE ALERT_MANAGEMENT ADD ALERT_IDENTIFIER NUMBER(20) UNIQUE;
+\ No newline at end of file
+ALTER TABLE ALERT_MANAGEMENT ADD ALERT_IDENTIFIER NUMBER(20) UNIQUE;
+
+
+--changeset Rahul Kumar:3
+INSERT INTO ALERT_MASTER(NAME, DESCRIPTION, CREATED_AT)
+VALUES ('Report Generation', '{0} Report has been generated for download',
+(SELECT ROUND(((TRUNC(SYSTIMESTAMP,'MI')-DATE '1970-01-01') * 24 * 60 * 60) + EXTRACT (SECOND FROM SYSTIMESTAMP), 3)*1000 FROM DUAL));
