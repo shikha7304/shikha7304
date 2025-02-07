@@ -1,3 +1,71 @@
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+ 
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.UUID;
+ 
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+ 
+    @ExceptionHandler(InvalidFormatException.class)
+    public ResponseEntity<Object> handleInvalidUUIDException(InvalidFormatException ex) {
+        ErrorDto errorDto;
+ 
+        if (ex.getTargetType() == UUID.class) {  
+            String formattedMessage = MessageFormat.format(
+                ErrorConstants.INVALID_ERROR_MESSAGE, "Request ID", "Invalid UUID format"
+            );
+ 
+            errorDto = ErrorDto.builder()
+                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                    .errorMessage(formattedMessage)
+                    .build();
+        } else {
+            errorDto = ErrorDto.builder()
+                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                    .errorMessage("Invalid request format.")
+                    .build();
+        }
+ 
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(MerchantResponse.builder()
+                        .status(MerchantConstant.RESPONSE_FAILURE)
+                        .errors(List.of(errorDto))
+                        .build());
+    }
+ 
+    // ✅ New method to handle invalid UUID binding
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex,
+            org.springframework.http.HttpHeaders headers,
+            HttpStatus status,
+            org.springframework.web.context.request.WebRequest request) {
+ 
+        ErrorDto errorDto = ErrorDto.builder()
+                .errorCode("INVALID_REQUEST")
+                .errorMessage("Invalid request parameters.")
+                .build();
+ 
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(MerchantResponse.builder()
+                        .status(MerchantConstant.RESPONSE_FAILURE)
+                        .errors(List.of(errorDto))
+                        .build());
+    }
+}
+
+
+
+
+
+
 @Override
 protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
                                                                 HttpHeaders headers, HttpStatus status,
