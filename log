@@ -392,3 +392,25 @@ public class ErrorConstants {
     public static final String INVALID_ERROR_CODE = "7002";
     public static final String INVALID_ERROR_MESSAGE = "Invalid {0}. Reason : {1}";
 
+
+@ExceptionHandler(InvalidFormatException.class)
+public ResponseEntity<Object> handleInvalidUUIDException(InvalidFormatException ex) {
+    ErrorDto errorDto;
+    if (ex.getTargetType() == UUID.class) {
+        String formattedMessage = MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Request ID", "Invalid UUID format");
+        errorDto = ErrorDto.builder()
+                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
+                .errorMessage(formattedMessage)
+                .build();
+    } else {
+        errorDto = ErrorDto.builder()
+                .errorCode(ErrorConstants.GENERIC_ERROR_CODE)
+                .errorMessage("Invalid request format.")
+                .build();
+    }
+    return ResponseEntity.ok().body(MerchantResponse.builder()
+            .status(MerchantConstant.RESPONSE_FAILURE)
+            .errors(List.of(errorDto))
+            .build());
+}
+
