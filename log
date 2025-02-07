@@ -1,112 +1,11 @@
-package com.epay.merchant.service;
+Defect: To Verify error message when user send invalid Request ID
 
+Method: Post2. .API: {base url}/merchant/v1/captcha{ "requestType":"LOGIN", "requestId":"31529ddf-ce3f-4547-a4c4-e741c893b81g"}
 
-import com.epay.merchant.dto.MerchantUserDto;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.enums.Report;
-import com.epay.merchant.util.enums.ReportFormat;
-import com.epay.merchant.util.file.generator.FileGenerator;
-import com.epay.merchant.util.file.model.FileModel;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.stereotype.Service;
+Actual Response
+Status: 400 Bad Request {     "status": 0,     "errors": [         {             "errorCode": "400",             "errorMessage": "JSON parse error: Cannot deserialize value of type java.util.UUID from String "82629ddf-bc3f-4547-a4c4-e741c893b81d-e741c893b81d": UUID has to be represented by standard 36-char representation"         }     ] }
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.text.MessageFormat;
-import java.util.List;
-import java.util.Map;
+Expected response
+Status should be displayed 200 OK and also show proper error message for invalid request id.
 
-@Service
-@RequiredArgsConstructor
-public class FileGeneratorService {
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-    private static int DEFAULT_BUFFER_SIZE = 8192;
-    private final   FileGenerator fileGenerator;
-
-    /**
-     * Building content type and setting file in response.
-     * @param httpResponse HttpServletResponse
-     * @param reportFormat ReportFormat
-     */
-    public  void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat,List<MerchantUserDto>merchantUserDtos) {
-        String contentType = "text/csv";
-        String filename="merchantUser_List";
-        setFileResponse(httpResponse, contentType,filename,merchantUserDtos);
-    }
-
-    public  FileModel buildFileModel(ReportFormat reportFormat, List<String> header, List<List<Object>> fileData, Map<String, Object> pdfFileData) {
-        return fileGenerator.buildFileModel(reportFormat, header, fileData, pdfFileData);
-    }
-
-    public File fileGenerator(ReportFormat reportFormat, Report report, String userName, FileModel fileModel) {
-        return fileGenerator.fileGenerator(reportFormat, report, userName, fileModel);
-    }
-    /**
-     * TODO: Temp code: it will replace from S3 code.
-     * @param filePath String
-     * @return InputStream
-     */
-    private InputStream getFileContent(String filePath) {
-        try {
-            return new FileInputStream(filePath);
-        } catch (IOException e) {
-            log.error("Unable to read file {}", filePath, e);
-            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, filePath));
-        }
-    }
-
-    /**
-     * Setting file name, content type and content in http servlet response.
-     * @param response HttpServletResponse
-     * @param contentType String
-     * @param fileName String
-     */
-    protected void setFileResponse(HttpServletResponse response, String contentType, String fileName,  List<MerchantUserDto> merchantUserResponseList) {
-        // Set the response headers for a downloadable file
-        response.setContentType(contentType);
-        response.setHeader(HttpHeaders.CONTENT_DISPOSITION,"attachment;filename=" + fileName);
-        // Write the file content to the response output stream
-        try {
-            // Write CSV header
-            /*String header = "User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n";
-            response.getWriter().write(header);
-            */// Fetch the data and write rows
-
-            //use the writer to write  the csv content
-            var writer = response.getWriter();
-            writer.write("User ID,Name,Email,Mobile No,User Type,Creation Date,Status\n");
-
-            for (MerchantUserDto user : merchantUserResponseList) {
-                String csvRow = user.getId() + ","
-                        + user.getUserName() + ","
-                        + user.getFirstName() + " " + user.getLastName()+ ","
-                        + user.getEmail() + ","
-                        + user.getMobilePhone() + ","
-                        + user.getRole() + ","
-                        + user.getCreatedAt() + ","
-                        + user.getStatus() + "\n";
-                response.getWriter().write(csvRow);
-            }
-                writer.flush();
-        }
-        catch (IOException e) {
-            log.error("Error in setting file content in response", e);
-            throw new MerchantException(ErrorConstants.GENERIC_ERROR_CODE,
-                    MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, fileName));
-        }
-    }
-}
-
-Postman response
-User ID,Name,Email,Mobile No,User Type,Creation Date,Status
-59d82f3c-90c2-44a0-94bb-486283b9dbe6,user6+,Shikha Sharma,test@domain.com,9600000000,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1737366742755,ACTIVE
-c47745c5-dd21-4e5e-ad67-c19842bfa349,user7,Shikha Sharma,test123@domain.com,9600900000,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1737381019135,ACTIVE
-56e1b334-7b97-4bd4-8537-d863bcee78d4,user8,Shikha Sharma,test321@domain.com,9600009000,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1737442028930,ACTIVE
-2b43a8b7-d1ff-529e-e063-7c86b10a9616,user5,Rathore Doe,user5@example.com,9149023567,2bd0c275-b4df-f43f-e063-7c86b10a71ac,1672531200,ACTIVE
+what all changes we need to do to achive this expected response as per my code 
