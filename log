@@ -1,3 +1,56 @@
+To generate a changelog for your project in GitLab, you can follow these approaches:
+
+1. Using Git Log (Manual Approach)
+
+Run the following command to generate a simple changelog from your commit history:
+
+git log --pretty=format:"%h - %s (%an, %ar)" --abbrev-commit > CHANGELOG.md
+
+	•	%h → Abbreviated commit hash
+	•	%s → Commit message
+	•	%an → Author name
+	•	%ar → Relative commit date
+
+If you want only the changes from a specific version (e.g., last release), use:
+
+git log v1.0.0..HEAD --pretty=format:"%h - %s (%an, %ar)" > CHANGELOG.md
+
+Replace v1.0.0 with your last release tag.
+
+2. Using GitLab CI/CD Pipeline (Automated)
+
+If you want to automate changelog generation with GitLab CI/CD, you can use GitLab’s release feature along with git log or a tool like git-chglog.
+
+Example .gitlab-ci.yml:
+
+stages:
+  - changelog
+
+generate_changelog:
+  stage: changelog
+  script:
+    - git-chglog -o CHANGELOG.md
+  only:
+    - main
+
+You need to install git-chglog first (brew install git-chglog or apt install git-chglog).
+
+3. Using Conventional Changelog
+
+If your team follows conventional commit messages (e.g., feat: added new API), use conventional-changelog:
+
+npm install -g conventional-changelog-cli
+conventional-changelog -p angular -i CHANGELOG.md -s
+
+This generates a structured changelog with sections like “Features,” “Bug Fixes,” etc.
+
+Would you like help setting up a specific approach based on your workflow?
+
+
+
+
+
+
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
