@@ -1,3 +1,91 @@
+Since you’re using GitLab, you can update your changelog using conventional commit messages, Git tags, or tools like git-changelog, standard-version, or auto-changelog.
+
+Steps to Update Changelog in the Future
+
+1. Manually Update the Changelog
+
+If you maintain a CHANGELOG.md file manually, just add new changes in the correct format.
+	•	Open CHANGELOG.md
+	•	Add a new section at the top with the latest changes.
+
+Example:
+
+## [1.1.0] - 2025-02-10
+### Added
+- Implemented report generation alerts.
+
+### Fixed
+- Fixed issue with Invalid UUID Exception handler.
+
+2. Automatically Generate and Update the Changelog
+
+If you want automation, use tools like:
+
+Option 1: git-changelog (npm-based)
+	1.	Install it globally:
+
+npm install -g git-changelog
+
+
+	2.	Run the following command to generate/update the changelog:
+
+git-changelog -o CHANGELOG.md
+
+This will append the latest commit history to CHANGELOG.md.
+
+Option 2: standard-version
+	1.	Install it:
+
+npm install -g standard-version
+
+
+	2.	Run:
+
+standard-version
+
+It will update CHANGELOG.md and bump the version automatically.
+
+Option 3: auto-changelog
+	1.	Install it:
+
+npm install -g auto-changelog
+
+
+	2.	Run:
+
+auto-changelog -p
+
+This will update CHANGELOG.md based on commit messages.
+
+3. Commit and Push the Changes
+
+After updating the changelog, commit and push it to GitLab:
+
+git add CHANGELOG.md
+git commit -m "chore: update changelog for version X.X.X"
+git push origin main
+
+4. Automate with GitLab CI/CD
+
+If you want to update the changelog automatically on every merge, add this to .gitlab-ci.yml:
+
+stages:
+  - changelog
+
+update_changelog:
+  stage: changelog
+  script:
+    - npx auto-changelog -p
+    - git add CHANGELOG.md
+    - git commit -m "chore: update changelog"
+    - git push origin main
+
+Let me know if you need help setting up automation!
+
+
+
+
+
 To generate a changelog for your project in GitLab, you can follow these approaches:
 
 1. Using Git Log (Manual Approach)
