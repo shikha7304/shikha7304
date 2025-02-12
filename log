@@ -1,151 +1,51 @@
-Here’s the modified release note with concise descriptions for each functionality:
+Invoices 
 
-Release Note – Epay Merchant Service
+Transaction Fee invoices  
 
-INTRODUCTION
+Users will be able to see and download generated transaction fee invoices as per the existing system. 
 
-Project Name: SBIePay 2.0
-Change: Merchant Service
-Release Date: 20-02-2025
-Updated by: Shikha Sharma
+GST invoices  
 
-OVERVIEW
-
-This release document outlines the functionalities implemented in the Merchant Service.
-
-FIXED ISSUES
-
-None
-
-IMPLEMENTATION
-
-To implement the release changes, we have completed the following steps:
-	•	Code development
-	•	Testing and debugging on UAT
-	•	SIT deployment
-
-Checklist of Features Implemented for Merchant Service
-
-Login
-	•	Implemented login functionality for merchants to securely access their accounts, view merchant details, and access dashboard reports.
-
-Keys Management
-	•	Merchants can generate or regenerate two types of keys: API Key and Encryption Key for secure transactions.
-
-Help & Support
-	•	Added a support section to assist merchants with queries, documentation, and troubleshooting.
-
-Payment Page Theme
-	•	Merchants can customize the payment page theme to align with their brand identity.
-
-Account & Settings
-
-Create Bank Account for Merchant (#61)
-	•	Enabled merchants to add their bank account details for settlements.
-
-Update Bank Account (#77)
-	•	Merchants can edit or update their bank account details as needed.
-
-MID Mapping
-	•	Implemented MID (Merchant Identification Number) mapping for transactions and settlements.
-
-User Management
-
-Activate Users
-	•	Merchants can activate users and assign roles as required.
-
-Manage Users
-	•	Merchants can create, update, and manage users with specific access controls.
-
-User Management View
-	•	A dedicated section for viewing and managing user details, roles, and permissions.
-
-Let me know if you need any refinements!
-
-
-
-
-
-Release Note-  Epay Merchant Service 
+Users will be able to select desired financial year, one or multiple months from the selected year, and click on download to download the GST invoices. 
 
  
 
-INTRODUCTION 
+Reports 
 
-Project Name 
+Reports Download 
 
-SBIePay 2.0 
+Created utility to generate and download order transactions and refund reports, Users can search any transaction by merchant order number, SBIePay order ID, ATRN, bank reference number, Duration and Transaction/Order Status. 
 
-Change 
+Standard Reports and formats- 
 
-Merchant Service 
+ORDER Reports 
 
-Release Date 
+TRANSACTION Reports 
 
-20-02-2025 
-
-Updated by 
-
-Shikha Sharma 
+REFUNDS Reports 
 
  
 
-OVERVIEW 
+Schedule Reports 
 
-This release document has the list of functionalities implemented in the merchant service. 
+Users can create a schedule and automate the report generation process, instead of downloading the report manually every time. 
 
-None 
+Recent Transactions 
 
-FIXED ISSUES 
+On the Dashboard, only limited entries will be displayed, Recent transactions will provide a list of daily and monthly transactions amount, refund amount and pending amount for settlement. 
 
-None 
+Transactions Summary Report 
 
-IMPLEMENTATION 
-
-To implement the release changes, we have done below steps. 
-
-Code development. 
-
-Test and debug changes on UAT 
-
-SIT deployment. 
+Fetches the transaction summary report for a given merchant ID and date range, including failure/Success percentages. 
 
  
 
-Checklist of features implemented for merchant service. 
+Paymode wise Transaction report  
+
+Retrieves a transaction pay mode report for a merchant within a specified date range. 
 
  
 
-Login 
+Transaction Trends 
 
-- Login page of the merchant panel wherein user can enter credentials and can view merchant information and access dashboard reports. 
-
- 
-
-Keys 
-
-   -User can generate or regenerate keys, there will be two types of keys API Key and Encryption key. 
-
- 
-
-⦁	Help & Support 
-
-⦁	Payment Page Theme 
-
-⦁	Account & Settings 
-
-Create bank account for merchant (#61)  
-
-- Update bank account (#77 
-
-. MID mapping 
-
- 
-
-Activate Users 
-
-. Manage Users 
-
-⦁	User management View 
-
-⦁	User Management 
+Fetches transaction trends (daily, weekly, or monthly) for a given merchant ID and frequency
