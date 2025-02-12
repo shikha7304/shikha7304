@@ -1,3 +1,71 @@
+Here’s the modified release note with concise descriptions for each functionality:
+
+Release Note – Epay Merchant Service
+
+INTRODUCTION
+
+Project Name: SBIePay 2.0
+Change: Merchant Service
+Release Date: 20-02-2025
+Updated by: Shikha Sharma
+
+OVERVIEW
+
+This release document outlines the functionalities implemented in the Merchant Service.
+
+FIXED ISSUES
+
+None
+
+IMPLEMENTATION
+
+To implement the release changes, we have completed the following steps:
+	•	Code development
+	•	Testing and debugging on UAT
+	•	SIT deployment
+
+Checklist of Features Implemented for Merchant Service
+
+Login
+	•	Implemented login functionality for merchants to securely access their accounts, view merchant details, and access dashboard reports.
+
+Keys Management
+	•	Merchants can generate or regenerate two types of keys: API Key and Encryption Key for secure transactions.
+
+Help & Support
+	•	Added a support section to assist merchants with queries, documentation, and troubleshooting.
+
+Payment Page Theme
+	•	Merchants can customize the payment page theme to align with their brand identity.
+
+Account & Settings
+
+Create Bank Account for Merchant (#61)
+	•	Enabled merchants to add their bank account details for settlements.
+
+Update Bank Account (#77)
+	•	Merchants can edit or update their bank account details as needed.
+
+MID Mapping
+	•	Implemented MID (Merchant Identification Number) mapping for transactions and settlements.
+
+User Management
+
+Activate Users
+	•	Merchants can activate users and assign roles as required.
+
+Manage Users
+	•	Merchants can create, update, and manage users with specific access controls.
+
+User Management View
+	•	A dedicated section for viewing and managing user details, roles, and permissions.
+
+Let me know if you need any refinements!
+
+
+
+
+
 Release Note-  Epay Merchant Service 
 
  
