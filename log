@@ -1,326 +1,83 @@
-Since you’re using GitLab, you can update your changelog using conventional commit messages, Git tags, or tools like git-changelog, standard-version, or auto-changelog.
+Release Note-  Epay Merchant Service 
 
-Steps to Update Changelog in the Future
+ 
 
-1. Manually Update the Changelog
+INTRODUCTION 
 
-If you maintain a CHANGELOG.md file manually, just add new changes in the correct format.
-	•	Open CHANGELOG.md
-	•	Add a new section at the top with the latest changes.
+Project Name 
 
-Example:
+SBIePay 2.0 
 
-## [1.1.0] - 2025-02-10
-### Added
-- Implemented report generation alerts.
+Change 
 
-### Fixed
-- Fixed issue with Invalid UUID Exception handler.
+Merchant Service 
 
-2. Automatically Generate and Update the Changelog
+Release Date 
 
-If you want automation, use tools like:
+20-02-2025 
 
-Option 1: git-changelog (npm-based)
-	1.	Install it globally:
+Updated by 
 
-npm install -g git-changelog
+Shikha Sharma 
 
+ 
 
-	2.	Run the following command to generate/update the changelog:
+OVERVIEW 
 
-git-changelog -o CHANGELOG.md
+This release document has the list of functionalities implemented in the merchant service. 
 
-This will append the latest commit history to CHANGELOG.md.
+None 
 
-Option 2: standard-version
-	1.	Install it:
+FIXED ISSUES 
 
-npm install -g standard-version
+None 
 
+IMPLEMENTATION 
 
-	2.	Run:
+To implement the release changes, we have done below steps. 
 
-standard-version
+Code development. 
 
-It will update CHANGELOG.md and bump the version automatically.
+Test and debug changes on UAT 
 
-Option 3: auto-changelog
-	1.	Install it:
+SIT deployment. 
 
-npm install -g auto-changelog
+ 
 
+Checklist of features implemented for merchant service. 
 
-	2.	Run:
+ 
 
-auto-changelog -p
+Login 
 
-This will update CHANGELOG.md based on commit messages.
+- Login page of the merchant panel wherein user can enter credentials and can view merchant information and access dashboard reports. 
 
-3. Commit and Push the Changes
+ 
 
-After updating the changelog, commit and push it to GitLab:
+Keys 
 
-git add CHANGELOG.md
-git commit -m "chore: update changelog for version X.X.X"
-git push origin main
+   -User can generate or regenerate keys, there will be two types of keys API Key and Encryption key. 
 
-4. Automate with GitLab CI/CD
+ 
 
-If you want to update the changelog automatically on every merge, add this to .gitlab-ci.yml:
+⦁	Help & Support 
 
-stages:
-  - changelog
+⦁	Payment Page Theme 
 
-update_changelog:
-  stage: changelog
-  script:
-    - npx auto-changelog -p
-    - git add CHANGELOG.md
-    - git commit -m "chore: update changelog"
-    - git push origin main
+⦁	Account & Settings 
 
-Let me know if you need help setting up automation!
+Create bank account for merchant (#61)  
 
+- Update bank account (#77 
 
+. MID mapping 
 
+ 
 
+Activate Users 
 
-To generate a changelog for your project in GitLab, you can follow these approaches:
+. Manage Users 
 
-1. Using Git Log (Manual Approach)
+⦁	User management View 
 
-Run the following command to generate a simple changelog from your commit history:
-
-git log --pretty=format:"%h - %s (%an, %ar)" --abbrev-commit > CHANGELOG.md
-
-	•	%h → Abbreviated commit hash
-	•	%s → Commit message
-	•	%an → Author name
-	•	%ar → Relative commit date
-
-If you want only the changes from a specific version (e.g., last release), use:
-
-git log v1.0.0..HEAD --pretty=format:"%h - %s (%an, %ar)" > CHANGELOG.md
-
-Replace v1.0.0 with your last release tag.
-
-2. Using GitLab CI/CD Pipeline (Automated)
-
-If you want to automate changelog generation with GitLab CI/CD, you can use GitLab’s release feature along with git log or a tool like git-chglog.
-
-Example .gitlab-ci.yml:
-
-stages:
-  - changelog
-
-generate_changelog:
-  stage: changelog
-  script:
-    - git-chglog -o CHANGELOG.md
-  only:
-    - main
-
-You need to install git-chglog first (brew install git-chglog or apt install git-chglog).
-
-3. Using Conventional Changelog
-
-If your team follows conventional commit messages (e.g., feat: added new API), use conventional-changelog:
-
-npm install -g conventional-changelog-cli
-conventional-changelog -p angular -i CHANGELOG.md -s
-
-This generates a structured changelog with sections like “Features,” “Bug Fixes,” etc.
-
-Would you like help setting up a specific approach based on your workflow?
-
-
-
-
-
-
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
- 
-import java.text.MessageFormat;
-import java.util.List;
-import java.util.UUID;
- 
-@RestControllerAdvice
-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
- 
-    @ExceptionHandler(InvalidFormatException.class)
-    public ResponseEntity<Object> handleInvalidUUIDException(InvalidFormatException ex) {
-        ErrorDto errorDto;
- 
-        if (ex.getTargetType() == UUID.class) {  
-            String formattedMessage = MessageFormat.format(
-                ErrorConstants.INVALID_ERROR_MESSAGE, "Request ID", "Invalid UUID format"
-            );
- 
-            errorDto = ErrorDto.builder()
-                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                    .errorMessage(formattedMessage)
-                    .build();
-        } else {
-            errorDto = ErrorDto.builder()
-                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                    .errorMessage("Invalid request format.")
-                    .build();
-        }
- 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(MerchantResponse.builder()
-                        .status(MerchantConstant.RESPONSE_FAILURE)
-                        .errors(List.of(errorDto))
-                        .build());
-    }
- 
-    // ✅ New method to handle invalid UUID binding
-    @Override
-    protected ResponseEntity<Object> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException ex,
-            org.springframework.http.HttpHeaders headers,
-            HttpStatus status,
-            org.springframework.web.context.request.WebRequest request) {
- 
-        ErrorDto errorDto = ErrorDto.builder()
-                .errorCode("INVALID_REQUEST")
-                .errorMessage("Invalid request parameters.")
-                .build();
- 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(MerchantResponse.builder()
-                        .status(MerchantConstant.RESPONSE_FAILURE)
-                        .errors(List.of(errorDto))
-                        .build());
-    }
-}
-
-
-
-
-
-
-@Override
-protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
-                                                                HttpHeaders headers, HttpStatus status,
-                                                                WebRequest request) {
-    Throwable cause = ex.getCause();
-    // Check if the root cause is an InvalidFormatException for a UUID
-    if (cause instanceof InvalidFormatException invalidFormatException &&
-        invalidFormatException.getTargetType() == UUID.class) {
-
-        String formattedMessage = MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE,
-                                                       "Request ID", "Invalid UUID format");
-        ErrorDto errorDto = ErrorDto.builder()
-                                    .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                                    .errorMessage(formattedMessage)
-                                    .build();
-
-        MerchantResponse response = MerchantResponse.builder()
-                                                    .status(MerchantConstant.RESPONSE_FAILURE)
-                                                    .errors(List.of(errorDto))
-                                                    .build();
-        // Return 200 OK as per your requirement
-        return ResponseEntity.ok(response);
-    }
-
-    // Default handling for other JSON parse errors
-    ErrorDto errorDto = ErrorDto.builder()
-                                .errorCode(ErrorConstants.GENERIC_ERROR_CODE)
-                                .errorMessage("Invalid request format. Please check the request body.")
-                                .build();
-
-    MerchantResponse response = MerchantResponse.builder()
-                                                .status(MerchantConstant.RESPONSE_FAILURE)
-                                                .errors(List.of(errorDto))
-                                                .build();
-    return ResponseEntity.badRequest().body(response);
-}
-
-
-
-
-
-
-
-@ExceptionHandler(HttpMessageNotReadableException.class)
-public ResponseEntity<Object> handleHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
-    Throwable cause = ex.getCause();
-    
-    if (cause instanceof InvalidFormatException invalidFormatException && 
-        invalidFormatException.getTargetType() == UUID.class) {
-        
-        String formattedMessage = MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Request ID", "Invalid UUID format");
-        
-        ErrorDto errorDto = ErrorDto.builder()
-                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                .errorMessage(formattedMessage)
-                .build();
-
-        return ResponseEntity.ok().body(MerchantResponse.builder()
-                .status(MerchantConstant.RESPONSE_FAILURE)
-                .errors(List.of(errorDto))
-                .build());
-    }
-
-    // Default error response if it's not related to UUID format
-    ErrorDto errorDto = ErrorDto.builder()
-            .errorCode(ErrorConstants.GENERIC_ERROR_CODE)
-            .errorMessage("Invalid request format.")
-            .build();
-
-    return ResponseEntity.badRequest().body(MerchantResponse.builder()
-            .status(MerchantConstant.RESPONSE_FAILURE)
-            .errors(List.of(errorDto))
-            .build());
-}
-
-
-
-
-
-
-
-
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class ErrorConstants {
-
-    public static final String MANDATORY_ERROR_CODE = "7001";
-    public static final String MANDATORY_ERROR_MESSAGE = "{0} is mandatory.";
-
-    public static final String NOT_FOUND_ERROR_CODE = "7003";
-    public static final String NOT_FOUND_ERROR_MESSAGE = "{0} is not found.";
-    public static final String LOGIN_USER_NOT_FOUND_ERROR_MESSAGE = "Invalid User -> Please check UserName and Password";
-
-    public static final String INVALID_ERROR_CODE = "7002";
-    public static final String INVALID_ERROR_MESSAGE = "Invalid {0}. Reason : {1}";
-
-
-@ExceptionHandler(InvalidFormatException.class)
-public ResponseEntity<Object> handleInvalidUUIDException(InvalidFormatException ex) {
-    ErrorDto errorDto;
-    if (ex.getTargetType() == UUID.class) {
-        String formattedMessage = MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Request ID", "Invalid UUID format");
-        errorDto = ErrorDto.builder()
-                .errorCode(ErrorConstants.INVALID_ERROR_CODE)
-                .errorMessage(formattedMessage)
-                .build();
-    } else {
-        errorDto = ErrorDto.builder()
-                .errorCode(ErrorConstants.GENERIC_ERROR_CODE)
-                .errorMessage("Invalid request format.")
-                .build();
-    }
-    return ResponseEntity.ok().body(MerchantResponse.builder()
-            .status(MerchantConstant.RESPONSE_FAILURE)
-            .errors(List.of(errorDto))
-            .build());
-}
-
+⦁	User Management 
