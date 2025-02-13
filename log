@@ -1,3 +1,48 @@
+
+public void info(String format, Object... arguments) {
+    setMDC(); // Maintain MDC context
+    
+    // Check if arguments contain sensitive data
+    Object[] sanitizedArguments = sanitizeSensitiveData(arguments);
+    
+    logger.info(format, sanitizedArguments);
+}
+
+/**
+ * Helper method to mask sensitive data
+ */
+private Object[] sanitizeSensitiveData(Object... arguments) {
+    if (arguments == null) {
+        return null;
+    }
+
+    Object[] sanitizedArgs = new Object[arguments.length];
+
+    for (int i = 0; i < arguments.length; i++) {
+        if (isSensitiveData(arguments[i])) {
+            sanitizedArgs[i] = "****";  // Mask sensitive data
+        } else {
+            sanitizedArgs[i] = arguments[i];
+        }
+    }
+
+    return sanitizedArgs;
+}
+
+/**
+ * Define sensitive data types that need masking
+ */
+private boolean isSensitiveData(Object data) {
+    if (data == null) return false;
+    
+    String str = data.toString().toLowerCase();
+    return str.contains("key") || str.contains("password") || str.contains("secret");
+}
+
+
+
+
+
 Yes! If you want to fix the Privacy Violation issue with minimal code changes, here’s a simpler approach:
 
 1. Fix in DecryptionService.java (Minimal Change)
