@@ -1,4 +1,19 @@
 
+public static String decryptValueBySecretKey(@NonNull SecretKey key, @NonNull String value, @NonNull EncryptionDecryptionAlgo algorithm, @NonNull GCMIvLength gcmIvLength, @NonNull GCMTagLength gcmTagLength) throws EncryptionDecryptionException {
+        log.info("Decryption Service :: algorithm : {}, gcmIvLength : {}, gcmTagLength : {}", algorithm, gcmIvLength, gcmTagLength);
+        try {
+            return decrypt(key, value, algorithm, gcmIvLength, gcmTagLength);
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
+                 InvalidAlgorithmParameterException | IllegalArgumentException | UnsupportedOperationException |
+                 IllegalStateException | IllegalBlockSizeException | BadPaddingException e) {
+            log.error("DecryptionService :: decrypt {}", e.getMessage());
+            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, EncryptionDecryptionConstants.GENERIC_ERROR_MESSAGE);
+        }
+    }
+
+
+
+
 public void info(String format, Object... arguments) {
     setMDC(); // Maintain MDC context
     
@@ -121,59 +136,3 @@ Final Recommendation
 Would you prefer the quick fix in code or via logback.xml?
 
 
-Invoices 
-
-Transaction Fee invoices  
-
-Users will be able to see and download generated transaction fee invoices as per the existing system. 
-
-GST invoices  
-
-Users will be able to select desired financial year, one or multiple months from the selected year, and click on download to download the GST invoices. 
-
- 
-
-Reports 
-
-Reports Download 
-
-Created utility to generate and download order transactions and refund reports, Users can search any transaction by merchant order number, SBIePay order ID, ATRN, bank reference number, Duration and Transaction/Order Status. 
-
-Standard Reports and formats- 
-
-ORDER Reports 
-
-TRANSACTION Reports 
-
-REFUNDS Reports 
-
- 
-
-Schedule Reports 
-
-Users can create a schedule and automate the report generation process, instead of downloading the report manually every time. 
-
-Recent Transactions 
-
-On the Dashboard, only limited entries will be displayed, Recent transactions will provide a list of daily and monthly transactions amount, refund amount and pending amount for settlement. 
-
-Transactions Summary Report 
-
-Fetches the transaction summary report for a given merchant ID and date range, including failure/Success percentages. 
-
- 
-
-Paymode wise Transaction report  
-
-Retrieves a transaction pay mode report for a merchant within a specified date range. 
-
- 
-
-Transaction Trends 
-
-Fetches transaction trends (daily, weekly, or monthly) for a given merchant ID and frequency
-
-
-
-
-https://neosofttechnologiesmail-my.sharepoint.com/:w:/r/personal/binoy_medhi_neosofttech_com/_layouts/15/Doc.aspx?sourcedoc=%7B9B3E24B6-F14E-4441-A33B-C030D4CDFBD3%7D&file=Release%20Note_date%20format%20change%20Odisha%2CGrips%2CMSEDCL1.docx&action=default&mobileredirect=true
