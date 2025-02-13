@@ -1,3 +1,92 @@
+Yes! If you want to fix the Privacy Violation issue with minimal code changes, here’s a simpler approach:
+
+1. Fix in DecryptionService.java (Minimal Change)
+
+Modify the logging statement to remove sensitive data (like key and value):
+
+log.info("Decryption Service :: algorithm: {}, gcmIvLength: {}, gcmTagLength: {}", 
+        algorithm, gcmIvLength, gcmTagLength);
+
+✅ Only logs non-sensitive information
+❌ No major refactoring required
+
+2. Fix in LoggerUtility.java (Minimal Change)
+
+Instead of modifying all logging calls, just prevent sensitive data from being logged at the entry point.
+
+Option 1: Mask sensitive data directly before logging
+
+Modify the info() method:
+
+public void info(String format, Object... arguments) {
+    setMDC(); // Maintain MDC context
+    
+    // Mask sensitive arguments
+    for (int i = 0; i < arguments.length; i++) {
+        if (arguments[i] instanceof String && containsSensitiveData((String) arguments[i])) {
+            arguments[i] = "****";  // Mask data
+        }
+    }
+
+    logger.info(format, arguments);
+}
+
+private boolean containsSensitiveData(String data) {
+    return data.toLowerCase().contains("key") || data.toLowerCase().contains("password");
+}
+
+✅ Minimal changes
+✅ Only masks sensitive data dynamically before logging
+
+3. Alternative Quick Fix (Disable Sensitive Logging via Logging Framework)
+
+If your project uses logback, you can filter out sensitive logs without changing code:
+
+logback.xml (Quick Config Fix)
+
+Add a filter to ignore logs containing sensitive keywords:
+
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="ch.qos.logback.classic.filter.EvaluatorFilter">
+            <evaluator>
+                <expression>!(message.contains("key") || message.contains("password"))</expression>
+            </evaluator>
+            <onMatch>DENY</onMatch>
+            <onMismatch>NEUTRAL</onMismatch>
+        </filter>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <root level="info">
+        <appender-ref ref="STDOUT" />
+    </root>
+</configuration>
+
+✅ No Java code changes
+✅ Filters logs dynamically
+✅ Easy to revert if needed
+
+Final Recommendation
+	•	If you can modify the log statements, remove sensitive fields (Best option).
+	•	If you want minimal code change, mask sensitive values dynamically in LoggerUtility.java.
+	•	If you want zero code changes, use a logging framework filter.
+
+Would you prefer the quick fix in code or via logback.xml?
+
+
+
+
+
+
+
+
+
+
+
+
+
 Invoices 
 
 Transaction Fee invoices  
