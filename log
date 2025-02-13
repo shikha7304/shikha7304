@@ -1,6 +1,45 @@
 public void info(String format, Object... arguments) {
     setMDC(); // Maintain MDC context
 
+    // Check if log data contains sensitive information, if yes, skip logging
+    if (containsSensitiveData(format, arguments)) {
+        logger.warn("Sensitive data detected, skipping log entry.");
+        return; // Stop logging sensitive data
+    }
+
+    logger.info(format, arguments);
+}
+
+/**
+ * Checks if format or arguments contain sensitive data.
+ */
+private boolean containsSensitiveData(String format, Object... arguments) {
+    String logContent = format.toLowerCase();
+    
+    // Check format string first
+    if (logContent.contains("key") || logContent.contains("password") || logContent.contains("secret")) {
+        return true;
+    }
+
+    // Check arguments
+    for (Object arg : arguments) {
+        if (arg instanceof String) {
+            String argStr = ((String) arg).toLowerCase();
+            if (argStr.contains("key") || argStr.contains("password") || argStr.contains("secret")) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
+
+
+
+public void info(String format, Object... arguments) {
+    setMDC(); // Maintain MDC context
+
     // Mask sensitive data before logging
     Object[] sanitizedArguments = maskSensitiveData(arguments);
     
