@@ -1,319 +1,204 @@
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+package com.epay.reporting.service;
+
+import com.epay.reporting.externalservice.MerchantServiceClient;
+import com.epay.reporting.model.response.ReportingResponse;
+import com.epay.reporting.util.ReportingConstant;
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.authentication.service.AuthenticationUserService;
+import com.sbi.epay.authentication.util.EPayAuthenticationConstant;
+import com.sbi.epay.authentication.util.enums.TokenType;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.ObjectUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-@ExtendWith(MockitoExtension.class)
-class EPayAuthenticationServiceTest {
-
-    @Mock
-    private MerchantServiceClient merchantServiceClient;
-
-    @InjectMocks
-    private EPayAuthenticationService authenticationService;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    void testLoadUserByUserName_Success() {
-        // Given
-        String userName = "testUser";
-        String tokenType = "USER";
-        String userNameWithTokenType = userName + "_" + tokenType; // Assuming "_" is the JOINER
-        ReportingResponse<String> mockResponse = new ReportingResponse<>();
-        mockResponse.setStatus(ReportingConstant.RESPONSE_SUCCESS);
-        mockResponse.setErrors(null); // CollectionUtils.isEmpty(null) -> true
-
-        when(merchantServiceClient.validateMerchantUser(userName)).thenReturn(mockResponse);
-
-        // When
-        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isPresent(), "Expected an EPayPrincipal object");
-        assertEquals(userName, result.get().getAuthenticationId(), "Authentication ID should match the username");
-        verify(merchantServiceClient, times(1)).validateMerchantUser(userName);
-    }
-
-    @Test
-    void testLoadUserByUserName_InvalidTokenType() {
-        // Given
-        String userNameWithTokenType = "testUser_INVALID"; // Invalid token type
-
-        // When
-        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isEmpty(), "Expected an empty result for invalid token type");
-        verifyNoInteractions(merchantServiceClient);
-    }
-
-    @Test
-    void testLoadUserByUserName_MerchantValidationFails() {
-        // Given
-        String userName = "testUser";
-        String tokenType = "USER";
-        String userNameWithTokenType = userName + "_" + tokenType;
-        ReportingResponse<String> mockResponse = new ReportingResponse<>();
-        mockResponse.setStatus(ReportingConstant.RESPONSE_FAILURE); // Simulating failure
-
-        when(merchantServiceClient.validateMerchantUser(userName)).thenReturn(mockResponse);
-
-        // When
-        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isEmpty(), "Expected an empty result when merchant validation fails");
-        verify(merchantServiceClient, times(1)).validateMerchantUser(userName);
-    }
-
-    @Test
-    void testLoadUserByUserName_InvalidInputFormat() {
-        // Given
-        String userNameWithTokenType = "invalidFormat"; // No separator
-
-        // When
-        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isEmpty(), "Expected an empty result for invalid input format");
-        verifyNoInteractions(merchantServiceClient);
-    }
-}
-
-
-
-
-
-
-
-public void info(String format, Object... arguments) {
-    setMDC(); // Maintain MDC context
-
-    // Check if log data contains sensitive information, if yes, skip logging
-    if (containsSensitiveData(format, arguments)) {
-        logger.warn("Sensitive data detected, skipping log entry.");
-        return; // Stop logging sensitive data
-    }
-
-    logger.info(format, arguments);
-}
-
 /**
- * Checks if format or arguments contain sensitive data.
+ * Class Name: SecurityService
+ * *
+ * Description: This service class handles user authentication and token validation
+ * for the merchant system. It interacts with the `MerchantServiceClient` to validate
+ * merchant users and tokens. It implements the `AuthenticationUserService` interface
+ * to load users based on their credentials and check the validity of their tokens.
+ * It also provides logging functionality to track the flow of the authentication process.
+ * *
+ * Author: Bhoopendra Rajput
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
  */
-private boolean containsSensitiveData(String format, Object... arguments) {
-    String logContent = format.toLowerCase();
-    
-    // Check format string first
-    if (logContent.contains("key") || logContent.contains("password") || logContent.contains("secret")) {
-        return true;
-    }
+@Service
+@RequiredArgsConstructor
+public class SecurityService implements AuthenticationUserService {
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final MerchantServiceClient merchantServiceClient;
 
-    // Check arguments
-    for (Object arg : arguments) {
-        if (arg instanceof String) {
-            String argStr = ((String) arg).toLowerCase();
-            if (argStr.contains("key") || argStr.contains("password") || argStr.contains("secret")) {
-                return true;
+    /**
+     * Method Name: loadUserByUserName
+     * <p>
+     * Description: This method extracts the username and token type from the provided
+     * `userNameWithTokenType` string, validates the merchant user using the `merchantServiceClient`,
+     * and returns an `EPayPrincipal` object if the validation is successful. It logs the
+     * process for debugging and traceability. If validation fails, an empty `Optional` is returned.
+     *
+     * @param userNameWithTokenType String - A string that contains the username and token type,
+     *                              separated by a predefined delimiter.
+     * @return Optional<EPayPrincipal> - An `Optional` containing the `EPayPrincipal` if the user is valid,
+     * or an empty `Optional` if the user is invalid.
+     */
+    @Override
+    public Optional<EPayPrincipal> loadUserByUserName(String userNameWithTokenType) {
+        log.info("Attempting to load user by username and token type: {}", userNameWithTokenType);
+
+        String[] users = userNameWithTokenType.split(EPayAuthenticationConstant.JOINER);
+        if (users.length > 0 && StringUtils.isNotEmpty(users[1]) && TokenType.USER.equals(TokenType.valueOf(users[1]))) {
+            log.info("Token type is USER. Validating merchant user: {}", users[0]);
+            ReportingResponse<String> response = merchantServiceClient.validateMerchantUser(users[0]);
+            if (response.getStatus() == ReportingConstant.RESPONSE_SUCCESS && CollectionUtils.isEmpty(response.getErrors())) {
+                log.info("Merchant user validation successful for: {}", users[0]);
+                EPayPrincipal authenticateEntity = new EPayPrincipal();
+                authenticateEntity.setAuthenticationId(users[0]);
+                return Optional.of(authenticateEntity);
             }
         }
+        return Optional.empty();
     }
-    return false;
+
+
+    /**
+     * Method Name: isTokenInValid
+     * <p>
+     * Description: This method checks if the provided token is valid based on the token type.
+     * It validates the token type, and if it is a USER token, it calls the `merchantServiceClient`
+     * to validate the token. If the token is invalid, it returns true; otherwise, it returns false.
+     * It logs the process for better traceability and debugging.
+     *
+     * @param token     String - The token to be validated.
+     * @param tokenType String - The type of the token (e.g., USER).
+     * @return boolean - Returns `true` if the token is invalid, `false` if the token is valid.
+     */
+    @Override
+    public boolean isTokenInValid(String token, String tokenType) {
+        log.info("Checking token validity for token: {} and tokenType: {}", token, tokenType);
+        if (StringUtils.isNotEmpty(tokenType) && TokenType.USER.equals(TokenType.valueOf(tokenType))) {
+            log.info("Token type is USER. Validating merchant token: {}", token);
+            ReportingResponse<String> response = merchantServiceClient.validateMerchantToken(token);
+            return !ObjectUtils.isNotEmpty(response) || response.getStatus() != ReportingConstant.RESPONSE_SUCCESS || !CollectionUtils.isEmpty(response.getErrors());
+        }
+        log.warn("Invalid token type: {}", tokenType);
+        return true;
+    }
 }
 
+package com.epay.reporting.externalservice;
 
 
+import com.epay.reporting.client.ApiClient;
+import com.epay.reporting.exception.ReportingException;
+import com.epay.reporting.externalservice.request.UserValidationRequest;
+import com.epay.reporting.model.response.ReportingResponse;
+import com.epay.reporting.util.EPayIdentityUtil;
+import com.epay.reporting.util.ErrorConstants;
+import com.sbi.epay.authentication.providers.EPayTokenProvider;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
+import reactor.core.publisher.Mono;
 
-
-public void info(String format, Object... arguments) {
-    setMDC(); // Maintain MDC context
-
-    // Mask sensitive data before logging
-    Object[] sanitizedArguments = maskSensitiveData(arguments);
-    
-    logger.info(format, sanitizedArguments);
-}
+import java.net.URI;
 
 /**
- * Masks sensitive data before logging.
+ * Class Name: MerchantServiceClient
+ * *
+ * Description:  This class provides methods for interacting with the Merchant Service API,
+ * specifically for validating merchant-related data, such as user, token, and merchant ID (MID) access.
+ * It extends the ApiClient class, utilizing WebClient for making HTTP requests.
+ * This service supports different types of validations including login, token validation,
+ * and access rights for active and non-active merchant IDs.
+ * Author: V1018482
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
  */
-private Object[] maskSensitiveData(Object... arguments) {
-    if (arguments == null) {
-        return null;
+public class MerchantServiceClient extends ApiClient {
+
+    public static final String MID_VALIDATION = "/validation/access/";
+    public static final String ACTIVE_MID_VALIDATION = "/validation/access/active/";
+    public static final String USER_VALIDATION = "/validation/user";
+    public static final String TOKEN_VALIDATION = "/validation/token";
+    public static final String BEARER = "Bearer ";
+
+    private final EPayTokenProvider ePayTokenProvider;
+
+    /**
+     * Constructor for initializing the MerchantServiceClient with a base URL and EPayTokenProvider.
+     *
+     * @param baseUrl the base URL of the Merchant Service API
+     * @param ePayTokenProvider the provider for fetching ePay tokens
+     */
+    public MerchantServiceClient(String baseUrl, EPayTokenProvider ePayTokenProvider) {
+        super(baseUrl);
+        this.ePayTokenProvider = ePayTokenProvider;
     }
 
-    Object[] sanitizedArgs = new Object[arguments.length];
-    for (int i = 0; i < arguments.length; i++) {
-        if (arguments[i] instanceof String && containsSensitiveData((String) arguments[i])) {
-            sanitizedArgs[i] = "****";  // Mask data
-        } else {
-            sanitizedArgs[i] = arguments[i];
-        }
-    }
-    return sanitizedArgs;
-}
-
-/**
- * Checks if data is sensitive.
- */
-private boolean containsSensitiveData(String data) {
-    return data.toLowerCase().contains("key") || data.toLowerCase().contains("password") || data.toLowerCase().contains("secret");
-}
-
-
-
-
-
-
-
-public static String decryptValueBySecretKey(@NonNull SecretKey key, @NonNull String value, @NonNull EncryptionDecryptionAlgo algorithm, @NonNull GCMIvLength gcmIvLength, @NonNull GCMTagLength gcmTagLength) throws EncryptionDecryptionException {
-        log.info("Decryption Service :: algorithm : {}, gcmIvLength : {}, gcmTagLength : {}", algorithm, gcmIvLength, gcmTagLength);
-        try {
-            return decrypt(key, value, algorithm, gcmIvLength, gcmTagLength);
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
-                 InvalidAlgorithmParameterException | IllegalArgumentException | UnsupportedOperationException |
-                 IllegalStateException | IllegalBlockSizeException | BadPaddingException e) {
-            log.error("DecryptionService :: decrypt {}", e.getMessage());
-            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, EncryptionDecryptionConstants.GENERIC_ERROR_MESSAGE);
-        }
+    /**
+     * Validates the user by making a POST request to the user validation endpoint.
+     *
+     * @param userName the username to validate
+     * @return a ReportingResponse containing validation status as a String
+     */
+    public ReportingResponse<String> validateMerchantUser(String userName) {
+        URI uri = URI.create(getBaseUrl() + USER_VALIDATION);
+        return getWebClient().post().uri(uri).bodyValue(UserValidationRequest.builder().requestType("LOGIN").userName(userName).build()).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
+        }).block();
     }
 
-
-
-
-public void info(String format, Object... arguments) {
-    setMDC(); // Maintain MDC context
-    
-    // Check if arguments contain sensitive data
-    Object[] sanitizedArguments = sanitizeSensitiveData(arguments);
-    
-    logger.info(format, sanitizedArguments);
-}
-
-/**
- * Helper method to mask sensitive data
- */
-private Object[] sanitizeSensitiveData(Object... arguments) {
-    if (arguments == null) {
-        return null;
+    /**
+     * Validates the provided token by making a GET request to the token validation endpoint.
+     *
+     * @param token the token to validate
+     * @return a ReportingResponse containing validation status as a String
+     */
+    public ReportingResponse<String> validateMerchantToken(String token) {
+        HttpHeaders headers = prepareHttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, BEARER + token);
+        URI uri = URI.create(getBaseUrl() + TOKEN_VALIDATION);
+        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
+        }).block();
     }
 
-    Object[] sanitizedArgs = new Object[arguments.length];
-
-    for (int i = 0; i < arguments.length; i++) {
-        if (isSensitiveData(arguments[i])) {
-            sanitizedArgs[i] = "****";  // Mask sensitive data
-        } else {
-            sanitizedArgs[i] = arguments[i];
-        }
+    /**
+     * Validates access to a merchant ID (MID) for the current user.
+     *
+     * @param mId the merchant ID to validate
+     * @return a ReportingResponse containing validation status as a String
+     */
+    public ReportingResponse<String> validateMIdAccess(String mId) {
+        HttpHeaders headers = prepareHttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, BEARER + ePayTokenProvider.getToken());
+        URI uri = URI.create(getBaseUrl() + MID_VALIDATION + EPayIdentityUtil.getUserPrincipal().getUsername() + "/" + mId);
+        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
+        }).block();
     }
 
-    return sanitizedArgs;
-}
-
-/**
- * Define sensitive data types that need masking
- */
-private boolean isSensitiveData(Object data) {
-    if (data == null) return false;
-    
-    String str = data.toString().toLowerCase();
-    return str.contains("key") || str.contains("password") || str.contains("secret");
-}
-
-
-
-
-
-Yes! If you want to fix the Privacy Violation issue with minimal code changes, here’s a simpler approach:
-
-1. Fix in DecryptionService.java (Minimal Change)
-
-Modify the logging statement to remove sensitive data (like key and value):
-
-log.info("Decryption Service :: algorithm: {}, gcmIvLength: {}, gcmTagLength: {}", 
-        algorithm, gcmIvLength, gcmTagLength);
-
-✅ Only logs non-sensitive information
-❌ No major refactoring required
-
-2. Fix in LoggerUtility.java (Minimal Change)
-
-Instead of modifying all logging calls, just prevent sensitive data from being logged at the entry point.
-
-Option 1: Mask sensitive data directly before logging
-
-Modify the info() method:
-
-public void info(String format, Object... arguments) {
-    setMDC(); // Maintain MDC context
-    
-    // Mask sensitive arguments
-    for (int i = 0; i < arguments.length; i++) {
-        if (arguments[i] instanceof String && containsSensitiveData((String) arguments[i])) {
-            arguments[i] = "****";  // Mask data
-        }
+    /**
+     * Validates access to an active merchant ID (MID) for the current user.
+     *
+     * @param mId the merchant ID to validate
+     * @return a ReportingResponse containing validation status as a String
+     */
+    public ReportingResponse<String> validateActiveMIdAccess(String mId) {
+        HttpHeaders headers = prepareHttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, BEARER + ePayTokenProvider.getToken());
+        URI uri = URI.create(getBaseUrl() + ACTIVE_MID_VALIDATION + EPayIdentityUtil.getUserPrincipal().getUsername() + "/" + mId);
+        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
+        }).block();
     }
 
-    logger.info(format, arguments);
 }
-
-private boolean containsSensitiveData(String data) {
-    return data.toLowerCase().contains("key") || data.toLowerCase().contains("password");
-}
-
-✅ Minimal changes
-✅ Only masks sensitive data dynamically before logging
-
-3. Alternative Quick Fix (Disable Sensitive Logging via Logging Framework)
-
-If your project uses logback, you can filter out sensitive logs without changing code:
-
-logback.xml (Quick Config Fix)
-
-Add a filter to ignore logs containing sensitive keywords:
-
-<configuration>
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <filter class="ch.qos.logback.classic.filter.EvaluatorFilter">
-            <evaluator>
-                <expression>!(message.contains("key") || message.contains("password"))</expression>
-            </evaluator>
-            <onMatch>DENY</onMatch>
-            <onMismatch>NEUTRAL</onMismatch>
-        </filter>
-        <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n</pattern>
-        </encoder>
-    </appender>
-    <root level="info">
-        <appender-ref ref="STDOUT" />
-    </root>
-</configuration>
-
-✅ No Java code changes
-✅ Filters logs dynamically
-✅ Easy to revert if needed
-
-Final Recommendation
-	•	If you can modify the log statements, remove sensitive fields (Best option).
-	•	If you want minimal code change, mask sensitive values dynamically in LoggerUtility.java.
-	•	If you want zero code changes, use a logging framework filter.
-
-Would you prefer the quick fix in code or via logback.xml?
-
-
