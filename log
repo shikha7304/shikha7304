@@ -1,3 +1,105 @@
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.util.Optional;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class EPayAuthenticationServiceTest {
+
+    @Mock
+    private MerchantServiceClient merchantServiceClient;
+
+    @InjectMocks
+    private EPayAuthenticationService authenticationService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testLoadUserByUserName_Success() {
+        // Given
+        String userName = "testUser";
+        String tokenType = "USER";
+        String userNameWithTokenType = userName + "_" + tokenType; // Assuming "_" is the JOINER
+        ReportingResponse<String> mockResponse = new ReportingResponse<>();
+        mockResponse.setStatus(ReportingConstant.RESPONSE_SUCCESS);
+        mockResponse.setErrors(null); // CollectionUtils.isEmpty(null) -> true
+
+        when(merchantServiceClient.validateMerchantUser(userName)).thenReturn(mockResponse);
+
+        // When
+        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
+
+        // Then
+        assertTrue(result.isPresent(), "Expected an EPayPrincipal object");
+        assertEquals(userName, result.get().getAuthenticationId(), "Authentication ID should match the username");
+        verify(merchantServiceClient, times(1)).validateMerchantUser(userName);
+    }
+
+    @Test
+    void testLoadUserByUserName_InvalidTokenType() {
+        // Given
+        String userNameWithTokenType = "testUser_INVALID"; // Invalid token type
+
+        // When
+        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
+
+        // Then
+        assertTrue(result.isEmpty(), "Expected an empty result for invalid token type");
+        verifyNoInteractions(merchantServiceClient);
+    }
+
+    @Test
+    void testLoadUserByUserName_MerchantValidationFails() {
+        // Given
+        String userName = "testUser";
+        String tokenType = "USER";
+        String userNameWithTokenType = userName + "_" + tokenType;
+        ReportingResponse<String> mockResponse = new ReportingResponse<>();
+        mockResponse.setStatus(ReportingConstant.RESPONSE_FAILURE); // Simulating failure
+
+        when(merchantServiceClient.validateMerchantUser(userName)).thenReturn(mockResponse);
+
+        // When
+        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
+
+        // Then
+        assertTrue(result.isEmpty(), "Expected an empty result when merchant validation fails");
+        verify(merchantServiceClient, times(1)).validateMerchantUser(userName);
+    }
+
+    @Test
+    void testLoadUserByUserName_InvalidInputFormat() {
+        // Given
+        String userNameWithTokenType = "invalidFormat"; // No separator
+
+        // When
+        Optional<EPayPrincipal> result = authenticationService.LoadUserByUserName(userNameWithTokenType);
+
+        // Then
+        assertTrue(result.isEmpty(), "Expected an empty result for invalid input format");
+        verifyNoInteractions(merchantServiceClient);
+    }
+}
+
+
+
+
+
+
+
 public void info(String format, Object... arguments) {
     setMDC(); // Maintain MDC context
 
