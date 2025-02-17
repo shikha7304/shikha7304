@@ -2,6 +2,146 @@ package com.epay.reporting.validator;
 
 import com.epay.reporting.exception.ValidationException;
 import com.epay.reporting.model.request.RecentTransactionRequest;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class TransactionDashboardValidatorTest {
+
+    @Mock
+    private MIdValidator mIdValidator;
+
+    @Mock
+    private LoggerUtility logger;
+
+    @InjectMocks
+    private TransactionDashboardValidator transactionDashboardValidator;
+
+    private static final String VALID_MID = "123456";
+
+    private RecentTransactionRequest validRequest;
+    private RecentTransactionRequest invalidRequest;
+
+    @BeforeEach
+    void setUp() {
+        validRequest = new RecentTransactionRequest();
+        validRequest.setFromDate("2024-02-01");
+        validRequest.setToDate("2024-02-15");
+
+        invalidRequest = new RecentTransactionRequest();
+    }
+
+    @Test
+    void testValidateRequest_Success() {
+        doNothing().when(mIdValidator).validatedActiveMId(VALID_MID);
+
+        assertDoesNotThrow(() -> transactionDashboardValidator.validateRequest(VALID_MID, validRequest));
+    }
+
+    @Test
+    void testValidateRequest_Failure_MissingFields() {
+        ValidationException exception = assertThrows(ValidationException.class, () ->
+                transactionDashboardValidator.validateRequest(VALID_MID, invalidRequest));
+
+        assertTrue(exception.getMessage().contains("From Date is mandatory") || 
+                   exception.getMessage().contains("To Date is mandatory"));
+    }
+
+    @Test
+    void testValidateRequest_Failure_InvalidMId() {
+        doThrow(new ValidationException("Invalid Merchant ID")).when(mIdValidator).validatedActiveMId(VALID_MID);
+
+        ValidationException exception = assertThrows(ValidationException.class, () ->
+                transactionDashboardValidator.validateRequest(VALID_MID, validRequest));
+
+        assertEquals("Invalid Merchant ID", exception.getMessage());
+    }
+}
+
+package com.epay.reporting.validator;
+
+import com.epay.reporting.exception.ValidationException;
+import com.epay.reporting.externalservice.MerchantServiceClient;
+import com.epay.reporting.model.response.ReportingResponse;
+import com.epay.reporting.util.ReportingConstant;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class MIdValidatorTest {
+
+    @Mock
+    private MerchantServiceClient merchantServiceClient;
+
+    @InjectMocks
+    private MIdValidator mIdValidator;
+
+    private static final String VALID_MID = "123456";
+    private static final String INVALID_MID = "000000";
+
+    @BeforeEach
+    void setUp() {
+        ReportingResponse<String> successResponse = new ReportingResponse<>();
+        successResponse.setStatus(ReportingConstant.RESPONSE_SUCCESS);
+
+        ReportingResponse<String> failureResponse = new ReportingResponse<>();
+        failureResponse.setStatus(ReportingConstant.RESPONSE_FAILURE);
+        failureResponse.setErrors("Invalid Merchant ID");
+
+        when(merchantServiceClient.validateActiveMIdAccess(VALID_MID)).thenReturn(successResponse);
+        when(merchantServiceClient.validateActiveMIdAccess(INVALID_MID)).thenReturn(failureResponse);
+
+        when(merchantServiceClient.validateMIdAccess(VALID_MID)).thenReturn(successResponse);
+        when(merchantServiceClient.validateMIdAccess(INVALID_MID)).thenReturn(failureResponse);
+    }
+
+    @Test
+    void testValidatedActiveMId_Success() {
+        assertDoesNotThrow(() -> mIdValidator.validatedActiveMId(VALID_MID));
+    }
+
+    @Test
+    void testValidatedActiveMId_Failure() {
+        ValidationException exception = assertThrows(ValidationException.class, () -> mIdValidator.validatedActiveMId(INVALID_MID));
+        assertEquals("Invalid Merchant ID", exception.getMessage());
+    }
+
+    @Test
+    void testValidatedMId_Success() {
+        assertDoesNotThrow(() -> mIdValidator.validatedMId(VALID_MID));
+    }
+
+    @Test
+    void testValidatedMId_Failure() {
+        ValidationException exception = assertThrows(ValidationException.class, () -> mIdValidator.validatedMId(INVALID_MID));
+        assertEquals("Invalid Merchant ID", exception.getMessage());
+    }
+}
+
+
+
+
+package com.epay.reporting.validator;
+
+import com.epay.reporting.exception.ValidationException;
+import com.epay.reporting.model.request.RecentTransactionRequest;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
