@@ -1,181 +1,57 @@
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+package com.epay.reporting.validator;
 
-import java.util.Optional;
-
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-@ExtendWith(MockitoExtension.class)
-class SecurityServiceTest {
-
-    @Mock
-    private MerchantServiceClient merchantServiceClient;
-
-    @InjectMocks
-    private SecurityService securityService;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
-
-    @Test
-    void testLoadUserByUserName_Success() {
-        // Given
-        String userName = "testUser";
-        String tokenType = "USER";
-        String userNameWithTokenType = userName + "_" + tokenType;
-        ReportingResponse<String> mockResponse = new ReportingResponse<>();
-        mockResponse.setStatus(ReportingConstant.RESPONSE_SUCCESS);
-        mockResponse.setErrors(null);
-
-        when(merchantServiceClient.validateMerchantUser(userName)).thenReturn(mockResponse);
-
-        // When
-        Optional<EPayPrincipal> result = securityService.loadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isPresent(), "Expected an EPayPrincipal object");
-        assertEquals(userName, result.get().getAuthenticationId(), "Authentication ID should match");
-        verify(merchantServiceClient, times(1)).validateMerchantUser(userName);
-    }
-
-    @Test
-    void testLoadUserByUserName_InvalidTokenType() {
-        // Given
-        String userNameWithTokenType = "testUser_INVALID";
-
-        // When
-        Optional<EPayPrincipal> result = securityService.loadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isEmpty(), "Expected an empty result for invalid token type");
-        verifyNoInteractions(merchantServiceClient);
-    }
-
-    @Test
-    void testLoadUserByUserName_MerchantValidationFails() {
-        // Given
-        String userName = "testUser";
-        String tokenType = "USER";
-        String userNameWithTokenType = userName + "_" + tokenType;
-        ReportingResponse<String> mockResponse = new ReportingResponse<>();
-        mockResponse.setStatus(ReportingConstant.RESPONSE_FAILURE);
-
-        when(merchantServiceClient.validateMerchantUser(userName)).thenReturn(mockResponse);
-
-        // When
-        Optional<EPayPrincipal> result = securityService.loadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isEmpty(), "Expected an empty result when merchant validation fails");
-        verify(merchantServiceClient, times(1)).validateMerchantUser(userName);
-    }
-
-    @Test
-    void testLoadUserByUserName_InvalidInputFormat() {
-        // Given
-        String userNameWithTokenType = "invalidFormat"; // No separator
-
-        // When
-        Optional<EPayPrincipal> result = securityService.loadUserByUserName(userNameWithTokenType);
-
-        // Then
-        assertTrue(result.isEmpty(), "Expected an empty result for invalid input format");
-        verifyNoInteractions(merchantServiceClient);
-    }
-
-    @Test
-    void testIsTokenInValid_Success() {
-        // Given
-        String token = "validToken";
-        String tokenType = "USER";
-        ReportingResponse<String> mockResponse = new ReportingResponse<>();
-        mockResponse.setStatus(ReportingConstant.RESPONSE_SUCCESS);
-        mockResponse.setErrors(null);
-
-        when(merchantServiceClient.validateMerchantToken(token)).thenReturn(mockResponse);
-
-        // When
-        boolean result = securityService.isTokenInValid(token, tokenType);
-
-        // Then
-        assertFalse(result, "Expected token to be valid");
-        verify(merchantServiceClient, times(1)).validateMerchantToken(token);
-    }
-
-    @Test
-    void testIsTokenInValid_InvalidTokenType() {
-        // Given
-        String token = "someToken";
-        String invalidTokenType = "INVALID";
-
-        // When
-        boolean result = securityService.isTokenInValid(token, invalidTokenType);
-
-        // Then
-        assertTrue(result, "Expected token to be invalid due to invalid token type");
-        verifyNoInteractions(merchantServiceClient);
-    }
-
-    @Test
-    void testIsTokenInValid_MerchantValidationFails() {
-        // Given
-        String token = "invalidToken";
-        String tokenType = "USER";
-        ReportingResponse<String> mockResponse = new ReportingResponse<>();
-        mockResponse.setStatus(ReportingConstant.RESPONSE_FAILURE);
-
-        when(merchantServiceClient.validateMerchantToken(token)).thenReturn(mockResponse);
-
-        // When
-        boolean result = securityService.isTokenInValid(token, tokenType);
-
-        // Then
-        assertTrue(result, "Expected token to be invalid when merchant validation fails");
-        verify(merchantServiceClient, times(1)).validateMerchantToken(token);
-    }
-}
-
-
-
-
-
-package com.epay.reporting.service;
-
-import com.epay.reporting.externalservice.MerchantServiceClient;
-import com.epay.reporting.model.response.ReportingResponse;
-import com.epay.reporting.util.ReportingConstant;
-import com.sbi.epay.authentication.model.EPayPrincipal;
-import com.sbi.epay.authentication.service.AuthenticationUserService;
-import com.sbi.epay.authentication.util.EPayAuthenticationConstant;
-import com.sbi.epay.authentication.util.enums.TokenType;
+import com.epay.reporting.exception.ValidationException;
+import com.epay.reporting.model.request.RecentTransactionRequest;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-import java.util.Optional;
+import java.util.ArrayList;
 
+@Component
+@RequiredArgsConstructor
+public class TransactionDashboardValidator extends BaseValidator {
+
+    private final MIdValidator mIdValidator;
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+
+    /**
+     * Validates the report schedule management request by checking mandatory fields and their values.
+     * Also validates the MId by checking if it's active.
+     *
+     * @param recentTransactionRequest The request object containing the recent transaction request details.
+     * @throws ValidationException if any validation fails.
+     */
+    public void validateRequest(String mId, RecentTransactionRequest recentTransactionRequest) {
+        logger.debug("Request Validation start for {}", recentTransactionRequest);
+        errorDtoList = new ArrayList<>();
+        validationMandatory(recentTransactionRequest);
+        mIdValidator.validatedActiveMId(mId);
+        logger.debug("Request Validation end for {}", recentTransactionRequest);
+    }
+
+    private void validationMandatory(RecentTransactionRequest recentTransactionRequest) {
+        checkMandatoryField(recentTransactionRequest.getFromDate(), "From Date");
+        checkMandatoryField(recentTransactionRequest.getToDate(), "To Date");
+        throwIfErrors();
+    }
+}
+package com.epay.reporting.validator;
+
+import com.epay.reporting.exception.ValidationException;
+import com.epay.reporting.externalservice.MerchantServiceClient;
+import com.epay.reporting.model.response.ReportingResponse;
+import com.epay.reporting.util.ReportingConstant;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 /**
- * Class Name: SecurityService
+ * Class Name: MIdValidator
  * *
- * Description: This service class handles user authentication and token validation
- * for the merchant system. It interacts with the `MerchantServiceClient` to validate
- * merchant users and tokens. It implements the `AuthenticationUserService` interface
- * to load users based on their credentials and check the validity of their tokens.
- * It also provides logging functionality to track the flow of the authentication process.
+ * Description: The MIdValidator class is responsible for validating merchant IDs (MId) to ensure they have the correct access or are active.
+ * It interacts with the MerchantServiceClient to validate MIds and throws a ValidationException if any validation fails.
  * *
  * Author: Bhoopendra Rajput
  * <p>
@@ -184,69 +60,40 @@ import java.util.Optional;
  * *
  * Version:1.0
  */
-@Service
+@Component
 @RequiredArgsConstructor
-public class SecurityService implements AuthenticationUserService {
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+public class MIdValidator {
+    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(MIdValidator.class);
     private final MerchantServiceClient merchantServiceClient;
 
     /**
-     * Method Name: loadUserByUserName
-     * <p>
-     * Description: This method extracts the username and token type from the provided
-     * `userNameWithTokenType` string, validates the merchant user using the `merchantServiceClient`,
-     * and returns an `EPayPrincipal` object if the validation is successful. It logs the
-     * process for debugging and traceability. If validation fails, an empty `Optional` is returned.
+     * Validates that the provided Merchant ID (MId) is active.
      *
-     * @param userNameWithTokenType String - A string that contains the username and token type,
-     *                              separated by a predefined delimiter.
-     * @return Optional<EPayPrincipal> - An `Optional` containing the `EPayPrincipal` if the user is valid,
-     * or an empty `Optional` if the user is invalid.
+     * @param mId - The Merchant ID to validate.
+     * @throws ValidationException if the Merchant ID is not active or if the validation fails.
      */
-    @Override
-    public Optional<EPayPrincipal> loadUserByUserName(String userNameWithTokenType) {
-        log.info("Attempting to load user by username and token type: {}", userNameWithTokenType);
-
-        String[] users = userNameWithTokenType.split(EPayAuthenticationConstant.JOINER);
-        if (users.length > 0 && StringUtils.isNotEmpty(users[1]) && TokenType.USER.equals(TokenType.valueOf(users[1]))) {
-            log.info("Token type is USER. Validating merchant user: {}", users[0]);
-            ReportingResponse<String> response = merchantServiceClient.validateMerchantUser(users[0]);
-            if (response.getStatus() == ReportingConstant.RESPONSE_SUCCESS && CollectionUtils.isEmpty(response.getErrors())) {
-                log.info("Merchant user validation successful for: {}", users[0]);
-                EPayPrincipal authenticateEntity = new EPayPrincipal();
-                authenticateEntity.setAuthenticationId(users[0]);
-                return Optional.of(authenticateEntity);
-            }
+    public void validatedActiveMId(String mId) {
+        ReportingResponse<String> response = merchantServiceClient.validateActiveMIdAccess(mId);
+        if (ReportingConstant.RESPONSE_FAILURE == response.getStatus()) {
+            log.error("Failed to validate active MId '{}'. Errors: {}", mId, response.getErrors());
+            throw new ValidationException(response.getErrors());
         }
-        return Optional.empty();
     }
-
 
     /**
-     * Method Name: isTokenInValid
-     * <p>
-     * Description: This method checks if the provided token is valid based on the token type.
-     * It validates the token type, and if it is a USER token, it calls the `merchantServiceClient`
-     * to validate the token. If the token is invalid, it returns true; otherwise, it returns false.
-     * It logs the process for better traceability and debugging.
+     * Validates that the provided Merchant ID (MId) has access.
      *
-     * @param token     String - The token to be validated.
-     * @param tokenType String - The type of the token (e.g., USER).
-     * @return boolean - Returns `true` if the token is invalid, `false` if the token is valid.
+     * @param mId - The Merchant ID to validate.
+     * @throws ValidationException if the Merchant ID does not have access or if the validation fails.
      */
-    @Override
-    public boolean isTokenInValid(String token, String tokenType) {
-        log.info("Checking token validity for token: {} and tokenType: {}", token, tokenType);
-        if (StringUtils.isNotEmpty(tokenType) && TokenType.USER.equals(TokenType.valueOf(tokenType))) {
-            log.info("Token type is USER. Validating merchant token: {}", token);
-            ReportingResponse<String> response = merchantServiceClient.validateMerchantToken(token);
-            return !ObjectUtils.isNotEmpty(response) || response.getStatus() != ReportingConstant.RESPONSE_SUCCESS || !CollectionUtils.isEmpty(response.getErrors());
+    public void validatedMId(String mId) {
+        ReportingResponse<String> response = merchantServiceClient.validateMIdAccess(mId);
+        if (ReportingConstant.RESPONSE_FAILURE == response.getStatus()) {
+            log.error("Failed to validate MId '{}'. Errors: {}", mId, response.getErrors());
+            throw new ValidationException(response.getErrors());
         }
-        log.warn("Invalid token type: {}", tokenType);
-        return true;
     }
 }
-
 package com.epay.reporting.externalservice;
 
 
