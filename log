@@ -112,3 +112,162 @@ public class FileDownloadService {
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, headers.getFirst(HttpHeaders.CONTENT_DISPOSITION));
     }
 }
+
+package com.epay.reporting.service;
+
+import com.epay.reporting.exception.ReportingException;
+import com.epay.reporting.util.ErrorConstants;
+import com.epay.reporting.util.enums.ReportFormat;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class FileDownloadServiceTest {
+
+    private FileDownloadService fileDownloadService;
+    private HttpServletResponse mockResponse;
+
+    @BeforeEach
+    void setUp() {
+        mockResponse = mock(HttpServletResponse.class);
+        fileDownloadService = spy(fileDownloadService);
+    }
+
+    @Test
+    void testDownloadFile_csvFormat() throws IOException {
+        String filePath = "path/to/file.csv";
+
+        // Prepare mock InputStream
+        InputStream mockInputStream = mock(InputStream.class);
+        when(mockInputStream.read(any(byte[].class))).thenReturn(-1); // Simulate end of file
+
+        // Mock FileDownloadService's getFileContent method
+        FileDownloadService spyService = spy(fileDownloadService);
+        doReturn(mockInputStream).when(spyService).getFileContent(filePath);
+
+        // Test downloadFile with CSV format
+        fileDownloadService.downloadFile(mockResponse, ReportFormat.CSV, filePath);
+
+        // Verify header setting logic
+        verify(mockResponse).setContentType("text/csv");
+        verify(mockResponse).setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=file.csv");
+    }
+
+    @Test
+    void testDownloadFile_xlsFormat() throws IOException {
+        String filePath = "path/to/file.xls";
+
+        // Prepare mock InputStream
+        InputStream mockInputStream = mock(InputStream.class);
+        when(mockInputStream.read(any(byte[].class))).thenReturn(-1); // Simulate end of file
+
+        // Mock FileDownloadService's getFileContent method
+        FileDownloadService spyService = spy(fileDownloadService);
+        doReturn(mockInputStream).when(spyService).getFileContent(filePath);
+
+        // Test downloadFile with XLS format
+        fileDownloadService.downloadFile(mockResponse, ReportFormat.XLS, filePath);
+
+        // Verify header setting logic
+        verify(mockResponse).setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        verify(mockResponse).setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=file.xls");
+    }
+
+    @Test
+    void testDownloadFile_pdfFormat() throws IOException {
+        String filePath = "path/to/file.pdf";
+
+        // Prepare mock InputStream
+        InputStream mockInputStream = mock(InputStream.class);
+        when(mockInputStream.read(any(byte[].class))).thenReturn(-1); // Simulate end of file
+
+        // Mock FileDownloadService's getFileContent method
+        FileDownloadService spyService = spy(fileDownloadService);
+        doReturn(mockInputStream).when(spyService).getFileContent(filePath);
+
+        // Test downloadFile with PDF format
+        fileDownloadService.downloadFile(mockResponse, ReportFormat.PDF, filePath);
+
+        // Verify header setting logic
+        verify(mockResponse).setContentType("application/pdf");
+        verify(mockResponse).setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=file.pdf");
+    }
+
+    @Test
+    void testDownloadFile_fileNotFound() throws IOException {
+        String filePath = "path/to/nonexistent/file.csv";
+
+        // Mock the exception that should be thrown when file is not found
+        FileDownloadService spyService = spy(fileDownloadService);
+        doThrow(new ReportingException(ErrorConstants.NOT_FOUND_ERROR_CODE, "File not found"))
+                .when(spyService).getFileContent(filePath);
+
+        // Test downloadFile and expect exception
+        try {
+            fileDownloadService.downloadFile(mockResponse, ReportFormat.CSV, filePath);
+        } catch (ReportingException e) {
+            // Check if the error code matches
+            assert e.getMessage().contains(ErrorConstants.NOT_FOUND_ERROR_MESSAGE);
+        }
+    }
+
+    @Test
+    void testSetFileResponse_handlesIOException() throws IOException {
+        String filePath = "path/to/file.csv";
+
+        // Mock an IOException when trying to open file
+        when(mockResponse.getOutputStream()).thenThrow(new IOException("IO error"));
+
+        // Test setting the file response and expect exception
+        try {
+            fileDownloadService.downloadFile(mockResponse, ReportFormat.CSV, filePath);
+        } catch (ReportingException e) {
+            assert e.getMessage().contains(ErrorConstants.GENERATION_ERROR_MESSAGE);
+        }
+    }
+
+ @Test
+    void testSetFileResponse_setsCorrectContentLength() throws IOException {
+        String filePath = "path/to/file.csv";
+
+        // Create a temporary file to test the behavior
+        File tempFile = new File(filePath);
+        tempFile.createNewFile(); // Just for testing
+
+        // Mock the file input stream
+        InputStream mockInputStream = new FileInputStream(tempFile);
+        when(mockResponse.getOutputStream()).thenReturn(mock(ServletOutputStream.class));
+
+        // Test the file response with real content
+        fileDownloadService.downloadFile(mockResponse, ReportFormat.CSV, filePath);
+
+        // Clean up after the test
+        tempFile.delete();
+
+        // Verify that content length is set
+        verify(mockResponse).setContentLength((int) tempFile.length());
+    }
+
+}
+
+    fileDownloadService = spy(fileDownloadService);
+Cannot invoke "Object.getClass()" because "object" is null
+java.lang.NullPointerException: Cannot invoke "Object.getClass()" because "object" is null
+	at org.mockito.Mockito.spy(Mockito.java:2192)
+	at com.epay.reporting.service.FileDownloadServiceTest.setUp(FileDownloadServiceTest.java:31)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
