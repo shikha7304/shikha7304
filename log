@@ -32,6 +32,114 @@ class FileDownloadServiceTest {
         fileDownloadService = spy(new FileDownloadService());
 
         when(mockResponse.getOutputStream()).thenReturn(mockOutputStream);
+        doNothing().when(mockOutputStream).write(any(byte[].class), anyInt(), anyInt());
+    }
+
+    @Test
+    void testDownloadFile_csvFormat() throws IOException {
+        String filePath = "file.csv";
+        InputStream mockInputStream = new ByteArrayInputStream("test data".getBytes());
+
+        doReturn(mockInputStream).when(fileDownloadService).getFileContent(filePath);
+
+        fileDownloadService.downloadFile(mockResponse, ReportFormat.CSV, filePath);
+
+        verify(mockResponse).setContentType("text/csv");
+        verify(mockResponse).setHeader("Content-Disposition", "attachment;filename=file.csv");
+        verify(mockOutputStream, atLeastOnce()).write(any(byte[].class), anyInt(), anyInt());
+    }
+
+    @Test
+    void testDownloadFile_xlsFormat() throws IOException {
+        String filePath = "file.xls";
+        InputStream mockInputStream = new ByteArrayInputStream("test data".getBytes());
+
+        doReturn(mockInputStream).when(fileDownloadService).getFileContent(filePath);
+
+        fileDownloadService.downloadFile(mockResponse, ReportFormat.XLS, filePath);
+
+        verify(mockResponse).setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        verify(mockResponse).setHeader("Content-Disposition", "attachment;filename=file.xls");
+        verify(mockOutputStream, atLeastOnce()).write(any(byte[].class), anyInt(), anyInt());
+    }
+
+    @Test
+    void testDownloadFile_pdfFormat() throws IOException {
+        String filePath = "file.pdf";
+        InputStream mockInputStream = new ByteArrayInputStream("test data".getBytes());
+
+        doReturn(mockInputStream).when(fileDownloadService).getFileContent(filePath);
+
+        fileDownloadService.downloadFile(mockResponse, ReportFormat.PDF, filePath);
+
+        verify(mockResponse).setContentType("application/pdf");
+        verify(mockResponse).setHeader("Content-Disposition", "attachment;filename=file.pdf");
+        verify(mockOutputStream, atLeastOnce()).write(any(byte[].class), anyInt(), anyInt());
+    }
+
+    @Test
+    void testDownloadFile_fileNotFound() {
+        String filePath = "nonexistent.csv";
+
+        doThrow(new ReportingException(ErrorConstants.NOT_FOUND_ERROR_CODE, "File not found"))
+                .when(fileDownloadService).getFileContent(filePath);
+
+        ReportingException exception = assertThrows(ReportingException.class, () ->
+                fileDownloadService.downloadFile(mockResponse, ReportFormat.CSV, filePath));
+
+        assertEquals(ErrorConstants.NOT_FOUND_ERROR_MESSAGE.replace("{0}", filePath), exception.getMessage());
+    }
+
+    @Test
+    void testSetFileResponse_handlesIOException() throws IOException {
+        String filePath = "file.csv";
+
+        when(mockResponse.getOutputStream()).thenThrow(new IOException("IO error"));
+
+        ReportingException exception = assertThrows(ReportingException.class, () ->
+                fileDownloadService.downloadFile(mockResponse, ReportFormat.CSV, filePath));
+
+        assertEquals(ErrorConstants.GENERATION_ERROR_MESSAGE.replace("{0}", filePath), exception.getMessage());
+    }
+}
+
+
+
+
+package com.epay.reporting.service;
+
+import com.epay.reporting.exception.ReportingException;
+import com.epay.reporting.util.ErrorConstants;
+import com.epay.reporting.util.enums.ReportFormat;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class FileDownloadServiceTest {
+
+    private FileDownloadService fileDownloadService;
+    private HttpServletResponse mockResponse;
+    private ServletOutputStream mockOutputStream;
+
+    @BeforeEach
+    void setUp() throws IOException {
+        mockResponse = mock(HttpServletResponse.class);
+        mockOutputStream = mock(ServletOutputStream.class);
+        fileDownloadService = spy(new FileDownloadService());
+
+        when(mockResponse.getOutputStream()).thenReturn(mockOutputStream);
     }
 
     @Test
