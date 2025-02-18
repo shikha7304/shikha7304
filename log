@@ -1,342 +1,114 @@
-package com.epay.reporting.validator;
+package com.epay.reporting.service;
 
-import com.epay.reporting.exception.ValidationException;
-import com.epay.reporting.model.request.RecentTransactionRequest;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-class TransactionDashboardValidatorTest {
-
-    @Mock
-    private MIdValidator mIdValidator;
-
-    @Mock
-    private LoggerUtility logger;
-
-    @InjectMocks
-    private TransactionDashboardValidator transactionDashboardValidator;
-
-    private static final String VALID_MID = "123456";
-
-    private RecentTransactionRequest validRequest;
-    private RecentTransactionRequest invalidRequest;
-
-    @BeforeEach
-    void setUp() {
-        validRequest = new RecentTransactionRequest();
-        validRequest.setFromDate("2024-02-01");
-        validRequest.setToDate("2024-02-15");
-
-        invalidRequest = new RecentTransactionRequest();
-    }
-
-    @Test
-    void testValidateRequest_Success() {
-        doNothing().when(mIdValidator).validatedActiveMId(VALID_MID);
-
-        assertDoesNotThrow(() -> transactionDashboardValidator.validateRequest(VALID_MID, validRequest));
-    }
-
-    @Test
-    void testValidateRequest_Failure_MissingFields() {
-        ValidationException exception = assertThrows(ValidationException.class, () ->
-                transactionDashboardValidator.validateRequest(VALID_MID, invalidRequest));
-
-        assertTrue(exception.getMessage().contains("From Date is mandatory") || 
-                   exception.getMessage().contains("To Date is mandatory"));
-    }
-
-    @Test
-    void testValidateRequest_Failure_InvalidMId() {
-        doThrow(new ValidationException("Invalid Merchant ID")).when(mIdValidator).validatedActiveMId(VALID_MID);
-
-        ValidationException exception = assertThrows(ValidationException.class, () ->
-                transactionDashboardValidator.validateRequest(VALID_MID, validRequest));
-
-        assertEquals("Invalid Merchant ID", exception.getMessage());
-    }
-}
-
-package com.epay.reporting.validator;
-
-import com.epay.reporting.exception.ValidationException;
-import com.epay.reporting.externalservice.MerchantServiceClient;
-import com.epay.reporting.model.response.ReportingResponse;
-import com.epay.reporting.util.ReportingConstant;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-class MIdValidatorTest {
-
-    @Mock
-    private MerchantServiceClient merchantServiceClient;
-
-    @InjectMocks
-    private MIdValidator mIdValidator;
-
-    private static final String VALID_MID = "123456";
-    private static final String INVALID_MID = "000000";
-
-    @BeforeEach
-    void setUp() {
-        ReportingResponse<String> successResponse = new ReportingResponse<>();
-        successResponse.setStatus(ReportingConstant.RESPONSE_SUCCESS);
-
-        ReportingResponse<String> failureResponse = new ReportingResponse<>();
-        failureResponse.setStatus(ReportingConstant.RESPONSE_FAILURE);
-        failureResponse.setErrors("Invalid Merchant ID");
-
-        when(merchantServiceClient.validateActiveMIdAccess(VALID_MID)).thenReturn(successResponse);
-        when(merchantServiceClient.validateActiveMIdAccess(INVALID_MID)).thenReturn(failureResponse);
-
-        when(merchantServiceClient.validateMIdAccess(VALID_MID)).thenReturn(successResponse);
-        when(merchantServiceClient.validateMIdAccess(INVALID_MID)).thenReturn(failureResponse);
-    }
-
-    @Test
-    void testValidatedActiveMId_Success() {
-        assertDoesNotThrow(() -> mIdValidator.validatedActiveMId(VALID_MID));
-    }
-
-    @Test
-    void testValidatedActiveMId_Failure() {
-        ValidationException exception = assertThrows(ValidationException.class, () -> mIdValidator.validatedActiveMId(INVALID_MID));
-        assertEquals("Invalid Merchant ID", exception.getMessage());
-    }
-
-    @Test
-    void testValidatedMId_Success() {
-        assertDoesNotThrow(() -> mIdValidator.validatedMId(VALID_MID));
-    }
-
-    @Test
-    void testValidatedMId_Failure() {
-        ValidationException exception = assertThrows(ValidationException.class, () -> mIdValidator.validatedMId(INVALID_MID));
-        assertEquals("Invalid Merchant ID", exception.getMessage());
-    }
-}
-
-
-
-
-package com.epay.reporting.validator;
-
-import com.epay.reporting.exception.ValidationException;
-import com.epay.reporting.model.request.RecentTransactionRequest;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-
-@Component
-@RequiredArgsConstructor
-public class TransactionDashboardValidator extends BaseValidator {
-
-    private final MIdValidator mIdValidator;
-    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
-
-    /**
-     * Validates the report schedule management request by checking mandatory fields and their values.
-     * Also validates the MId by checking if it's active.
-     *
-     * @param recentTransactionRequest The request object containing the recent transaction request details.
-     * @throws ValidationException if any validation fails.
-     */
-    public void validateRequest(String mId, RecentTransactionRequest recentTransactionRequest) {
-        logger.debug("Request Validation start for {}", recentTransactionRequest);
-        errorDtoList = new ArrayList<>();
-        validationMandatory(recentTransactionRequest);
-        mIdValidator.validatedActiveMId(mId);
-        logger.debug("Request Validation end for {}", recentTransactionRequest);
-    }
-
-    private void validationMandatory(RecentTransactionRequest recentTransactionRequest) {
-        checkMandatoryField(recentTransactionRequest.getFromDate(), "From Date");
-        checkMandatoryField(recentTransactionRequest.getToDate(), "To Date");
-        throwIfErrors();
-    }
-}
-package com.epay.reporting.validator;
-
-import com.epay.reporting.exception.ValidationException;
-import com.epay.reporting.externalservice.MerchantServiceClient;
-import com.epay.reporting.model.response.ReportingResponse;
-import com.epay.reporting.util.ReportingConstant;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-/**
- * Class Name: MIdValidator
- * *
- * Description: The MIdValidator class is responsible for validating merchant IDs (MId) to ensure they have the correct access or are active.
- * It interacts with the MerchantServiceClient to validate MIds and throws a ValidationException if any validation fails.
- * *
- * Author: Bhoopendra Rajput
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-@Component
-@RequiredArgsConstructor
-public class MIdValidator {
-    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(MIdValidator.class);
-    private final MerchantServiceClient merchantServiceClient;
-
-    /**
-     * Validates that the provided Merchant ID (MId) is active.
-     *
-     * @param mId - The Merchant ID to validate.
-     * @throws ValidationException if the Merchant ID is not active or if the validation fails.
-     */
-    public void validatedActiveMId(String mId) {
-        ReportingResponse<String> response = merchantServiceClient.validateActiveMIdAccess(mId);
-        if (ReportingConstant.RESPONSE_FAILURE == response.getStatus()) {
-            log.error("Failed to validate active MId '{}'. Errors: {}", mId, response.getErrors());
-            throw new ValidationException(response.getErrors());
-        }
-    }
-
-    /**
-     * Validates that the provided Merchant ID (MId) has access.
-     *
-     * @param mId - The Merchant ID to validate.
-     * @throws ValidationException if the Merchant ID does not have access or if the validation fails.
-     */
-    public void validatedMId(String mId) {
-        ReportingResponse<String> response = merchantServiceClient.validateMIdAccess(mId);
-        if (ReportingConstant.RESPONSE_FAILURE == response.getStatus()) {
-            log.error("Failed to validate MId '{}'. Errors: {}", mId, response.getErrors());
-            throw new ValidationException(response.getErrors());
-        }
-    }
-}
-package com.epay.reporting.externalservice;
-
-
-import com.epay.reporting.client.ApiClient;
 import com.epay.reporting.exception.ReportingException;
-import com.epay.reporting.externalservice.request.UserValidationRequest;
-import com.epay.reporting.model.response.ReportingResponse;
-import com.epay.reporting.util.EPayIdentityUtil;
 import com.epay.reporting.util.ErrorConstants;
-import com.sbi.epay.authentication.providers.EPayTokenProvider;
-import org.springframework.core.ParameterizedTypeReference;
+import com.epay.reporting.util.enums.ReportFormat;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.text.StringEscapeUtils;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
-import reactor.core.publisher.Mono;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
 
-import java.net.URI;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.text.MessageFormat;
 
 /**
- * Class Name: MerchantServiceClient
- * *
- * Description:  This class provides methods for interacting with the Merchant Service API,
- * specifically for validating merchant-related data, such as user, token, and merchant ID (MID) access.
- * It extends the ApiClient class, utilizing WebClient for making HTTP requests.
- * This service supports different types of validations including login, token validation,
- * and access rights for active and non-active merchant IDs.
- * Author: V1018482
+ * Class Name: FileDownloadService
+ * Description: This service defines the logic for downloading files. It handles the processes of preparing,
+ * streaming, and sending files in response to a client’s request. The service ensures efficient file download
+ * handling with buffer management and proper error logging.
+ * Author: Bhoopendra Rajput
  * Copyright (c) 2024 [State Bank of India]
  * All rights reserved
- * *
  * Version:1.0
  */
-public class MerchantServiceClient extends ApiClient {
-
-    public static final String MID_VALIDATION = "/validation/access/";
-    public static final String ACTIVE_MID_VALIDATION = "/validation/access/active/";
-    public static final String USER_VALIDATION = "/validation/user";
-    public static final String TOKEN_VALIDATION = "/validation/token";
-    public static final String BEARER = "Bearer ";
-
-    private final EPayTokenProvider ePayTokenProvider;
+@Service
+@RequiredArgsConstructor
+public class FileDownloadService {
+    private final static int DEFAULT_BUFFER_SIZE = 8192;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
 
     /**
-     * Constructor for initializing the MerchantServiceClient with a base URL and EPayTokenProvider.
+     * Building content type and setting file in response.
      *
-     * @param baseUrl the base URL of the Merchant Service API
-     * @param ePayTokenProvider the provider for fetching ePay tokens
+     * @param httpResponse HttpServletResponse
+     * @param reportFormat ReportFormat
+     * @param filePath     String
      */
-    public MerchantServiceClient(String baseUrl, EPayTokenProvider ePayTokenProvider) {
-        super(baseUrl);
-        this.ePayTokenProvider = ePayTokenProvider;
+    public void downloadFile(HttpServletResponse httpResponse, ReportFormat reportFormat, String filePath) {
+        log.info("Started downloadFile for Report : {}, filePath: {}", reportFormat, filePath);
+        String contentType = switch (reportFormat) {
+            case CSV -> "text/csv";
+            case XLS -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case PDF -> MediaType.APPLICATION_PDF_VALUE;
+        };
+        setFileResponse(httpResponse, contentType, filePath);
     }
 
     /**
-     * Validates the user by making a POST request to the user validation endpoint.
+     * TODO: Temp code: it will replace from S3 code.
      *
-     * @param userName the username to validate
-     * @return a ReportingResponse containing validation status as a String
+     * @param filePath String
+     * @return InputStream
      */
-    public ReportingResponse<String> validateMerchantUser(String userName) {
-        URI uri = URI.create(getBaseUrl() + USER_VALIDATION);
-        return getWebClient().post().uri(uri).bodyValue(UserValidationRequest.builder().requestType("LOGIN").userName(userName).build()).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
-        }).block();
+    protected InputStream getFileContent(String filePath) {
+        log.info("Started getFileContent for filePath: {}", filePath);
+        try {
+            return new FileInputStream(filePath);
+        } catch (IOException e) {
+            log.error("Unable to read file {}", filePath, e);
+            throw new ReportingException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, filePath));
+        }
     }
 
     /**
-     * Validates the provided token by making a GET request to the token validation endpoint.
+     * Setting file name, content type and content in http servlet response.
      *
-     * @param token the token to validate
-     * @return a ReportingResponse containing validation status as a String
+     * @param response    HttpServletResponse
+     * @param contentType String
+     * @param filePath    String
      */
-    public ReportingResponse<String> validateMerchantToken(String token) {
-        HttpHeaders headers = prepareHttpHeaders();
-        headers.set(HttpHeaders.AUTHORIZATION, BEARER + token);
-        URI uri = URI.create(getBaseUrl() + TOKEN_VALIDATION);
-        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
-        }).block();
+    protected void setFileResponse(HttpServletResponse response, String contentType, String filePath) {
+        // Write the file content to the response output stream
+        log.info("Started setFileResponse for contentType: {}, fileName: {}", contentType, filePath);
+
+        try (InputStream inputStream = new FileInputStream(filePath); ServletOutputStream outputStream = response.getOutputStream()) {
+            String fileName = FilenameUtils.getName(filePath);
+            setHeader(response, contentType, fileName);
+            long length = IOUtils.copy(inputStream, outputStream, DEFAULT_BUFFER_SIZE);
+            if (length <= Integer.MAX_VALUE) {
+                response.setContentLength((int) length);
+            } else {
+                response.addHeader("Content-Length", Long.toString(length));
+            }
+        } catch (IOException e) {
+            log.error("Error in setting file content in response", e);
+            throw new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, MessageFormat.format(ErrorConstants.GENERATION_ERROR_MESSAGE, filePath));
+        }
     }
 
     /**
-     * Validates access to a merchant ID (MID) for the current user.
-     *
-     * @param mId the merchant ID to validate
-     * @return a ReportingResponse containing validation status as a String
+     * Set the response headers for a downloadable file
+     * @param response    HttpServletResponse
+     * @param contentType String
+     * @param fileName    String
      */
-    public ReportingResponse<String> validateMIdAccess(String mId) {
-        HttpHeaders headers = prepareHttpHeaders();
-        headers.set(HttpHeaders.AUTHORIZATION, BEARER + ePayTokenProvider.getToken());
-        URI uri = URI.create(getBaseUrl() + MID_VALIDATION + EPayIdentityUtil.getUserPrincipal().getUsername() + "/" + mId);
-        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
-        }).block();
+    private void setHeader(HttpServletResponse response, String contentType, String fileName) {
+        log.info("Started setHeader for contentType: {}, fileName: {}", contentType, fileName);
+        response.setContentType(contentType);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, StringEscapeUtils.escapeJava("attachment;filename=" + fileName));
+        HttpHeaders headers = new HttpHeaders();
+        ContentDisposition contentDisposition = ContentDisposition.attachment().filename(fileName).build();
+        headers.setContentDisposition(contentDisposition);
+        response.setHeader(HttpHeaders.CONTENT_DISPOSITION, headers.getFirst(HttpHeaders.CONTENT_DISPOSITION));
     }
-
-    /**
-     * Validates access to an active merchant ID (MID) for the current user.
-     *
-     * @param mId the merchant ID to validate
-     * @return a ReportingResponse containing validation status as a String
-     */
-    public ReportingResponse<String> validateActiveMIdAccess(String mId) {
-        HttpHeaders headers = prepareHttpHeaders();
-        headers.set(HttpHeaders.AUTHORIZATION, BEARER + ePayTokenProvider.getToken());
-        URI uri = URI.create(getBaseUrl() + ACTIVE_MID_VALIDATION + EPayIdentityUtil.getUserPrincipal().getUsername() + "/" + mId);
-        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new ReportingException(ErrorConstants.GENERIC_ERROR_CODE, ErrorConstants.GENERIC_ERROR_MESSAGE))).bodyToMono(new ParameterizedTypeReference<ReportingResponse<String>>() {
-        }).block();
-    }
-
 }
