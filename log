@@ -10,6 +10,142 @@ import com.epay.merchant.util.ErrorConstants;
 import com.epay.merchant.util.MerchantConstant;
 import com.epay.merchant.util.enums.RequestType;
 import com.epay.merchant.validator.MerchantLoginValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.*;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.text.MessageFormat;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class LoginServiceTest {
+
+    @InjectMocks
+    private LoginService loginService;
+
+    @Mock
+    private MerchantLoginValidator merchantLoginValidator;
+
+    @Mock
+    private TokenService tokenService;
+
+    @Mock
+    private LoginDao loginDao;
+
+    private MerchantLoginRequest request;
+
+    @BeforeEach
+    void setUp() {
+        request = new MerchantLoginRequest();
+        request.setUserName("testUser");
+        request.setRequestId("12345");
+    }
+
+    @Test
+    void testMerchantLogin_SuccessfulLogin() {
+        // Mock successful validation and DAO calls
+        doNothing().when(merchantLoginValidator).validateMerchantLoginRequest(request);
+        doNothing().when(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
+        doNothing().when(loginDao).updateCaptchaIsVerified("12345");
+
+        MerchantResponse<Object> response = loginService.merchantLogin(request);
+
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertNotNull(response.getData());
+        assertTrue(response.getData() instanceof List);
+        assertEquals(1, ((List<?>) response.getData()).size());
+        assertTrue(((List<?>) response.getData()).get(0).toString().contains("Logged In User Found"));
+
+        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
+        verify(loginDao).updateCaptchaIsVerified("12345");
+    }
+
+    @Test
+    void testMerchantLogin_ValidationException() {
+        ValidationException validationException = new ValidationException(List.of(new ErrorDto(ErrorConstants.MANDATORY_ERROR_CODE, "Mandatory field missing")));
+        doThrow(validationException).when(merchantLoginValidator).validateMerchantLoginRequest(request);
+
+        assertThrows(ValidationException.class, () -> loginService.merchantLogin(request));
+
+        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
+        verify(loginDao, never()).saveLoginAudit(anyString(), any(), anyBoolean(), anyString());
+    }
+
+    @Test
+    void testMerchantLogin_MerchantException() {
+        MerchantException merchantException = new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, "User not found");
+        doThrow(merchantException).when(merchantLoginValidator).validateMerchantLoginRequest(request);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(request);
+
+        assertEquals(MerchantConstant.RESPONSE_FAILURE, response.getStatus());
+        assertNotNull(response.getErrors());
+        assertEquals(1, response.getErrors().size());
+        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, response.getErrors().get(0).getErrorCode());
+
+        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(false), anyString());
+    }
+
+    @Test
+    void testMerchantLogin_GenericException() {
+        doThrow(new RuntimeException("Unexpected error")).when(merchantLoginValidator).validateMerchantLoginRequest(request);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(request);
+
+        assertEquals(MerchantConstant.RESPONSE_FAILURE, response.getStatus());
+        assertNotNull(response.getErrors());
+        assertEquals(1, response.getErrors().size());
+        assertEquals(ErrorConstants.GENERIC_ERROR_CODE, response.getErrors().get(0).getErrorCode());
+
+        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(false), anyString());
+    }
+
+    @Test
+    void testHandleLoginFailure_UserExists() {
+        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(3);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(request);
+
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
+    }
+
+    @Test
+    void testHandleLoginFailure_UserNotFound() {
+        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(0);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(request);
+
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
+    }
+}
+
+
+
+
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.MerchantLoginValidator;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
