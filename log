@@ -1,3 +1,91 @@
+User Story: Implement Download Key Encryption API
+
+Title: Enable Download of Merchant Encryption Key as a Password-Protected PDF
+
+As a
+
+Merchant or Administrator
+
+I want
+
+To securely download the active encryption key for a given Merchant ID (mId) in a password-protected PDF format
+
+So that
+
+The encryption key remains secure and accessible only to authorized users.
+
+API Details:
+	•	Method: GET
+	•	Endpoint: /merchant/v1/download/encryption/{mId}
+	•	Access Type: Secure (Only authorized merchants or administrators)
+
+Request Parameters:
+
+Field	Type	Required	Description
+mId	String	Yes	Merchant ID for which the encryption key is to be downloaded
+
+Success Response:
+	•	A password-protected PDF file containing the encryption key is returned as a downloadable attachment.
+	•	A notification is sent to the merchant with the password required to open the PDF.
+
+Failure Response:
+
+{
+  "status": 0,
+  "error": [
+    {
+      "errorCode": "ENCRYPTION_KEY_NOT_FOUND",
+      "errorMessage": "Encryption key not found for the given Merchant ID."
+    }
+  ]
+}
+
+Acceptance Criteria:
+	1.	Encryption Key Retrieval:
+	•	The API should fetch the active encryption key for the given mId.
+	•	If no key is found, return a proper error response.
+	2.	PDF Generation & Security:
+	•	The encryption key should be embedded in a password-protected PDF.
+	•	A randomly generated password should be used for each request.
+	3.	Password Notification:
+	•	The generated PDF password should be sent to the merchant via email/SMS/notification.
+	4.	Error Handling:
+	•	Proper validation for mId before fetching the encryption key.
+	•	Handle exceptions and log errors while retrieving/generating the key.
+	5.	Testing & Validation:
+	•	Verify that a valid request generates a downloadable PDF.
+	•	Ensure that the password is correctly sent to the merchant.
+	•	Validate security measures, including password protection.
+
+Technical Implementation Steps:
+	1.	Validate Merchant ID:
+	•	Ensure mId is valid before processing the request.
+	2.	Fetch Encryption Key:
+	•	Retrieve the encryption key from the Key Management Service (KMS).
+	3.	Generate Password-Protected PDF:
+	•	Convert the encryption key into a password-protected PDF using a PDF generation library.
+	4.	Send Password Notification:
+	•	Store and send the generated password to the merchant.
+	5.	Return PDF as Response:
+	•	Send the PDF file as a downloadable response in the API.
+
+Developer Checklist:
+
+✅ Validate mId before processing.
+✅ Fetch the encryption key securely.
+✅ Generate a password-protected PDF.
+✅ Send the PDF password securely to the merchant.
+✅ Log all key actions for traceability.
+✅ Handle errors and invalid requests gracefully.
+✅ Ensure 90% unit test coverage.
+
+Would you like any modifications based on additional business rules?
+
+
+
+
+
+
 Implement Captcha Creation API
 Open
  Issue
