@@ -1,3 +1,113 @@
+User Story: Implement Kafka for Asynchronous Processing of Email & SMS Notifications
+
+Title: Integrate Kafka Producer & Consumer for Email and SMS Notifications
+
+As a
+
+System Administrator / Developer
+
+I want
+
+To implement Kafka-based asynchronous processing for handling email and SMS notifications efficiently.
+
+So that
+
+Notifications are processed in a scalable, event-driven manner, reducing response time and system load.
+
+API Details:
+	•	Producer API (Publish Notification Event)
+	•	Method: POST
+	•	Endpoint: /merchant/v1/notifications/publish
+	•	Access Type: Internal API
+
+Request Body:
+
+{
+  "notificationType": "EMAIL | SMS",
+  "recipient": "user@example.com",
+  "message": "Your OTP is 123456",
+  "subject": "Verification Code",
+  "metadata": {
+    "transactionId": "abc123",
+    "timestamp": "2025-02-20T10:00:00Z"
+  }
+}
+
+Success Response:
+
+{
+  "status": 1,
+  "message": "Notification event published successfully"
+}
+
+Failure Response:
+
+{
+  "status": 0,
+  "error": [
+    {
+      "errorCode": "KAFKA_PUBLISH_ERROR",
+      "errorMessage": "Failed to publish notification event"
+    }
+  ]
+}
+
+Kafka Topics:
+
+Topic Name	Purpose
+email-notification-topic	Handles email notifications
+sms-notification-topic	Handles SMS notifications
+
+Acceptance Criteria:
+	1.	Kafka Producer Implementation:
+	•	Implement Kafka Producer to publish messages to the appropriate email or SMS topic.
+	•	Ensure messages are published asynchronously for better performance.
+	2.	Kafka Consumer & Listener:
+	•	Implement Kafka Consumer & Listener to consume messages from topics.
+	•	Process email notifications via an Email Service.
+	•	Process SMS notifications via an SMS Service.
+	3.	Service Layer:
+	•	Implement a service layer to route messages to the correct Kafka topic based on notification type.
+	•	Ensure the message structure is consistent across producer and consumer.
+	4.	DAO & Database Integration:
+	•	Implement DAO and repository to store notification logs for audit and debugging.
+	5.	Mapper Class:
+	•	Create a Mapper to transform API request data into Kafka messages.
+	6.	Error Handling & Logging:
+	•	Implement retry logic for failed messages.
+	•	Log all messages sent and received for traceability.
+	7.	Testing & Validation:
+	•	Unit tests for Kafka Producer and Consumer.
+	•	Integration tests to ensure end-to-end flow of messages.
+	•	Validate high-volume load handling.
+
+Technical Implementation Steps:
+	1.	Kafka Producer Setup:
+	•	Configure Kafka producer settings in application.yml.
+	•	Implement KafkaProducerService to publish messages.
+	2.	Kafka Consumer & Listener:
+	•	Configure consumer settings in application.yml.
+	•	Implement KafkaConsumerListener to process messages.
+	3.	Service Layer Implementation:
+	•	Create NotificationService to handle email and SMS processing.
+	4.	DAO & Database Changes:
+	•	Store notifications in notification_log table.
+	5.	Mapper Class:
+	•	Convert API requests to Kafka messages.
+
+Developer Checklist:
+
+✅ Kafka Producer & Consumer implemented.
+✅ Email & SMS service integrated with Kafka.
+✅ Database logging for notifications.
+✅ Error handling & retry mechanism.
+✅ Logging for all Kafka messages.
+✅ 90% unit test coverage achieved.
+
+Would you like any additional details or modifications based on your system’s requirements?
+
+
+
 User Story: Implement Download Key Encryption API
 
 Title: Enable Download of Merchant Encryption Key as a Password-Protected PDF
