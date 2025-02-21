@@ -1,3 +1,52 @@
+User Story: Add Content-Disposition in Auth Service
+
+Title: Add Content-Disposition Header Support in Auth Service
+
+As a
+
+Developer / API Consumer
+
+I want
+
+The Auth Service to include a Content-Disposition header in API responses where applicable.
+
+So that
+
+Clients consuming the API can properly handle the response, especially for downloadable files or structured data responses.
+
+Acceptance Criteria:
+	1.	Header Inclusion:
+	•	The API should return the Content-Disposition header in relevant responses.
+	•	The format should be:
+
+Content-Disposition: attachment; filename="response.json"
+
+
+	2.	Configuration Support:
+	•	Allow configuring the filename dynamically based on response type or request parameters.
+	3.	Backward Compatibility:
+	•	Ensure existing API functionality remains unaffected for requests that do not require this header.
+	4.	Error Handling:
+	•	If an issue occurs while setting the header, log the error without breaking the response.
+	5.	Testing & Validation:
+	•	Unit tests to verify the presence of the Content-Disposition header.
+	•	Integration tests to ensure responses behave as expected.
+
+Technical Notes:
+	•	Modify the response handling logic to include Content-Disposition where applicable.
+	•	Use HttpServletResponse (for Java/Spring) or an equivalent mechanism in the framework.
+	•	Example in Spring Boot:
+
+response.setHeader("Content-Disposition", "attachment; filename=\"response.json\"");
+
+
+
+Would you like any specific business rules or constraints added?
+
+
+
+
+
 package com.epay.merchant.service;
 
 import com.epay.merchant.dao.LoginDao;
