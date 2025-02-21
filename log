@@ -1,3 +1,52 @@
+User Story: Remove Account Expiry Notification for User Role
+
+Title: Stop Sending Account Expiry Notifications to Regular Users
+
+As a
+
+System Administrator
+
+I want
+
+To stop sending account expiry notification alerts to regular users and ensure they are only sent to Admin and Super Admin users.
+
+So that
+
+Regular users are not unnecessarily notified, while Admins and Super Admins can still manage account expirations effectively.
+
+Acceptance Criteria:
+	1.	Notification Restriction:
+	•	Account expiry alerts should no longer be sent to users with the “User” role.
+	•	Alerts should only be sent to users with “Admin” and “Super Admin” roles.
+	2.	System Behavior Update:
+	•	Modify the notification logic to check user roles before sending an alert.
+	•	Ensure that only Admins and Super Admins receive account expiry notifications.
+	3.	Logging & Monitoring:
+	•	Log an entry when a notification is triggered, specifying the recipient role.
+	•	Ensure no alerts are mistakenly sent to regular users.
+	4.	Backward Compatibility:
+	•	Ensure existing notification logic remains intact for Admins and Super Admins.
+	•	No impact on other alert mechanisms in the system.
+	5.	Testing & Validation:
+	•	Unit tests to verify that notifications are only sent to the correct roles.
+	•	Integration tests to confirm that no alerts are sent to regular users.
+
+Technical Notes:
+	•	Modify the existing notification service to filter recipients based on user roles.
+	•	Example logic update:
+
+if (user.hasRole("ADMIN") || user.hasRole("SUPER_ADMIN")) {
+    sendAccountExpiryNotification(user);
+}
+
+
+	•	Ensure changes are applied across all notification channels (email, SMS, in-app alerts).
+
+Would you like any additional constraints or business rules added?
+
+
+
+
 User Story: Add Content-Disposition in Auth Service
 
 Title: Add Content-Disposition Header Support in Auth Service
