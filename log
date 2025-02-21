@@ -1,343 +1,200 @@
-User Story: Remove Account Expiry Notification for User Role
+Implement Captcha Creation API
+Open
+ Issue
+created
+2 months ago
+by
+Bhoopendra Rajput
+Description
+For a merchant, we need to implement captcha mechanism during login, reset password functionality to prevent unauthorized access and ensure enhanced security for an application.
 
-Title: Stop Sending Account Expiry Notifications to Regular Users
-
-As a
-
-System Administrator
-
-I want
-
-To stop sending account expiry notification alerts to regular users and ensure they are only sent to Admin and Super Admin users.
-
-So that
-
-Regular users are not unnecessarily notified, while Admins and Super Admins can still manage account expirations effectively.
-
-Acceptance Criteria:
-	1.	Notification Restriction:
-	•	Account expiry alerts should no longer be sent to users with the “User” role.
-	•	Alerts should only be sent to users with “Admin” and “Super Admin” roles.
-	2.	System Behavior Update:
-	•	Modify the notification logic to check user roles before sending an alert.
-	•	Ensure that only Admins and Super Admins receive account expiry notifications.
-	3.	Logging & Monitoring:
-	•	Log an entry when a notification is triggered, specifying the recipient role.
-	•	Ensure no alerts are mistakenly sent to regular users.
-	4.	Backward Compatibility:
-	•	Ensure existing notification logic remains intact for Admins and Super Admins.
-	•	No impact on other alert mechanisms in the system.
-	5.	Testing & Validation:
-	•	Unit tests to verify that notifications are only sent to the correct roles.
-	•	Integration tests to confirm that no alerts are sent to regular users.
-
-Technical Notes:
-	•	Modify the existing notification service to filter recipients based on user roles.
-	•	Example logic update:
-
-if (user.hasRole("ADMIN") || user.hasRole("SUPER_ADMIN")) {
-    sendAccountExpiryNotification(user);
+API Details
+Method: Post
+API Definition: /merchant/v1/captcha
+Access Type: Open API
+Request Body:
+{
+  "requestType": String,
+  "requestId": String
 }
-
-
-	•	Ensure changes are applied across all notification channels (email, SMS, in-app alerts).
-
-Would you like any additional constraints or business rules added?
-
-
-
-
-User Story: Add Content-Disposition in Auth Service
-
-Title: Add Content-Disposition Header Support in Auth Service
-
-As a
-
-Developer / API Consumer
-
-I want
-
-The Auth Service to include a Content-Disposition header in API responses where applicable.
-
-So that
-
-Clients consuming the API can properly handle the response, especially for downloadable files or structured data responses.
-
-Acceptance Criteria:
-	1.	Header Inclusion:
-	•	The API should return the Content-Disposition header in relevant responses.
-	•	The format should be:
-
-Content-Disposition: attachment; filename="response.json"
-
-
-	2.	Configuration Support:
-	•	Allow configuring the filename dynamically based on response type or request parameters.
-	3.	Backward Compatibility:
-	•	Ensure existing API functionality remains unaffected for requests that do not require this header.
-	4.	Error Handling:
-	•	If an issue occurs while setting the header, log the error without breaking the response.
-	5.	Testing & Validation:
-	•	Unit tests to verify the presence of the Content-Disposition header.
-	•	Integration tests to ensure responses behave as expected.
-
-Technical Notes:
-	•	Modify the response handling logic to include Content-Disposition where applicable.
-	•	Use HttpServletResponse (for Java/Spring) or an equivalent mechanism in the framework.
-	•	Example in Spring Boot:
-
-response.setHeader("Content-Disposition", "attachment; filename=\"response.json\"");
-
-
-
-Would you like any specific business rules or constraints added?
-
-
-
-
-
-package com.epay.merchant.service;
-
-import com.epay.merchant.dao.LoginDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.model.request.MerchantLoginRequest;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.validator.MerchantLoginValidator;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.text.MessageFormat;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-class LoginServiceTest {
-
-    @InjectMocks
-    private LoginService loginService;
-
-    @Mock
-    private MerchantLoginValidator merchantLoginValidator;
-
-    @Mock
-    private TokenService tokenService;
-
-    @Mock
-    private LoginDao loginDao;
-
-    private MerchantLoginRequest request;
-
-    @BeforeEach
-    void setUp() {
-        request = new MerchantLoginRequest();
-        request.setUserName("testUser");
-        request.setRequestId("12345");
+request Type need to be Enum and can hold the value - LOGIN, RESET_PASSWORD
+request Id need to be unique for each captcha request and need to maintain until Request complete.
+Both fields are mandatory
+Success Response Body
+{
+  "data": [
+    {
+       "id": UUID,
+       "captchaImage": BASE64,
+       "expiryTime": long,
     }
-
-    @Test
-    void testMerchantLogin_SuccessfulLogin() {
-        // Mock successful validation and DAO calls
-        doNothing().when(merchantLoginValidator).validateMerchantLoginRequest(request);
-        doNothing().when(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
-        doNothing().when(loginDao).updateCaptchaIsVerified("12345");
-
-        MerchantResponse<Object> response = loginService.merchantLogin(request);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        assertNotNull(response.getData());
-        assertTrue(response.getData() instanceof List);
-        assertEquals(1, ((List<?>) response.getData()).size());
-        assertTrue(((List<?>) response.getData()).get(0).toString().contains("Logged In User Found"));
-
-        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
-        verify(loginDao).updateCaptchaIsVerified("12345");
-    }
-
-    @Test
-    void testMerchantLogin_ValidationException() {
-        ValidationException validationException = new ValidationException(List.of(new ErrorDto(ErrorConstants.MANDATORY_ERROR_CODE, "Mandatory field missing")));
-        doThrow(validationException).when(merchantLoginValidator).validateMerchantLoginRequest(request);
-
-        assertThrows(ValidationException.class, () -> loginService.merchantLogin(request));
-
-        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
-        verify(loginDao, never()).saveLoginAudit(anyString(), any(), anyBoolean(), anyString());
-    }
-
-    @Test
-    void testMerchantLogin_MerchantException() {
-        MerchantException merchantException = new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, "User not found");
-        doThrow(merchantException).when(merchantLoginValidator).validateMerchantLoginRequest(request);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(request);
-
-        assertEquals(MerchantConstant.RESPONSE_FAILURE, response.getStatus());
-        assertNotNull(response.getErrors());
-        assertEquals(1, response.getErrors().size());
-        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, response.getErrors().get(0).getErrorCode());
-
-        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(false), anyString());
-    }
-
-    @Test
-    void testMerchantLogin_GenericException() {
-        doThrow(new RuntimeException("Unexpected error")).when(merchantLoginValidator).validateMerchantLoginRequest(request);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(request);
-
-        assertEquals(MerchantConstant.RESPONSE_FAILURE, response.getStatus());
-        assertNotNull(response.getErrors());
-        assertEquals(1, response.getErrors().size());
-        assertEquals(ErrorConstants.GENERIC_ERROR_CODE, response.getErrors().get(0).getErrorCode());
-
-        verify(merchantLoginValidator).validateMerchantLoginRequest(request);
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(false), anyString());
-    }
-
-    @Test
-    void testHandleLoginFailure_UserExists() {
-        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(3);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(request);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
-    }
-
-    @Test
-    void testHandleLoginFailure_UserNotFound() {
-        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(0);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(request);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
-    }
+   ],
+  "status":1,
+  "count": 1,
+  "total": 1
 }
+Failure Response Body
+{
+  "status":0,
+  "error": [
+     {
+       "errorCode": String,
+       "errorMessage": String
+     }
+   ]
+}
+Testing Checklist
+Verify Captcha generation and image quality.
+Test with valid and invalid Captcha inputs.
+Check for edge cases like session expiration or multiple users.
+Ensure Captcha images are refreshed and expire as expected.
+Test Captcha functionality for edge cases (e.g., expiration, retries).
+Verify integration with the login API.
+Developer Checklist
+Class Flow
+image.png
+
+90% Unit test case coverage
+Development Steps for Captcha Implementation 
+Step 1: Add Captcha Library: com.github.penggle.kaptcha: 2.3.2 This library will be used to generate Captcha images and texts dynamically. 
+
+Step 2: Configure Captcha Generator_ -_ Set up a Spring Bean to configure the Captcha properties. These properties include image dimensions, font size, text length, and other visual settings. 
+
+@Configuration public class CaptchaConfig {      
+@Bean     
+public DefaultKaptcha captchaProducer() {         
+       DefaultKaptcha captcha = new DefaultKaptcha();         
+       Properties properties = new Properties();         properties.setProperty("kaptcha.border", "no");         properties.setProperty("kaptcha.textproducer.font.color", "black");         properties.setProperty("kaptcha.textproducer.char.space", "5");         properties.setProperty("kaptcha.image.width", "200");         properties.setProperty("kaptcha.image.height", "50");         properties.setProperty("kaptcha.textproducer.font.size", "40");         properties.setProperty("kaptcha.textproducer.char.length", "6");         captcha.setConfig(new Config(properties));         
+       return captcha;     
+} 
+}  
+This ensures Captcha images meet the required specifications. 
+
+Step 3: Create Captcha Controller_ -_ Develop a REST Controller to expose the Captcha API endpoints for generation and validation. 
+
+Generates a Captcha and returns it as a Base64-encoded string along with a unique Captcha ID and expiration time. 
+Step 4: Develop Captcha Service_ -_ Create a service class to handle Captcha creation, conversion to Base64 format, and expiration logic.
+
+Generate Captcha text and image using DefaultKaptcha or Producer. 
+Convert the Captcha image to a Base64 string. 
+Set an expiration time for the Captcha based on configuration. 
+Step 5: Create Captcha DAO and Repository 
+
+Captcha Entity: Define a JPA entity to represent Captcha data, including: 
+
+ID 
+
+Captcha text 
+
+Expiration time 
+
+Request Id 
+
+Request Type 
+
+Created At 
+
+Captcha Dao: To call the repository layer 
+
+Captcha Repository: Use a Spring Data JPA repository to persist and retrieve Captcha information. 
+
+Database Table- Captcha_Management
+
+Column name
+
+DataType
+
+Nullable
+
+ID	RAW	No
+CAPTCHA_IMAGE	CLOB	No
+EXPIRY_TIME	NUMBER	Yes
+REQUEST_ID	RAW	No
+REQUEST_TYPE	VARCHAR2(255 BYTE)	No
+IS_VERIFIED	NUMBER(1,0)	Yes
+CREATED_AT	NUMBER	No
+UPDATED_AT	NUMBER	No
+CAPTCHA_TEXT	VARCHAR2(200 BYTE)	Yes
+VERSION	NUMBER	No
+Summary of Key Components 
+
+Controller: Exposes endpoints for Captcha generation and validation. 
+
+Service: Handles Captcha logic, including image creation, encoding, and storage. 
+
+Configuration: Defines Captcha appearance and behavior. 
+
+Repository: Stores Captcha data in the database for validation and expiration. 
+
+Library: Kaptcha for Captcha generation. 
+
+Acceptance Criteria 
+Captcha should generate dynamically on each request with six random alphanumeric characters. 
+Captcha should expire after 5 minutes. 
+Validation should confirm the user-provided Captcha matches the stored Captcha. 
+Users can refresh the Captcha if needed. 
+All requests and responses must be logged for traceability. 
 
 
-
-
-package com.epay.merchant.service;
-
-import com.epay.merchant.dao.LoginDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.model.request.MerchantLoginRequest;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.validator.MerchantLoginValidator;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Service;
-
-import java.text.MessageFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import static com.epay.merchant.util.MerchantConstant.SUCCESS_MESSAGE;
-
-/**
- * Class Name: LoginService
- * *
- * Description: LoginService is responsible for validating the merchant login.
- * Validate the UserName and PWD to login
- * *
- * Author: Ravi Rathore
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-
-@Service
-@RequiredArgsConstructor
-public class LoginService {
-
-    private final MerchantLoginValidator merchantLoginValidator;
-    private final TokenService tokenService;
-    private final LoginDao loginDao;
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    /**
-     * Validates the user based on the provided validation request.
-     * @param merchantLoginRequest The login validation request containing user login details with captcha.
-     * @return MerchantResponse containing success or failure details.
+   /**
+     * Endpoint to generate and download a password-protected Merchant Encryption key in PDF for a given Merchant ID.
+     *
+     * @param mId      Merchant ID for which the Encryption key is to be generated.
+     * @param response HttpServletResponse object to send the PDF as a downloadable response.
      */
-    public MerchantResponse<Object> merchantLogin(MerchantLoginRequest merchantLoginRequest) {
-        log.info("Started merchantLogin for userName: {}", merchantLoginRequest.getUserName());
+    @GetMapping("/download/encryption/{mId}")
+    @Operation(summary = "Download Active Encryption Key In Password protected PDF", description = "Download a password-protected PDF containing the encryption key for the given Merchant ID.")
+    public void getMerchantEncryptionKeysForDownload(@PathVariable String mId, HttpServletResponse response) {
+        logger.info("Received request to download encryption key in PDF for mId: {}", mId);
+        keyService.getMerchantEncryptionKeysForDownload(mId, response);
+    }
+
+}
+ public String getMerchantEncryptionKeysForDownload(String mId){
         try {
-            log.info("validating Merchant login request for userName : {}", merchantLoginRequest.getUserName());
-            merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest);
-            loginDao.saveLoginAudit(merchantLoginRequest.getUserName(), RequestType.LOGIN, true, MessageFormat.format(SUCCESS_MESSAGE, "Logged In User Found"));
-            loginDao.updateCaptchaIsVerified(merchantLoginRequest.getRequestId());
-            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, "Logged In User Found"))).build();
-        } catch (ValidationException e) {
-            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
-                throw e;
-            });
-            log.error("Login Validation Failed for userName {} with error {}", merchantLoginRequest.getUserName(), e.getErrorMessages().toString());
-            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")), e.getErrorMessages());
-        } catch (MerchantException e) {
-            log.error("MerchantException : Login Failed for userName {} ", merchantLoginRequest.getUserName());
-            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessage(), List.of(ErrorDto.builder().errorCode(e.getErrorCode()).errorMessage(e.getErrorMessage()).build()));
+            MerchantResponse<String> kmsResponse = kmsClient.getMerchantEncryptionKeys(mId);
+            if (MerchantConstant.RESPONSE_SUCCESS == kmsResponse.getStatus() && CollectionUtils.isNotEmpty(kmsResponse.getData())) {
+                saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_SUCCESS, "Download Encryption Key Successfully");
+                return kmsResponse.getData().getFirst();
+            } else if (kmsResponse.getStatus() == MerchantConstant.RESPONSE_FAILURE) {
+                saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, Arrays.toString(kmsResponse.getErrors().toArray(new ErrorDto[0])));
+                throw new ValidationException(kmsResponse.getErrors());
+            }
+            saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, "Error in Encryption Key fetched");
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Encryption Key"));
         } catch (Exception e) {
-            log.error("GenericException : Login Failed for userName {} ", merchantLoginRequest.getUserName(), e.getMessage());
-            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getLocalizedMessage(), List.of(ErrorDto.builder().errorCode(ErrorConstants.GENERIC_ERROR_CODE).errorMessage(e.getMessage()).build()));
+            log.error("Error in Encryption Key fetch : ", e);
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Encryption Key"));
         }
     }
-    /**
-     * Handles the login failure process, such as logging and updating failure count.
-     * MerchantResponse failure and save Login Audit details
-     * @param userName String
-     * @param e String
-     * @param errors List<ErrorDto>
+  public MerchantResponse<String> getMerchantEncryptionKeys(String mId){
+        HttpHeaders headers = prepareHttpHeaders();
+        URI uri = URI.create(getBaseUrl() + GET_DOWNLOAD_ENCRYPTION_KEY + mId);
+        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Get Encryption Key Request", "Internal Issue, Please try again")))).bodyToMono(new ParameterizedTypeReference<MerchantResponse<String>>() {
+        }).block();
+    }
+  /**
+     * This method retrieves a Encryption key for the given Merchant ID (mId),
+     * generates a password-protected PDF, and sends it as a downloadable response.
+     *
+     * @param mId      Merchant ID for which the decryption key is to be fetched.
+     * @param response HttpServletResponse object to send the generated PDF as a response.
      */
-    private MerchantResponse<Object> handleLoginFailure(String userName, String e, List<ErrorDto> errors) {
-        log.info("Started handleLoginFailure for userName: {}",userName);
-        int loginFailureCount = 0;
-        if (StringUtils.isNotEmpty(userName)) {
-            try {
-                log.info("Updating login failure count for userName: {}",userName);
-                loginFailureCount = tokenService.updateMerchantUserForLogin(userName, false);
-                if(loginFailureCount > 0) {
-                    log.info("Saving login audit for userName: {},loginFailureCount :{}",userName,loginFailureCount);
-                    loginDao.saveLoginAudit(userName, RequestType.LOGIN, false, e);
-                }
-            } catch (MerchantException ex) {
-                log.error("MerchantException in handleLoginFailure for userName {}", userName, ex.getErrorMessage());
-            } catch (Exception ex) {
-                log.error("GenericException  in handleLoginFailure for userName {}", userName, ex.getMessage());
-            }
-        }
-        if(loginFailureCount > 0) {
-            log.info("Returning  response with  login failure count :{} for userName ;{}",loginFailureCount,userName);
-            return MerchantResponse.builder().data(List.of(Map.of("loginFailAttempt", loginFailureCount))).status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
-        } else {
-            log.info("Returning  failure response for userName ;{}",userName);
-            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
-        }
+    public void getMerchantEncryptionKeysForDownload(String mId, HttpServletResponse response) {
+        // Step 1: validate the mId
+        keyValidator.validateMId(mId);
+        // Step 2: Fetch the decrypted key
+        String mek = keyDao.getMerchantEncryptionKeysForDownload(mId);
+        // Step 3: Generate a password for the PDF
+        ByteArrayOutputStream pdfStream = pdfFileGenerator(mId, mek, UUID.randomUUID());
+        fileResponse(KeyType.ENCRYPTION, KeyGenerationRequest.builder().mId(mId).build(), response, pdfStream);
     }
 
-}
+    private ByteArrayOutputStream pdfFileGenerator(String mId, String mek, UUID id) {
+        String password = passwordGenerator.generatePassword();
+        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new EncryptionKeyPDFBuilder(), mek, password);
+        // Step 3 : Send Notification to Merchant
+        keyDao.saveNotification(KeyType.ENCRYPTION, id, "Encryption Key PDF file Password is :" + password, mId);
+        logger.info("File Generate for encryptionKey");
+        return byteArrayOutputStream;
+    }
