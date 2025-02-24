@@ -1,6 +1,110 @@
 package com.epay.merchant.dao;
 
 import com.epay.merchant.entity.LoginPasswordAudit;
+import com.epay.merchant.entity.MerchantUser;
+import com.epay.merchant.entity.cache.CaptchaManagement;
+import com.epay.merchant.repository.LoginPasswordAuditRepository;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class LoginDaoTest {
+
+    @Mock
+    private MerchantUserDao merchantUserDao;
+
+    @Mock
+    private CaptchaDao captchaDao;
+
+    @Mock
+    private LoginPasswordAuditRepository loginPasswordAuditRepository;
+
+    @Mock
+    private LoggerUtility log;
+
+    @InjectMocks
+    private LoginDao loginDao;
+
+    private String userName;
+    private String password;
+    private UUID userId;
+
+    @BeforeEach
+    void setUp() {
+        userName = "testUser";
+        password = "testPass";
+        userId = UUID.randomUUID();
+    }
+
+    @Test
+    void testIsMerchantUserExistsByUserNameAndPassword_Exists() {
+        when(merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, password)).thenReturn(true);
+
+        boolean result = loginDao.isMerchantUserExistsByUserNameAndPassword(userName, password);
+
+        assertTrue(result);
+        verify(merchantUserDao, times(1)).isMerchantUserExistByUserNameAndPassword(userName, password);
+    }
+
+    @Test
+    void testIsMerchantUserExistsByUserNameAndPassword_NotExists() {
+        when(merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, password)).thenReturn(false);
+
+        boolean result = loginDao.isMerchantUserExistsByUserNameAndPassword(userName, password);
+
+        assertFalse(result);
+        verify(merchantUserDao, times(1)).isMerchantUserExistByUserNameAndPassword(userName, password);
+    }
+
+    @Test
+    void testSaveLoginAudit() {
+        MerchantUser merchantUser = new MerchantUser();
+        merchantUser.setId(userId);
+
+        when(merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(any(), any(), any(), any())).thenReturn(merchantUser);
+
+        loginDao.saveLoginAudit(userName, RequestType.LOGIN, true, "Success");
+
+        verify(loginPasswordAuditRepository, times(1)).save(any(LoginPasswordAudit.class));
+    }
+
+    @Test
+    void testUpdateCaptchaIsVerified() {
+        UUID requestId = UUID.randomUUID();
+        CaptchaManagement captchaManagement = new CaptchaManagement();
+        captchaManagement.setVerified(false);
+
+        when(captchaDao.getActiveCaptchaByRequestId(requestId)).thenReturn(captchaManagement);
+
+        loginDao.updateCaptchaIsVerified(requestId);
+
+        assertTrue(captchaManagement.isVerified());
+        verify(captchaDao, times(1)).save(captchaManagement);
+    }
+}
+
+
+
+
+
+package com.epay.merchant.dao;
+
+import com.epay.merchant.entity.LoginPasswordAudit;
 import com.epay.merchant.entity.cache.CaptchaManagement;
 import com.epay.merchant.repository.LoginPasswordAuditRepository;
 import com.epay.merchant.util.enums.RequestType;
