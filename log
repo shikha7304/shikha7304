@@ -4,6 +4,116 @@ import com.epay.merchant.dao.LoginDao;
 import com.epay.merchant.dto.ErrorDto;
 import com.epay.merchant.model.request.MerchantLoginRequest;
 import com.epay.merchant.util.ErrorConstants;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
+import java.util.UUID;
+
+import static com.epay.merchant.util.ErrorConstants.LOGIN_USER_NOT_FOUND_ERROR_MESSAGE;
+import static com.epay.merchant.util.ErrorConstants.NOT_FOUND_ERROR_CODE;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class MerchantLoginValidatorTest {
+
+    @Mock
+    private LoginDao loginDao;
+
+    @Mock
+    private CaptchaValidator captchaValidator;
+
+    @Mock
+    private ValidationValidator validationValidator;
+
+    @Mock
+    private LoggerUtility logger;
+
+    @InjectMocks
+    private MerchantLoginValidator merchantLoginValidator;
+
+    private MerchantLoginRequest merchantLoginRequest;
+
+    @BeforeEach
+    void setUp() {
+        merchantLoginRequest = new MerchantLoginRequest();
+        merchantLoginRequest.setUserName("testUser");
+        merchantLoginRequest.setPassword("testPassword");
+        merchantLoginRequest.setCaptchaText("123456");
+        merchantLoginRequest.setRequestId(UUID.randomUUID());
+    }
+
+    @Test
+    void testValidateMerchantLoginRequest_Success() {
+        when(loginDao.isMerchantUserExistsByUserNameAndPassword(anyString(), anyString())).thenReturn(true);
+
+        assertDoesNotThrow(() -> merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest));
+
+        verify(captchaValidator, times(1)).captchaValueValidation(any(), any());
+        verify(loginDao, times(1)).isMerchantUserExistsByUserNameAndPassword(anyString(), anyString());
+        verify(validationValidator, times(1)).validatedMerchantUser(anyString());
+    }
+
+    @Test
+    void testValidateMerchantLoginRequest_UserNotFound() {
+        when(loginDao.isMerchantUserExistsByUserNameAndPassword(anyString(), anyString())).thenReturn(false);
+
+        Exception exception = assertThrows(RuntimeException.class, () -> merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest));
+
+        assertTrue(exception.getMessage().contains(LOGIN_USER_NOT_FOUND_ERROR_MESSAGE));
+
+        verify(captchaValidator, times(1)).captchaValueValidation(any(), any());
+        verify(loginDao, times(1)).isMerchantUserExistsByUserNameAndPassword(anyString(), anyString());
+    }
+
+    @Test
+    void testValidateMandatoryFields_AllFieldsPresent() {
+        assertDoesNotThrow(() -> merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest));
+    }
+
+    @Test
+    void testValidateMandatoryFields_MissingUserName() {
+        merchantLoginRequest.setUserName(null);
+
+        Exception exception = assertThrows(RuntimeException.class, () -> merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest));
+
+        assertTrue(exception.getMessage().contains(ErrorConstants.USER_NAME));
+    }
+
+    @Test
+    void testIsUserExist_UserExists() {
+        when(loginDao.isMerchantUserExistsByUserNameAndPassword(anyString(), anyString())).thenReturn(true);
+
+        assertDoesNotThrow(() -> merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest));
+    }
+
+    @Test
+    void testIsUserExist_UserNotExists() {
+        when(loginDao.isMerchantUserExistsByUserNameAndPassword(anyString(), anyString())).thenReturn(false);
+
+        Exception exception = assertThrows(RuntimeException.class, () -> merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest));
+
+        assertTrue(exception.getMessage().contains(LOGIN_USER_NOT_FOUND_ERROR_MESSAGE));
+    }
+}
+
+
+
+
+
+package com.epay.merchant.validator;
+
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.util.ErrorConstants;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
