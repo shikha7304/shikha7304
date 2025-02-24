@@ -1,398 +1,80 @@
-User Story: Implement Kafka for Asynchronous Processing of Email & SMS Notifications
-
-Title: Integrate Kafka Producer & Consumer for Email and SMS Notifications
-
-As a
-
-System Administrator / Developer
-
-I want
-
-To implement Kafka-based asynchronous processing for handling email and SMS notifications efficiently.
-
-So that
-
-Notifications are processed in a scalable, event-driven manner, reducing response time and system load.
-
-API Details:
-	•	Producer API (Publish Notification Event)
-	•	Method: POST
-	•	Endpoint: /merchant/v1/notifications/publish
-	•	Access Type: Internal API
-
-Request Body:
-
-{
-  "notificationType": "EMAIL | SMS",
-  "recipient": "user@example.com",
-  "message": "Your OTP is 123456",
-  "subject": "Verification Code",
-  "metadata": {
-    "transactionId": "abc123",
-    "timestamp": "2025-02-20T10:00:00Z"
-  }
-}
-
-Success Response:
-
-{
-  "status": 1,
-  "message": "Notification event published successfully"
-}
-
-Failure Response:
-
-{
-  "status": 0,
-  "error": [
-    {
-      "errorCode": "KAFKA_PUBLISH_ERROR",
-      "errorMessage": "Failed to publish notification event"
-    }
-  ]
-}
-
-Kafka Topics:
-
-Topic Name	Purpose
-email-notification-topic	Handles email notifications
-sms-notification-topic	Handles SMS notifications
-
-Acceptance Criteria:
-	1.	Kafka Producer Implementation:
-	•	Implement Kafka Producer to publish messages to the appropriate email or SMS topic.
-	•	Ensure messages are published asynchronously for better performance.
-	2.	Kafka Consumer & Listener:
-	•	Implement Kafka Consumer & Listener to consume messages from topics.
-	•	Process email notifications via an Email Service.
-	•	Process SMS notifications via an SMS Service.
-	3.	Service Layer:
-	•	Implement a service layer to route messages to the correct Kafka topic based on notification type.
-	•	Ensure the message structure is consistent across producer and consumer.
-	4.	DAO & Database Integration:
-	•	Implement DAO and repository to store notification logs for audit and debugging.
-	5.	Mapper Class:
-	•	Create a Mapper to transform API request data into Kafka messages.
-	6.	Error Handling & Logging:
-	•	Implement retry logic for failed messages.
-	•	Log all messages sent and received for traceability.
-	7.	Testing & Validation:
-	•	Unit tests for Kafka Producer and Consumer.
-	•	Integration tests to ensure end-to-end flow of messages.
-	•	Validate high-volume load handling.
-
-Technical Implementation Steps:
-	1.	Kafka Producer Setup:
-	•	Configure Kafka producer settings in application.yml.
-	•	Implement KafkaProducerService to publish messages.
-	2.	Kafka Consumer & Listener:
-	•	Configure consumer settings in application.yml.
-	•	Implement KafkaConsumerListener to process messages.
-	3.	Service Layer Implementation:
-	•	Create NotificationService to handle email and SMS processing.
-	4.	DAO & Database Changes:
-	•	Store notifications in notification_log table.
-	5.	Mapper Class:
-	•	Convert API requests to Kafka messages.
-
-Developer Checklist:
-
-✅ Kafka Producer & Consumer implemented.
-✅ Email & SMS service integrated with Kafka.
-✅ Database logging for notifications.
-✅ Error handling & retry mechanism.
-✅ Logging for all Kafka messages.
-✅ 90% unit test coverage achieved.
-
-Would you like any additional details or modifications based on your system’s requirements?
-
-
-
-User Story: Implement Download Key Encryption API
-
-Title: Enable Download of Merchant Encryption Key as a Password-Protected PDF
-
-As a
-
-Merchant or Administrator
-
-I want
-
-To securely download the active encryption key for a given Merchant ID (mId) in a password-protected PDF format
-
-So that
-
-The encryption key remains secure and accessible only to authorized users.
-
-API Details:
-	•	Method: GET
-	•	Endpoint: /merchant/v1/download/encryption/{mId}
-	•	Access Type: Secure (Only authorized merchants or administrators)
-
-Request Parameters:
-
-Field	Type	Required	Description
-mId	String	Yes	Merchant ID for which the encryption key is to be downloaded
-
-Success Response:
-	•	A password-protected PDF file containing the encryption key is returned as a downloadable attachment.
-	•	A notification is sent to the merchant with the password required to open the PDF.
-
-Failure Response:
-
-{
-  "status": 0,
-  "error": [
-    {
-      "errorCode": "ENCRYPTION_KEY_NOT_FOUND",
-      "errorMessage": "Encryption key not found for the given Merchant ID."
-    }
-  ]
-}
-
-Acceptance Criteria:
-	1.	Encryption Key Retrieval:
-	•	The API should fetch the active encryption key for the given mId.
-	•	If no key is found, return a proper error response.
-	2.	PDF Generation & Security:
-	•	The encryption key should be embedded in a password-protected PDF.
-	•	A randomly generated password should be used for each request.
-	3.	Password Notification:
-	•	The generated PDF password should be sent to the merchant via email/SMS/notification.
-	4.	Error Handling:
-	•	Proper validation for mId before fetching the encryption key.
-	•	Handle exceptions and log errors while retrieving/generating the key.
-	5.	Testing & Validation:
-	•	Verify that a valid request generates a downloadable PDF.
-	•	Ensure that the password is correctly sent to the merchant.
-	•	Validate security measures, including password protection.
-
-Technical Implementation Steps:
-	1.	Validate Merchant ID:
-	•	Ensure mId is valid before processing the request.
-	2.	Fetch Encryption Key:
-	•	Retrieve the encryption key from the Key Management Service (KMS).
-	3.	Generate Password-Protected PDF:
-	•	Convert the encryption key into a password-protected PDF using a PDF generation library.
-	4.	Send Password Notification:
-	•	Store and send the generated password to the merchant.
-	5.	Return PDF as Response:
-	•	Send the PDF file as a downloadable response in the API.
-
-Developer Checklist:
-
-✅ Validate mId before processing.
-✅ Fetch the encryption key securely.
-✅ Generate a password-protected PDF.
-✅ Send the PDF password securely to the merchant.
-✅ Log all key actions for traceability.
-✅ Handle errors and invalid requests gracefully.
-✅ Ensure 90% unit test coverage.
-
-Would you like any modifications based on additional business rules?
-
-
-
-
-
-
-Implement Captcha Creation API
-Open
- Issue
-created
-2 months ago
-by
-Bhoopendra Rajput
-Description
-For a merchant, we need to implement captcha mechanism during login, reset password functionality to prevent unauthorized access and ensure enhanced security for an application.
-
-API Details
-Method: Post
-API Definition: /merchant/v1/captcha
-Access Type: Open API
-Request Body:
-{
-  "requestType": String,
-  "requestId": String
-}
-request Type need to be Enum and can hold the value - LOGIN, RESET_PASSWORD
-request Id need to be unique for each captcha request and need to maintain until Request complete.
-Both fields are mandatory
-Success Response Body
-{
-  "data": [
-    {
-       "id": UUID,
-       "captchaImage": BASE64,
-       "expiryTime": long,
-    }
-   ],
-  "status":1,
-  "count": 1,
-  "total": 1
-}
-Failure Response Body
-{
-  "status":0,
-  "error": [
-     {
-       "errorCode": String,
-       "errorMessage": String
-     }
-   ]
-}
-Testing Checklist
-Verify Captcha generation and image quality.
-Test with valid and invalid Captcha inputs.
-Check for edge cases like session expiration or multiple users.
-Ensure Captcha images are refreshed and expire as expected.
-Test Captcha functionality for edge cases (e.g., expiration, retries).
-Verify integration with the login API.
-Developer Checklist
-Class Flow
-image.png
-
-90% Unit test case coverage
-Development Steps for Captcha Implementation 
-Step 1: Add Captcha Library: com.github.penggle.kaptcha: 2.3.2 This library will be used to generate Captcha images and texts dynamically. 
-
-Step 2: Configure Captcha Generator_ -_ Set up a Spring Bean to configure the Captcha properties. These properties include image dimensions, font size, text length, and other visual settings. 
-
-@Configuration public class CaptchaConfig {      
-@Bean     
-public DefaultKaptcha captchaProducer() {         
-       DefaultKaptcha captcha = new DefaultKaptcha();         
-       Properties properties = new Properties();         properties.setProperty("kaptcha.border", "no");         properties.setProperty("kaptcha.textproducer.font.color", "black");         properties.setProperty("kaptcha.textproducer.char.space", "5");         properties.setProperty("kaptcha.image.width", "200");         properties.setProperty("kaptcha.image.height", "50");         properties.setProperty("kaptcha.textproducer.font.size", "40");         properties.setProperty("kaptcha.textproducer.char.length", "6");         captcha.setConfig(new Config(properties));         
-       return captcha;     
-} 
-}  
-This ensures Captcha images meet the required specifications. 
-
-Step 3: Create Captcha Controller_ -_ Develop a REST Controller to expose the Captcha API endpoints for generation and validation. 
-
-Generates a Captcha and returns it as a Base64-encoded string along with a unique Captcha ID and expiration time. 
-Step 4: Develop Captcha Service_ -_ Create a service class to handle Captcha creation, conversion to Base64 format, and expiration logic.
-
-Generate Captcha text and image using DefaultKaptcha or Producer. 
-Convert the Captcha image to a Base64 string. 
-Set an expiration time for the Captcha based on configuration. 
-Step 5: Create Captcha DAO and Repository 
-
-Captcha Entity: Define a JPA entity to represent Captcha data, including: 
-
-ID 
-
-Captcha text 
-
-Expiration time 
-
-Request Id 
-
-Request Type 
-
-Created At 
-
-Captcha Dao: To call the repository layer 
-
-Captcha Repository: Use a Spring Data JPA repository to persist and retrieve Captcha information. 
-
-Database Table- Captcha_Management
-
-Column name
-
-DataType
-
-Nullable
-
-ID	RAW	No
-CAPTCHA_IMAGE	CLOB	No
-EXPIRY_TIME	NUMBER	Yes
-REQUEST_ID	RAW	No
-REQUEST_TYPE	VARCHAR2(255 BYTE)	No
-IS_VERIFIED	NUMBER(1,0)	Yes
-CREATED_AT	NUMBER	No
-UPDATED_AT	NUMBER	No
-CAPTCHA_TEXT	VARCHAR2(200 BYTE)	Yes
-VERSION	NUMBER	No
-Summary of Key Components 
-
-Controller: Exposes endpoints for Captcha generation and validation. 
-
-Service: Handles Captcha logic, including image creation, encoding, and storage. 
-
-Configuration: Defines Captcha appearance and behavior. 
-
-Repository: Stores Captcha data in the database for validation and expiration. 
-
-Library: Kaptcha for Captcha generation. 
-
-Acceptance Criteria 
-Captcha should generate dynamically on each request with six random alphanumeric characters. 
-Captcha should expire after 5 minutes. 
-Validation should confirm the user-provided Captcha matches the stored Captcha. 
-Users can refresh the Captcha if needed. 
-All requests and responses must be logged for traceability. 
-
-
-   /**
-     * Endpoint to generate and download a password-protected Merchant Encryption key in PDF for a given Merchant ID.
+package com.epay.merchant.dao;
+
+import com.epay.merchant.entity.LoginPasswordAudit;
+import com.epay.merchant.entity.cache.CaptchaManagement;
+import com.epay.merchant.repository.LoginPasswordAuditRepository;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.util.enums.UserStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Class Name: MerchantBankDao
+ * Description:
+ * MerchantBankDao is responsible for handling database operations related to merchant banking information.
+ * It interacts with repositories to perform CRUD operations for merchant-related data, such as banking details,
+ * account information, and other merchant-specific financial data. This class helps ensure that the banking information
+ * of merchants is accurately stored and retrieved in the system.
+ * Author: Subhra Goswami
+ * <p>
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * <p>
+ * Version: 1.0
+ */
+
+@Component
+@RequiredArgsConstructor
+public class LoginDao {
+
+    private final MerchantUserDao merchantUserDao;
+    private final CaptchaDao captchaDao;
+    private final LoginPasswordAuditRepository loginPasswordAuditRepository;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+
+    /**
+     * It will check if the user already exists or not for given userName and pwd
+     * Checks if the merchant user exists by username and pwd.
      *
-     * @param mId      Merchant ID for which the Encryption key is to be generated.
-     * @param response HttpServletResponse object to send the PDF as a downloadable response.
+     * @param userName String
+     * @param pwd      String
+     * @return Boolean
      */
-    @GetMapping("/download/encryption/{mId}")
-    @Operation(summary = "Download Active Encryption Key In Password protected PDF", description = "Download a password-protected PDF containing the encryption key for the given Merchant ID.")
-    public void getMerchantEncryptionKeysForDownload(@PathVariable String mId, HttpServletResponse response) {
-        logger.info("Received request to download encryption key in PDF for mId: {}", mId);
-        keyService.getMerchantEncryptionKeysForDownload(mId, response);
+    public boolean isMerchantUserExistsByUserNameAndPassword(String userName, String pwd) {
+        log.info("Checking if merchant user exists for username: {}", userName);
+        return merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, pwd);
+    }
+
+    /**
+     * Saves the login audit details for the given username and request type.
+     * It will fetch the active user and save login details in audit table
+     *
+     * @param userName    String
+     * @param requestType RequestType
+     * @param status      boolean
+     * @param reason      String
+     */
+    public void saveLoginAudit(String userName, RequestType requestType, boolean status, String reason) {
+        log.info("Saving login audit for username: {}, requestType: {}, status: {}, reason: {}", userName, requestType, status, reason);
+        UUID userId = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.values())).getId();
+        LoginPasswordAudit loginPasswordAudit = LoginPasswordAudit.builder().userId(userId).requestType(requestType).status(status).reason(reason).build();
+        loginPasswordAuditRepository.save(loginPasswordAudit);
+    }
+
+    /**
+     * It will update the captcha isVerified field
+     *
+     * @param requestId UUID
+     */
+    public void updateCaptchaIsVerified(UUID requestId) {
+        CaptchaManagement captchaManagement = captchaDao.getActiveCaptchaByRequestId(requestId);
+        captchaManagement.setVerified(true);
+        captchaDao.save(captchaManagement);
     }
 
 }
- public String getMerchantEncryptionKeysForDownload(String mId){
-        try {
-            MerchantResponse<String> kmsResponse = kmsClient.getMerchantEncryptionKeys(mId);
-            if (MerchantConstant.RESPONSE_SUCCESS == kmsResponse.getStatus() && CollectionUtils.isNotEmpty(kmsResponse.getData())) {
-                saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_SUCCESS, "Download Encryption Key Successfully");
-                return kmsResponse.getData().getFirst();
-            } else if (kmsResponse.getStatus() == MerchantConstant.RESPONSE_FAILURE) {
-                saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, Arrays.toString(kmsResponse.getErrors().toArray(new ErrorDto[0])));
-                throw new ValidationException(kmsResponse.getErrors());
-            }
-            saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, "Error in Encryption Key fetched");
-            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Encryption Key"));
-        } catch (Exception e) {
-            log.error("Error in Encryption Key fetch : ", e);
-            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Encryption Key"));
-        }
-    }
-  public MerchantResponse<String> getMerchantEncryptionKeys(String mId){
-        HttpHeaders headers = prepareHttpHeaders();
-        URI uri = URI.create(getBaseUrl() + GET_DOWNLOAD_ENCRYPTION_KEY + mId);
-        return getWebClient().get().uri(uri).headers(httpHeaders -> httpHeaders.addAll(headers)).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Get Encryption Key Request", "Internal Issue, Please try again")))).bodyToMono(new ParameterizedTypeReference<MerchantResponse<String>>() {
-        }).block();
-    }
-  /**
-     * This method retrieves a Encryption key for the given Merchant ID (mId),
-     * generates a password-protected PDF, and sends it as a downloadable response.
-     *
-     * @param mId      Merchant ID for which the decryption key is to be fetched.
-     * @param response HttpServletResponse object to send the generated PDF as a response.
-     */
-    public void getMerchantEncryptionKeysForDownload(String mId, HttpServletResponse response) {
-        // Step 1: validate the mId
-        keyValidator.validateMId(mId);
-        // Step 2: Fetch the decrypted key
-        String mek = keyDao.getMerchantEncryptionKeysForDownload(mId);
-        // Step 3: Generate a password for the PDF
-        ByteArrayOutputStream pdfStream = pdfFileGenerator(mId, mek, UUID.randomUUID());
-        fileResponse(KeyType.ENCRYPTION, KeyGenerationRequest.builder().mId(mId).build(), response, pdfStream);
-    }
-
-    private ByteArrayOutputStream pdfFileGenerator(String mId, String mek, UUID id) {
-        String password = passwordGenerator.generatePassword();
-        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new EncryptionKeyPDFBuilder(), mek, password);
-        // Step 3 : Send Notification to Merchant
-        keyDao.saveNotification(KeyType.ENCRYPTION, id, "Encryption Key PDF file Password is :" + password, mId);
-        logger.info("File Generate for encryptionKey");
-        return byteArrayOutputStream;
-    }
