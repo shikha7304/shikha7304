@@ -1,184 +1,85 @@
-package com.epay.merchant.dao;
+package com.epay.merchant.validator;
 
-import com.epay.merchant.entity.LoginPasswordAudit;
-import com.epay.merchant.entity.MerchantUser;
-import com.epay.merchant.entity.cache.CaptchaManagement;
-import com.epay.merchant.repository.LoginPasswordAuditRepository;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.util.enums.UserStatus;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.List;
-import java.util.UUID;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-class LoginDaoTest {
-
-    @Mock
-    private MerchantUserDao merchantUserDao;
-
-    @Mock
-    private CaptchaDao captchaDao;
-
-    @Mock
-    private LoginPasswordAuditRepository loginPasswordAuditRepository;
-
-    @Mock
-    private LoggerUtility log;
-
-    @InjectMocks
-    private LoginDao loginDao;
-
-    private String userName;
-    private String password;
-    private UUID userId;
-
-    @BeforeEach
-    void setUp() {
-        userName = "testUser";
-        password = "testPass";
-        userId = UUID.randomUUID();
-    }
-
-    @Test
-    void testIsMerchantUserExistsByUserNameAndPassword_Exists() {
-        when(merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, password)).thenReturn(true);
-
-        boolean result = loginDao.isMerchantUserExistsByUserNameAndPassword(userName, password);
-
-        assertTrue(result);
-        verify(merchantUserDao, times(1)).isMerchantUserExistByUserNameAndPassword(userName, password);
-    }
-
-    @Test
-    void testIsMerchantUserExistsByUserNameAndPassword_NotExists() {
-        when(merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, password)).thenReturn(false);
-
-        boolean result = loginDao.isMerchantUserExistsByUserNameAndPassword(userName, password);
-
-        assertFalse(result);
-        verify(merchantUserDao, times(1)).isMerchantUserExistByUserNameAndPassword(userName, password);
-    }
-
-    @Test
-    void testSaveLoginAudit() {
-        MerchantUser merchantUser = new MerchantUser();
-        merchantUser.setId(userId);
-
-        when(merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(any(), any(), any(), any())).thenReturn(merchantUser);
-
-        loginDao.saveLoginAudit(userName, RequestType.LOGIN, true, "Success");
-
-        verify(loginPasswordAuditRepository, times(1)).save(any(LoginPasswordAudit.class));
-    }
-
-    @Test
-    void testUpdateCaptchaIsVerified() {
-        UUID requestId = UUID.randomUUID();
-        CaptchaManagement captchaManagement = new CaptchaManagement();
-        captchaManagement.setVerified(false);
-
-        when(captchaDao.getActiveCaptchaByRequestId(requestId)).thenReturn(captchaManagement);
-
-        loginDao.updateCaptchaIsVerified(requestId);
-
-        assertTrue(captchaManagement.isVerified());
-        verify(captchaDao, times(1)).save(captchaManagement);
-    }
-}
-
-
-
-
-
-package com.epay.merchant.dao;
-
-import com.epay.merchant.entity.LoginPasswordAudit;
-import com.epay.merchant.entity.cache.CaptchaManagement;
-import com.epay.merchant.repository.LoginPasswordAuditRepository;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.util.enums.UserStatus;
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.util.ErrorConstants;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.ArrayList;
+
+import static com.epay.merchant.util.ErrorConstants.*;
 
 /**
- * Class Name: MerchantBankDao
- * Description:
- * MerchantBankDao is responsible for handling database operations related to merchant banking information.
- * It interacts with repositories to perform CRUD operations for merchant-related data, such as banking details,
- * account information, and other merchant-specific financial data. This class helps ensure that the banking information
- * of merchants is accurately stored and retrieved in the system.
- * Author: Subhra Goswami
+ * Class Name: MerchantLoginValidator
+ * *
+ * Description:  MerchantLoginValidator is responsible for validating the merchant login request,
+ * including mandatory fields, user existence, and captcha.
+ * *
+ * Author: Ravi Rathore
  * <p>
  * Copyright (c) 2024 [State Bank of India]
  * All rights reserved
- * <p>
- * Version: 1.0
+ * *
+ * Version:1.0
  */
 
 @Component
 @RequiredArgsConstructor
-public class LoginDao {
+public class MerchantLoginValidator extends BaseValidator {
 
-    private final MerchantUserDao merchantUserDao;
-    private final CaptchaDao captchaDao;
-    private final LoginPasswordAuditRepository loginPasswordAuditRepository;
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+
+    private final LoginDao loginDao;
+    private final CaptchaValidator captchaValidator;
+    private final ValidationValidator validationValidator;
 
     /**
-     * It will check if the user already exists or not for given userName and pwd
-     * Checks if the merchant user exists by username and pwd.
+     * Validates the merchant login request, including mandatory fields,user existence and captcha validation
      *
-     * @param userName String
-     * @param pwd      String
-     * @return Boolean
+     * @param merchantLoginRequest MerchantLoginRequest The login request to validate.
      */
-    public boolean isMerchantUserExistsByUserNameAndPassword(String userName, String pwd) {
-        log.info("Checking if merchant user exists for username: {}", userName);
-        return merchantUserDao.isMerchantUserExistByUserNameAndPassword(userName, pwd);
+    public void validateMerchantLoginRequest(MerchantLoginRequest merchantLoginRequest) {
+        logger.debug("Merchant validation start for {}", merchantLoginRequest);
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(merchantLoginRequest);
+        logger.debug("Mandatory validation completed for {}", merchantLoginRequest);
+        captchaValidator.captchaValueValidation(merchantLoginRequest.getRequestId(), merchantLoginRequest.getCaptchaText());
+        logger.debug("captcha validation completed for {}", merchantLoginRequest);
+        isUserExist(merchantLoginRequest);
+        logger.debug("user check validation completed for {}", merchantLoginRequest);
+        validationValidator.validatedMerchantUser(merchantLoginRequest.getUserName());
+        logger.debug("user status check completed for {}", merchantLoginRequest);
     }
 
     /**
-     * Saves the login audit details for the given username and request type.
-     * It will fetch the active user and save login details in audit table
+     * Validates the all the mandatory fields in the merchantLoginRequest
      *
-     * @param userName    String
-     * @param requestType RequestType
-     * @param status      boolean
-     * @param reason      String
+     * @param merchantLoginRequest MerchantLoginRequest
      */
-    public void saveLoginAudit(String userName, RequestType requestType, boolean status, String reason) {
-        log.info("Saving login audit for username: {}, requestType: {}, status: {}, reason: {}", userName, requestType, status, reason);
-        UUID userId = merchantUserDao.getByUserNameOrEmailOrMobilePhoneAndStatus(userName, userName, userName, List.of(UserStatus.values())).getId();
-        LoginPasswordAudit loginPasswordAudit = LoginPasswordAudit.builder().userId(userId).requestType(requestType).status(status).reason(reason).build();
-        loginPasswordAuditRepository.save(loginPasswordAudit);
+    private void validateMandatoryFields(MerchantLoginRequest merchantLoginRequest) {
+        checkMandatoryField(merchantLoginRequest.getUserName(), USER_NAME);
+        checkMandatoryField(merchantLoginRequest.getPassword(), ErrorConstants.PSW);
+        checkMandatoryField(merchantLoginRequest.getCaptchaText(), CAPTCHA_TEXT);
+        checkMandatoryField(String.valueOf(merchantLoginRequest.getRequestId()), ErrorConstants.REQUEST_ID);
+        throwIfErrors();
     }
 
     /**
-     * It will update the captcha isVerified field
+     * Validates if the user exists based on the provided login request
      *
-     * @param requestId UUID
+     * @param merchantLoginRequest MerchantLoginRequest
      */
-    public void updateCaptchaIsVerified(UUID requestId) {
-        CaptchaManagement captchaManagement = captchaDao.getActiveCaptchaByRequestId(requestId);
-        captchaManagement.setVerified(true);
-        captchaDao.save(captchaManagement);
+    private void isUserExist(MerchantLoginRequest merchantLoginRequest) {
+        boolean merchantUserExistsByUserNameAndPassword = loginDao.isMerchantUserExistsByUserNameAndPassword(merchantLoginRequest.getUserName(), merchantLoginRequest.getPassword());
+        if (!merchantUserExistsByUserNameAndPassword) {
+            errorDtoList.add(ErrorDto.builder().errorCode(NOT_FOUND_ERROR_CODE).errorMessage(LOGIN_USER_NOT_FOUND_ERROR_MESSAGE).build());
+        }
+        throwIfErrors();
     }
+
 
 }
