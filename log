@@ -1,3 +1,94 @@
+import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.UUID;
+import jakarta.servlet.http.HttpServletResponse;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class KeyServiceTest {
+
+    @Mock
+    private KeyValidator keyValidator;
+    
+    @Mock
+    private KeyDao keyDao;
+    
+    @Mock
+    private HttpServletResponse response;
+    
+    @Mock
+    private KeyService keyService;
+
+    @InjectMocks
+    private KeyService keyService;
+
+    @BeforeEach
+    void setUp() {
+        keyService = new KeyService(keyValidator, keyDao);
+    }
+
+    @Test
+    void testGenerateKeyWithApiType() throws IOException {
+        KeyGenerationRequest request = new KeyGenerationRequest();
+        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+        
+        doNothing().when(keyValidator).validateKeyGenerationRequest(request);
+        when(keyService.apiKeyGeneration(request)).thenReturn(pdfStream);
+        doNothing().when(keyService).fileResponse(any(), any(), any(), any());
+        
+        keyService.generateKey(KeyType.API, request, response);
+        
+        verify(keyValidator).validateKeyGenerationRequest(request);
+        verify(keyService).apiKeyGeneration(request);
+        verify(keyService).fileResponse(eq(KeyType.API), eq(request), eq(response), eq(pdfStream));
+    }
+
+    @Test
+    void testGenerateKeyWithInvalidType() {
+        KeyGenerationRequest request = new KeyGenerationRequest();
+        doNothing().when(keyValidator).validateKeyGenerationRequest(request);
+        
+        MerchantException exception = assertThrows(MerchantException.class, () ->
+            keyService.generateKey(null, request, response)
+        );
+        
+        assertEquals(ErrorConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+    }
+
+    @Test
+    void testGetMerchantEncryptionKeysForDownload() throws IOException {
+        String mId = "12345";
+        String mek = "testKey";
+        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+        
+        doNothing().when(keyValidator).validateMId(mId);
+        when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
+        when(keyService.pdfFileGenerator(eq(mId), eq(mek), any(UUID.class))).thenReturn(pdfStream);
+        doNothing().when(keyService).fileResponse(any(), any(), any(), any());
+        
+        keyService.getMerchantEncryptionKeysForDownload(mId, response);
+        
+        verify(keyValidator).validateMId(mId);
+        verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
+        verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
+        verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
+    }
+}
+
+
+
+
+
+
 public void generateKey(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
         logger.info("Started generateKey for type: {}", type);
         ByteArrayOutputStream pdfStream;
