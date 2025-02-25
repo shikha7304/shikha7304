@@ -1,177 +1,24 @@
-@Test
-public void testGetMerchantEncryptionKeysForDownload() throws I0Exception {
-    String mId = "12345";
-    String mek = "testKey";
-    ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-
-    doNothing().when(keyValidator).validateMId(mId);
-    when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
-    // Use doNothing() for void methods
-    doNothing().when(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
-    when(passwordGenerator.generatePassword()).thenReturn("pass");
-    doNothing().when(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
-
-    keyService.getMerchantEncryptionKeysForDownload(mId, response);
-
-    verify(keyValidator).validateMId(mId);
-    verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
-    verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
-    verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
-}
-
-
-
-
-@Test
-void testGetMerchantEncryptionKeysForDownload() throws IOException {
-    String mId = "12345";
-    String mek = "testKey";
-    ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-    String password = "securePwd";
-    UUID id = UUID.randomUUID();
-
-    // Mock password generation
-    when(passwordGenerator.generatePassword()).thenReturn(password);
-
-    // Mock key retrieval
-    doNothing().when(keyValidator).validateMId(mId);
-    when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
-
-    // Mock PDF generation
-    Map<String, String> expectedInput = new HashMap<>();
-    expectedInput.put(MerchantConstant.MEK, mek);
-    when(pdfService.generatedPDF(eq(expectedInput), eq(password), eq("encryption_key"))).thenReturn(pdfStream);
-
-    // Mock notification saving
-    doNothing().when(keyDao).saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), anyString(), eq(mId));
-
-    // Mock file response to avoid actual I/O operation
-    doNothing().when(keyService).fileResponse(any(), any(), any(), any());
-
-    // Execute method
-    keyService.getMerchantEncryptionKeysForDownload(mId, response);
-
-    // Verify interactions
-    verify(keyValidator).validateMId(mId);
-    verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
-    verify(passwordGenerator).generatePassword();
-    verify(pdfService).generatedPDF(eq(expectedInput), eq(password), eq("encryption_key"));
-    verify(keyDao).saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), contains("Encryption Key PDF file Password is"), eq(mId));
-    verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
-}
-
-
-
-
-
-
-
-import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.*;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.UUID;
-import jakarta.servlet.http.HttpServletResponse;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-@ExtendWith(MockitoExtension.class)
-class KeyServiceTest {
-
-    @Mock
-    private KeyValidator keyValidator;
-    
-    @Mock
-    private KeyDao keyDao;
-    
-    @Mock
-    private HttpServletResponse response;
-    
-    @Mock
-    private KeyService keyService;
-
-    @InjectMocks
-    private KeyService keyService;
-
-    @BeforeEach
-    void setUp() {
-        keyService = new KeyService(keyValidator, keyDao);
-    }
-
-    @Test
-    void testGenerateKeyWithApiType() throws IOException {
-        KeyGenerationRequest request = new KeyGenerationRequest();
-        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-        
-        doNothing().when(keyValidator).validateKeyGenerationRequest(request);
-        when(keyService.apiKeyGeneration(request)).thenReturn(pdfStream);
-        doNothing().when(keyService).fileResponse(any(), any(), any(), any());
-        
-        keyService.generateKey(KeyType.API, request, response);
-        
-        verify(keyValidator).validateKeyGenerationRequest(request);
-        verify(keyService).apiKeyGeneration(request);
-        verify(keyService).fileResponse(eq(KeyType.API), eq(request), eq(response), eq(pdfStream));
-    }
-
-    @Test
-    void testGenerateKeyWithInvalidType() {
-        KeyGenerationRequest request = new KeyGenerationRequest();
-        doNothing().when(keyValidator).validateKeyGenerationRequest(request);
-        
-        MerchantException exception = assertThrows(MerchantException.class, () ->
-            keyService.generateKey(null, request, response)
-        );
-        
-        assertEquals(ErrorConstants.INVALID_ERROR_CODE, exception.getErrorCode());
-    }
-
-    @Test
-    void testGetMerchantEncryptionKeysForDownload() throws IOException {
-        String mId = "12345";
-        String mek = "testKey";
-        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-        
-        doNothing().when(keyValidator).validateMId(mId);
-        when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
-        when(keyService.pdfFileGenerator(eq(mId), eq(mek), any(UUID.class))).thenReturn(pdfStream);
-        doNothing().when(keyService).fileResponse(any(), any(), any(), any());
-        
-        keyService.getMerchantEncryptionKeysForDownload(mId, response);
-        
-        verify(keyValidator).validateMId(mId);
-        verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
-        verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
-        verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
-    }
-}
-
-
-
-
-
-
-public void generateKey(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
-        logger.info("Started generateKey for type: {}", type);
-        ByteArrayOutputStream pdfStream;
-        // Step 1 : Validate the KMSKeyGenerationRequest
-        keyValidator.validateKeyGenerationRequest(keyGenerationRequest);
-        switch (type) {
-            case API -> pdfStream = apiKeyGeneration(keyGenerationRequest);
-            case ENCRYPTION -> pdfStream = encryptionKeyGeneration(keyGenerationRequest);
-            default -> {
-                logger.error("Invalid KeyType provided: {}", type);
-                throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "KeyType", "Valid Key Type are " + Arrays.toString(KeyType.values())));
+KeyDao
+public String getMerchantEncryptionKeysForDownload(String mId) {
+        try {
+            MerchantResponse<String> kmsResponse = kmsClient.getMerchantEncryptionKeys(mId);
+            if (MerchantConstant.RESPONSE_SUCCESS == kmsResponse.getStatus() && CollectionUtils.isNotEmpty(kmsResponse.getData())) {
+                saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_SUCCESS, DOWNLOAD_MEK_KEY_SUCCESSFULLY);
+                return kmsResponse.getData().getFirst();
             }
+            saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, Arrays.toString(kmsResponse.getErrors().toArray(new ErrorDto[0])));
+            throw new ValidationException(kmsResponse.getErrors());
+        } catch (Exception e) {
+            log.error("Error in Encryption-Key fetch : ", e);
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, MEK_KEY));
         }
-        fileResponse(type, keyGenerationRequest, response, pdfStream);
-        logger.info("Completed generateKey for type: {}", type);
+    }
+
+kmsClient
+   public MerchantResponse<String> getMerchantEncryptionKeys(String mId) {
+        URI uri = URI.create(getBaseUrl() + GET_DOWNLOAD_ENCRYPTION_KEY + mId);
+        return getWebClient().get().uri(uri).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Get Encryption Key Request", "Internal Issue, Please try again")))).bodyToMono(new ParameterizedTypeReference<MerchantResponse<String>>() {
+        }).block();
     }
 
 public void getMerchantEncryptionKeysForDownload(String mId, HttpServletResponse response) {
