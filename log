@@ -1,156 +1,79 @@
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+  @Test
+    void testGetMerchantEncryptionKeysForDownload() throws IOException {
+        String mId = "12345";
+        String mek = "testKey";
+        UUID id= UUID.randomUUID();
+        Map<String, String> expectedInput = new HashMap<>();
+        expectedInput.put(MerchantConstant.MEK, mek);
+        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+        byte[] inputBytes = expectedInput.toString().getBytes();
+        pdfStream.write(inputBytes);
 
-import java.text.MessageFormat;
-import java.util.Collections;
-import java.util.LinkedList;
+        byte[] array = mId.getBytes();
+        pdfStream.write(array);
+        String password = "securePwd";
 
-import org.apache.commons.collections4.CollectionUtils;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+        doNothing().when(keyValidator).validateMId(mId);
+        when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
+        Mockito.doNothing().when(keyDao).saveNotification(KeyType.API, id, "API Key PDF File Password is :" + password, mId);
+        when(passwordGenerator.generatePassword()).thenReturn(password);
 
-// Import your project's classes
-// import com.epay.merchant.dao.KeyDao;
-// import com.epay.merchant.client.KmsClient;
-// import com.epay.merchant.dto.ErrorDto;
-// import com.epay.merchant.dto.MerchantResponse;
-// import com.epay.merchant.exception.MerchantException;
-// import com.epay.merchant.exception.ValidationException;
-// import com.epay.merchant.constant.ErrorConstants;
-// import com.epay.merchant.constant.MerchantConstant;
-// import com.epay.merchant.constant.KeyType;
+        when(pdfService.generatedPDF(expectedInput, password, ("encryption_key"))).thenReturn(pdfStream);
+        when(keyService.pdfFileGenerator(mId,mek,id)).thenReturn(pdfStream);
 
-public class KeyDaoTest {
-
-    @Mock
-    private KmsClient kmsClient;
-
-    // Create an instance of KeyDao and inject the mocked kmsClient.
-    @InjectMocks
-    private KeyDao keyDao;
-
-    @BeforeEach
-    public void setUp() {
-        MockitoAnnotations.openMocks(this);
+        keyService.getMerchantEncryptionKeysForDownload(mId, response);
+        doNothing().when(keyService).fileResponse(KeyType.ENCRYPTION,keyGenerationRequest,response,pdfStream);
+        verify(keyValidator).validateMId(mId);
+        verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
+        verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
+        verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
     }
 
-    /**
-     * Test when the KMS client returns a successful response with non-empty data.
-     */
-    @Test
-    public void testGetMerchantEncryptionKeysForDownload_success() {
-        // Given
-        String mId = "merchantId";
-        String expectedKey = "testKey";
 
-        // Prepare a successful MerchantResponse.
-        MerchantResponse<String> merchantResponse = new MerchantResponse<>();
-        merchantResponse.setStatus(MerchantConstant.RESPONSE_SUCCESS);
-        LinkedList<String> data = new LinkedList<>();
-        data.add(expectedKey);
-        merchantResponse.setData(data);
-        merchantResponse.setErrors(Collections.emptyList());
-
-        when(kmsClient.getMerchantEncryptionKeys(mId)).thenReturn(merchantResponse);
-
-        // Spy the keyDao to verify the internal call to saveKey.
-        KeyDao spyKeyDao = spy(keyDao);
-
-        // When
-        String result = spyKeyDao.getMerchantEncryptionKeysForDownload(mId);
-
-        // Then
-        assertEquals(expectedKey, result);
-        verify(spyKeyDao).saveKey(eq(mId), eq(KeyType.ENCRYPTION), eq(MerchantConstant.RESPONSE_SUCCESS), eq(DOWNLOAD_MEK_KEY_SUCCESSFULLY));
+    protected ByteArrayOutputStream pdfFileGenerator(String mId, String mek, UUID id) {
+        String password = passwordGenerator.generatePassword();
+        Map<String, String> input = new HashMap<>();
+        input.put(MerchantConstant.MEK,mek);
+        ByteArrayOutputStream byteArrayOutputStream = pdfService.generatedPDF(input, password,"encryption_key");
+        // Step 3 : Send Notification to Merchant
+        keyDao.saveNotification(KeyType.ENCRYPTION, id, "Encryption Key PDF file Password is :" + password, mId);
+        logger.info("File Generate for encryptionKey");
+        return byteArrayOutputStream;
     }
 
-    /**
-     * Test when the KMS client returns a failure response.
-     */
-    @Test
-    public void testGetMerchantEncryptionKeysForDownload_failure() {
-        // Given
-        String mId = "merchantId";
 
-        MerchantResponse<String> merchantResponse = new MerchantResponse<>();
-        merchantResponse.setStatus(MerchantConstant.RESPONSE_FAILURE);
-        // Simulate empty data.
-        merchantResponse.setData(new LinkedList<>());
-        // Simulate an error.
-        ErrorDto errorDto = new ErrorDto("ERR001", "Error message");
-        merchantResponse.setErrors(Collections.singletonList(errorDto));
+'saveNotification' is a *void method* and it *cannot* be stubbed with a *return value*!
+Voids are usually stubbed with Throwables:
+    doThrow(exception).when(mock).someVoidMethod();
+If you need to set the void method to do nothing you can use:
+    doNothing().when(mock).someVoidMethod();
+For more information, check out the javadocs for Mockito.doNothing().
+***
+If you're unsure why you're getting above error read on.
+Due to the nature of the syntax above problem might occur because:
+1. The method you are trying to stub is *overloaded*. Make sure you are calling the right overloaded version.
+2. Somewhere in your test you are stubbing *final methods*. Sorry, Mockito does not verify/stub final methods.
+3. A spy is stubbed using when(spy.foo()).then() syntax. It is safer to stub spies - 
+   - with doReturn|Throw() family of methods. More in javadocs for Mockito.spy() method.
+4. Mocking methods declared on non-public parent classes is not supported.
 
-        when(kmsClient.getMerchantEncryptionKeys(mId)).thenReturn(merchantResponse);
+org.mockito.exceptions.misusing.CannotStubVoidMethodWithReturnValue: 
+'saveNotification' is a *void method* and it *cannot* be stubbed with a *return value*!
+Voids are usually stubbed with Throwables:
+    doThrow(exception).when(mock).someVoidMethod();
+If you need to set the void method to do nothing you can use:
+    doNothing().when(mock).someVoidMethod();
+For more information, check out the javadocs for Mockito.doNothing().
+***
+If you're unsure why you're getting above error read on.
+Due to the nature of the syntax above problem might occur because:
+1. The method you are trying to stub is *overloaded*. Make sure you are calling the right overloaded version.
+2. Somewhere in your test you are stubbing *final methods*. Sorry, Mockito does not verify/stub final methods.
+3. A spy is stubbed using when(spy.foo()).then() syntax. It is safer to stub spies - 
+   - with doReturn|Throw() family of methods. More in javadocs for Mockito.spy() method.
+4. Mocking methods declared on non-public parent classes is not supported.
 
-        KeyDao spyKeyDao = spy(keyDao);
-
-        // When & Then: Expect a ValidationException.
-        ValidationException exception = assertThrows(ValidationException.class, () -> {
-            spyKeyDao.getMerchantEncryptionKeysForDownload(mId);
-        });
-        assertNotNull(exception.getErrors());
-        verify(spyKeyDao).saveKey(eq(mId), eq(KeyType.ENCRYPTION), eq(MerchantConstant.RESPONSE_FAILURE),
-                contains("Error message"));
-    }
-
-    /**
-     * Test when the KMS client throws an exception.
-     */
-    @Test
-    public void testGetMerchantEncryptionKeysForDownload_exception() {
-        // Given
-        String mId = "merchantId";
-
-        when(kmsClient.getMerchantEncryptionKeys(mId)).thenThrow(new RuntimeException("some error"));
-
-        KeyDao spyKeyDao = spy(keyDao);
-
-        // When & Then: Expect a MerchantException.
-        MerchantException exception = assertThrows(MerchantException.class, () -> {
-            spyKeyDao.getMerchantEncryptionKeysForDownload(mId);
-        });
-        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
-    }
-}
-
-
-
-
-
-
-KeyDao
-public String getMerchantEncryptionKeysForDownload(String mId) {
-        try {
-            MerchantResponse<String> kmsResponse = kmsClient.getMerchantEncryptionKeys(mId);
-            if (MerchantConstant.RESPONSE_SUCCESS == kmsResponse.getStatus() && CollectionUtils.isNotEmpty(kmsResponse.getData())) {
-                saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_SUCCESS, DOWNLOAD_MEK_KEY_SUCCESSFULLY);
-                return kmsResponse.getData().getFirst();
-            }
-            saveKey(mId, KeyType.ENCRYPTION, MerchantConstant.RESPONSE_FAILURE, Arrays.toString(kmsResponse.getErrors().toArray(new ErrorDto[0])));
-            throw new ValidationException(kmsResponse.getErrors());
-        } catch (Exception e) {
-            log.error("Error in Encryption-Key fetch : ", e);
-            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, MEK_KEY));
-        }
-    }
-
-kmsClient
-   public MerchantResponse<String> getMerchantEncryptionKeys(String mId) {
-        URI uri = URI.create(getBaseUrl() + GET_DOWNLOAD_ENCRYPTION_KEY + mId);
-        return getWebClient().get().uri(uri).retrieve().onStatus(httpStatusCode -> httpStatusCode.is4xxClientError() || httpStatusCode.is5xxServerError(), clientResponse -> Mono.error(new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Get Encryption Key Request", "Internal Issue, Please try again")))).bodyToMono(new ParameterizedTypeReference<MerchantResponse<String>>() {
-        }).block();
-    }
-
-public void getMerchantEncryptionKeysForDownload(String mId, HttpServletResponse response) {
-        // Step 1: validate the mId
-        keyValidator.validateMId(mId);
-        // Step 2: Fetch the decrypted key
-        String mek = keyDao.getMerchantEncryptionKeysForDownload(mId);
-        // Step 3: Generate a pwd for the PDF
-        ByteArrayOutputStream pdfStream = pdfFileGenerator(mId, mek, UUID.randomUUID());
-        fileResponse(KeyType.ENCRYPTION, KeyGenerationRequest.builder().mId(mId).build(), response, pdfStream);
-    }
+	at com.epay.merchant.service.KeyServiceTest.testGetMerchantEncryptionKeysForDownload(KeyServiceTest.java:255)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
