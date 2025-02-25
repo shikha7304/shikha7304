@@ -1,4 +1,60 @@
-  @Test
+@Test
+void testGetMerchantEncryptionKeysForDownload() throws IOException {
+    // Arrange
+    String mId = "12345";
+    String mek = "testKey";
+    UUID id = UUID.randomUUID();
+    String password = "securePwd";
+
+    // Prepare the expected input for PDF generation.
+    Map<String, String> expectedInput = new HashMap<>();
+    expectedInput.put(MerchantConstant.MEK, mek);
+
+    // Create a ByteArrayOutputStream as our dummy PDF stream.
+    ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+    pdfStream.write(expectedInput.toString().getBytes());
+    pdfStream.write(mId.getBytes());
+
+    // Stub methods before invoking the method under test.
+    // Stub keyValidator to do nothing.
+    doNothing().when(keyValidator).validateMId(mId);
+
+    // Stub keyDao to return the test key.
+    when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
+
+    // Stub the void method saveNotification using the correct parameters.
+    doNothing().when(keyDao)
+            .saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), eq("Encryption Key PDF file Password is :" + password), eq(mId));
+
+    // Stub password generation.
+    when(passwordGenerator.generatePassword()).thenReturn(password);
+
+    // Stub PDF generation.
+    when(pdfService.generatedPDF(eq(expectedInput), eq(password), eq("encryption_key")))
+            .thenReturn(pdfStream);
+
+    // If keyService is a spy (or if you need to stub its internal call), use doReturn() for pdfFileGenerator.
+    doReturn(pdfStream).when(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
+
+    // Stub fileResponse BEFORE calling the method under test.
+    doNothing().when(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
+
+    // Act
+    keyService.getMerchantEncryptionKeysForDownload(mId, response);
+
+    // Assert / Verify
+    verify(keyValidator).validateMId(mId);
+    verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
+    verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
+    verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
+}
+
+
+
+
+
+
+@Test
     void testGetMerchantEncryptionKeysForDownload() throws IOException {
         String mId = "12345";
         String mek = "testKey";
