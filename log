@@ -1,3 +1,127 @@
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+import java.text.MessageFormat;
+import java.util.Collections;
+import java.util.LinkedList;
+
+import org.apache.commons.collections4.CollectionUtils;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+
+// Import your project's classes
+// import com.epay.merchant.dao.KeyDao;
+// import com.epay.merchant.client.KmsClient;
+// import com.epay.merchant.dto.ErrorDto;
+// import com.epay.merchant.dto.MerchantResponse;
+// import com.epay.merchant.exception.MerchantException;
+// import com.epay.merchant.exception.ValidationException;
+// import com.epay.merchant.constant.ErrorConstants;
+// import com.epay.merchant.constant.MerchantConstant;
+// import com.epay.merchant.constant.KeyType;
+
+public class KeyDaoTest {
+
+    @Mock
+    private KmsClient kmsClient;
+
+    // Create an instance of KeyDao and inject the mocked kmsClient.
+    @InjectMocks
+    private KeyDao keyDao;
+
+    @BeforeEach
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    /**
+     * Test when the KMS client returns a successful response with non-empty data.
+     */
+    @Test
+    public void testGetMerchantEncryptionKeysForDownload_success() {
+        // Given
+        String mId = "merchantId";
+        String expectedKey = "testKey";
+
+        // Prepare a successful MerchantResponse.
+        MerchantResponse<String> merchantResponse = new MerchantResponse<>();
+        merchantResponse.setStatus(MerchantConstant.RESPONSE_SUCCESS);
+        LinkedList<String> data = new LinkedList<>();
+        data.add(expectedKey);
+        merchantResponse.setData(data);
+        merchantResponse.setErrors(Collections.emptyList());
+
+        when(kmsClient.getMerchantEncryptionKeys(mId)).thenReturn(merchantResponse);
+
+        // Spy the keyDao to verify the internal call to saveKey.
+        KeyDao spyKeyDao = spy(keyDao);
+
+        // When
+        String result = spyKeyDao.getMerchantEncryptionKeysForDownload(mId);
+
+        // Then
+        assertEquals(expectedKey, result);
+        verify(spyKeyDao).saveKey(eq(mId), eq(KeyType.ENCRYPTION), eq(MerchantConstant.RESPONSE_SUCCESS), eq(DOWNLOAD_MEK_KEY_SUCCESSFULLY));
+    }
+
+    /**
+     * Test when the KMS client returns a failure response.
+     */
+    @Test
+    public void testGetMerchantEncryptionKeysForDownload_failure() {
+        // Given
+        String mId = "merchantId";
+
+        MerchantResponse<String> merchantResponse = new MerchantResponse<>();
+        merchantResponse.setStatus(MerchantConstant.RESPONSE_FAILURE);
+        // Simulate empty data.
+        merchantResponse.setData(new LinkedList<>());
+        // Simulate an error.
+        ErrorDto errorDto = new ErrorDto("ERR001", "Error message");
+        merchantResponse.setErrors(Collections.singletonList(errorDto));
+
+        when(kmsClient.getMerchantEncryptionKeys(mId)).thenReturn(merchantResponse);
+
+        KeyDao spyKeyDao = spy(keyDao);
+
+        // When & Then: Expect a ValidationException.
+        ValidationException exception = assertThrows(ValidationException.class, () -> {
+            spyKeyDao.getMerchantEncryptionKeysForDownload(mId);
+        });
+        assertNotNull(exception.getErrors());
+        verify(spyKeyDao).saveKey(eq(mId), eq(KeyType.ENCRYPTION), eq(MerchantConstant.RESPONSE_FAILURE),
+                contains("Error message"));
+    }
+
+    /**
+     * Test when the KMS client throws an exception.
+     */
+    @Test
+    public void testGetMerchantEncryptionKeysForDownload_exception() {
+        // Given
+        String mId = "merchantId";
+
+        when(kmsClient.getMerchantEncryptionKeys(mId)).thenThrow(new RuntimeException("some error"));
+
+        KeyDao spyKeyDao = spy(keyDao);
+
+        // When & Then: Expect a MerchantException.
+        MerchantException exception = assertThrows(MerchantException.class, () -> {
+            spyKeyDao.getMerchantEncryptionKeysForDownload(mId);
+        });
+        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
+    }
+}
+
+
+
+
+
+
 KeyDao
 public String getMerchantEncryptionKeysForDownload(String mId) {
         try {
