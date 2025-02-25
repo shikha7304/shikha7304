@@ -1,48 +1,40 @@
-  @Test
-    void testGetMerchantEncryptionKeysForDownload() throws IOException {
-
-        String mId = "12345";
-        String mek = "testKey";
-        UUID id = UUID.randomUUID();
-        String password = "securePwd";
-
-        Map<String, String> expectedInput = new HashMap<>();
-        expectedInput.put(MerchantConstant.MEK, mek);
-
-        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-        pdfStream.write(expectedInput.toString().getBytes());
-        pdfStream.write(mId.getBytes());
-
-        doNothing().when(keyValidator).validateMId(mId);
-        when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
-        doNothing().when(keyDao).saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), eq("Encryption Key PDF file Password is :" + password), eq(mId));
-
-        when(passwordGenerator.generatePassword()).thenReturn(password);
-        when(pdfService.generatedPDF(eq(expectedInput), eq(password), eq("encryption_key")))
-                .thenReturn(pdfStream);
-
-        // If keyService is a spy (or if you need to stub its internal call), use doReturn() for pdfFileGenerator.
-        doReturn(pdfStream).when(keyService).pdfFileGenerator(mId, mek,id);
-        doNothing().when(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
-
-        keyService.getMerchantEncryptionKeysForDownload(mId, response);
-
-        verify(keyValidator).validateMId(mId);
-        verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
-        verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
-        verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
+ public void generateKey(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
+        logger.info("Started generateKey for type: {}", type);
+        ByteArrayOutputStream pdfStream;
+        // Step 1 : Validate the KMSKeyGenerationRequest
+        keyValidator.validateKeyGenerationRequest(keyGenerationRequest);
+        switch (type) {
+            case API -> pdfStream = apiKeyGeneration(keyGenerationRequest);
+            case ENCRYPTION -> pdfStream = encryptionKeyGeneration(keyGenerationRequest);
+            default -> {
+                logger.error("Invalid KeyType provided: {}", type);
+                throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "KeyType", "Valid Key Type are " + Arrays.toString(KeyType.values())));
+            }
+        }
+        fileResponse(type, keyGenerationRequest, response, pdfStream);
+        logger.info("Completed generateKey for type: {}", type);
     }
-	
-Argument passed to when() is not a mock!
-Example of correct stubbing:
-    doThrow(new RuntimeException()).when(mock).someMethod();
-org.mockito.exceptions.misusing.NotAMockException: 
-Argument passed to when() is not a mock!
-Example of correct stubbing:
-    doThrow(new RuntimeException()).when(mock).someMethod();
-	at com.epay.merchant.service.KeyServiceTest.testGetMerchantEncryptionKeysForDownload(KeyServiceTest.java:289)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-
-
-    // If keyService is a spy (or if you need to stub its internal call), use doReturn() for pdfFileGenerator.
-        doReturn(pdfStream).when(keyService).pdfFileGenerator(mId, mek,id);
+    public void validateKeyGenerationRequest(KeyGenerationRequest keyGenerationRequest) {
+        errorDtoList = new ArrayList<>();
+        validatedMandatoryField(keyGenerationRequest);
+        validateMId(keyGenerationRequest.getMId());
+    }
+  private ByteArrayOutputStream apiKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
+        logger.info("Started apiKeyGeneration for request: {}", keyGenerationRequest);
+        // Step 1 : Call the KMS APIs
+        KMSAPIKeysResponse kmsapiKeysResponse = keyDao.generateApiKey(keyGenerationRequest.getMId());
+        // Step 2 : Generate the pwd-protected PDF File
+        String password = passwordGenerator.generatePassword();
+        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new APIKeyPDFBuilder(), kmsapiKeysResponse, password);
+        // Step 3 : Send Notification to Merchant
+        keyDao.saveNotification(KeyType.API, kmsapiKeysResponse.getId(), "API Key PDF File Password is :" + password, keyGenerationRequest.getMId());
+        logger.info("Completed apiKeyGeneration for request: {}", keyGenerationRequest);
+        return byteArrayOutputStream;
+    }
+ private ByteArrayOutputStream encryptionKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
+        logger.info("Started encryptionKeyGeneration for request: {}", keyGenerationRequest);
+        // Step 1 : Call the KMS APIs
+        KMSEncryptionKeysResponse kmsEncryptionKeysResponse = keyDao.generateEncryptionKey(keyGenerationRequest);
+        // Step 2 : Generate the pwd-protected PDF File
+        return pdfFileGenerator(keyGenerationRequest.getMId(), kmsEncryptionKeysResponse.getMek(), kmsEncryptionKeysResponse.getId());
+    }
