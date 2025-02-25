@@ -1,4 +1,28 @@
 @Test
+public void testGetMerchantEncryptionKeysForDownload() throws I0Exception {
+    String mId = "12345";
+    String mek = "testKey";
+    ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+
+    doNothing().when(keyValidator).validateMId(mId);
+    when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
+    // Use doNothing() for void methods
+    doNothing().when(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
+    when(passwordGenerator.generatePassword()).thenReturn("pass");
+    doNothing().when(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
+
+    keyService.getMerchantEncryptionKeysForDownload(mId, response);
+
+    verify(keyValidator).validateMId(mId);
+    verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
+    verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
+    verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
+}
+
+
+
+
+@Test
 void testGetMerchantEncryptionKeysForDownload() throws IOException {
     String mId = "12345";
     String mek = "testKey";
