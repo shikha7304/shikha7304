@@ -1,3 +1,47 @@
+@Test
+void testGetMerchantEncryptionKeysForDownload() throws IOException {
+    String mId = "12345";
+    String mek = "testKey";
+    ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+    String password = "securePwd";
+    UUID id = UUID.randomUUID();
+
+    // Mock password generation
+    when(passwordGenerator.generatePassword()).thenReturn(password);
+
+    // Mock key retrieval
+    doNothing().when(keyValidator).validateMId(mId);
+    when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
+
+    // Mock PDF generation
+    Map<String, String> expectedInput = new HashMap<>();
+    expectedInput.put(MerchantConstant.MEK, mek);
+    when(pdfService.generatedPDF(eq(expectedInput), eq(password), eq("encryption_key"))).thenReturn(pdfStream);
+
+    // Mock notification saving
+    doNothing().when(keyDao).saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), anyString(), eq(mId));
+
+    // Mock file response to avoid actual I/O operation
+    doNothing().when(keyService).fileResponse(any(), any(), any(), any());
+
+    // Execute method
+    keyService.getMerchantEncryptionKeysForDownload(mId, response);
+
+    // Verify interactions
+    verify(keyValidator).validateMId(mId);
+    verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
+    verify(passwordGenerator).generatePassword();
+    verify(pdfService).generatedPDF(eq(expectedInput), eq(password), eq("encryption_key"));
+    verify(keyDao).saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), contains("Encryption Key PDF file Password is"), eq(mId));
+    verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
+}
+
+
+
+
+
+
+
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
 
