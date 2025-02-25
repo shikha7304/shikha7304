@@ -1,135 +1,48 @@
-@Test
-void testGetMerchantEncryptionKeysForDownload() throws IOException {
-    // Arrange
-    String mId = "12345";
-    String mek = "testKey";
-    UUID id = UUID.randomUUID();
-    String password = "securePwd";
-
-    // Prepare the expected input for PDF generation.
-    Map<String, String> expectedInput = new HashMap<>();
-    expectedInput.put(MerchantConstant.MEK, mek);
-
-    // Create a ByteArrayOutputStream as our dummy PDF stream.
-    ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-    pdfStream.write(expectedInput.toString().getBytes());
-    pdfStream.write(mId.getBytes());
-
-    // Stub methods before invoking the method under test.
-    // Stub keyValidator to do nothing.
-    doNothing().when(keyValidator).validateMId(mId);
-
-    // Stub keyDao to return the test key.
-    when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
-
-    // Stub the void method saveNotification using the correct parameters.
-    doNothing().when(keyDao)
-            .saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), eq("Encryption Key PDF file Password is :" + password), eq(mId));
-
-    // Stub password generation.
-    when(passwordGenerator.generatePassword()).thenReturn(password);
-
-    // Stub PDF generation.
-    when(pdfService.generatedPDF(eq(expectedInput), eq(password), eq("encryption_key")))
-            .thenReturn(pdfStream);
-
-    // If keyService is a spy (or if you need to stub its internal call), use doReturn() for pdfFileGenerator.
-    doReturn(pdfStream).when(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
-
-    // Stub fileResponse BEFORE calling the method under test.
-    doNothing().when(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
-
-    // Act
-    keyService.getMerchantEncryptionKeysForDownload(mId, response);
-
-    // Assert / Verify
-    verify(keyValidator).validateMId(mId);
-    verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
-    verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
-    verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
-}
-
-
-
-
-
-
-@Test
+  @Test
     void testGetMerchantEncryptionKeysForDownload() throws IOException {
+
         String mId = "12345";
         String mek = "testKey";
-        UUID id= UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        String password = "securePwd";
+
         Map<String, String> expectedInput = new HashMap<>();
         expectedInput.put(MerchantConstant.MEK, mek);
-        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-        byte[] inputBytes = expectedInput.toString().getBytes();
-        pdfStream.write(inputBytes);
 
-        byte[] array = mId.getBytes();
-        pdfStream.write(array);
-        String password = "securePwd";
+        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
+        pdfStream.write(expectedInput.toString().getBytes());
+        pdfStream.write(mId.getBytes());
 
         doNothing().when(keyValidator).validateMId(mId);
         when(keyDao.getMerchantEncryptionKeysForDownload(mId)).thenReturn(mek);
-        Mockito.doNothing().when(keyDao).saveNotification(KeyType.API, id, "API Key PDF File Password is :" + password, mId);
-        when(passwordGenerator.generatePassword()).thenReturn(password);
+        doNothing().when(keyDao).saveNotification(eq(KeyType.ENCRYPTION), any(UUID.class), eq("Encryption Key PDF file Password is :" + password), eq(mId));
 
-        when(pdfService.generatedPDF(expectedInput, password, ("encryption_key"))).thenReturn(pdfStream);
-        when(keyService.pdfFileGenerator(mId,mek,id)).thenReturn(pdfStream);
+        when(passwordGenerator.generatePassword()).thenReturn(password);
+        when(pdfService.generatedPDF(eq(expectedInput), eq(password), eq("encryption_key")))
+                .thenReturn(pdfStream);
+
+        // If keyService is a spy (or if you need to stub its internal call), use doReturn() for pdfFileGenerator.
+        doReturn(pdfStream).when(keyService).pdfFileGenerator(mId, mek,id);
+        doNothing().when(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
 
         keyService.getMerchantEncryptionKeysForDownload(mId, response);
-        doNothing().when(keyService).fileResponse(KeyType.ENCRYPTION,keyGenerationRequest,response,pdfStream);
+
         verify(keyValidator).validateMId(mId);
         verify(keyDao).getMerchantEncryptionKeysForDownload(mId);
         verify(keyService).pdfFileGenerator(eq(mId), eq(mek), any(UUID.class));
         verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), any(), eq(response), eq(pdfStream));
     }
-
-
-    protected ByteArrayOutputStream pdfFileGenerator(String mId, String mek, UUID id) {
-        String password = passwordGenerator.generatePassword();
-        Map<String, String> input = new HashMap<>();
-        input.put(MerchantConstant.MEK,mek);
-        ByteArrayOutputStream byteArrayOutputStream = pdfService.generatedPDF(input, password,"encryption_key");
-        // Step 3 : Send Notification to Merchant
-        keyDao.saveNotification(KeyType.ENCRYPTION, id, "Encryption Key PDF file Password is :" + password, mId);
-        logger.info("File Generate for encryptionKey");
-        return byteArrayOutputStream;
-    }
-
-
-'saveNotification' is a *void method* and it *cannot* be stubbed with a *return value*!
-Voids are usually stubbed with Throwables:
-    doThrow(exception).when(mock).someVoidMethod();
-If you need to set the void method to do nothing you can use:
-    doNothing().when(mock).someVoidMethod();
-For more information, check out the javadocs for Mockito.doNothing().
-***
-If you're unsure why you're getting above error read on.
-Due to the nature of the syntax above problem might occur because:
-1. The method you are trying to stub is *overloaded*. Make sure you are calling the right overloaded version.
-2. Somewhere in your test you are stubbing *final methods*. Sorry, Mockito does not verify/stub final methods.
-3. A spy is stubbed using when(spy.foo()).then() syntax. It is safer to stub spies - 
-   - with doReturn|Throw() family of methods. More in javadocs for Mockito.spy() method.
-4. Mocking methods declared on non-public parent classes is not supported.
-
-org.mockito.exceptions.misusing.CannotStubVoidMethodWithReturnValue: 
-'saveNotification' is a *void method* and it *cannot* be stubbed with a *return value*!
-Voids are usually stubbed with Throwables:
-    doThrow(exception).when(mock).someVoidMethod();
-If you need to set the void method to do nothing you can use:
-    doNothing().when(mock).someVoidMethod();
-For more information, check out the javadocs for Mockito.doNothing().
-***
-If you're unsure why you're getting above error read on.
-Due to the nature of the syntax above problem might occur because:
-1. The method you are trying to stub is *overloaded*. Make sure you are calling the right overloaded version.
-2. Somewhere in your test you are stubbing *final methods*. Sorry, Mockito does not verify/stub final methods.
-3. A spy is stubbed using when(spy.foo()).then() syntax. It is safer to stub spies - 
-   - with doReturn|Throw() family of methods. More in javadocs for Mockito.spy() method.
-4. Mocking methods declared on non-public parent classes is not supported.
-
-	at com.epay.merchant.service.KeyServiceTest.testGetMerchantEncryptionKeysForDownload(KeyServiceTest.java:255)
+	
+Argument passed to when() is not a mock!
+Example of correct stubbing:
+    doThrow(new RuntimeException()).when(mock).someMethod();
+org.mockito.exceptions.misusing.NotAMockException: 
+Argument passed to when() is not a mock!
+Example of correct stubbing:
+    doThrow(new RuntimeException()).when(mock).someMethod();
+	at com.epay.merchant.service.KeyServiceTest.testGetMerchantEncryptionKeysForDownload(KeyServiceTest.java:289)
 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+    // If keyService is a spy (or if you need to stub its internal call), use doReturn() for pdfFileGenerator.
+        doReturn(pdfStream).when(keyService).pdfFileGenerator(mId, mek,id);
