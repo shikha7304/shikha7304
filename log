@@ -1,3 +1,186 @@
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import com.sbiepay.merchant.dao.*;
+import com.sbiepay.merchant.dto.*;
+import com.sbiepay.merchant.exception.MerchantException;
+import com.sbiepay.merchant.mapper.MerchantMapper;
+import com.sbiepay.merchant.model.request.*;
+import com.sbiepay.merchant.model.response.*;
+import com.sbiepay.merchant.util.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+import java.util.UUID;
+
+@ExtendWith(MockitoExtension.class)
+class MerchantUserServiceTest {
+
+    @Mock
+    private MerchantInfoDao merchantInfoDao;
+
+    @Mock
+    private MerchantUserDao merchantUserDao;
+
+    @Mock
+    private MerchantUserRoleDao merchantUserRoleDao;
+
+    @Mock
+    private MerchantUserValidator merchantUserValidator;
+
+    @Mock
+    private MerchantMapper merchantMapper;
+
+    @Mock
+    private CSVGenerator csvGenerator;
+
+    @InjectMocks
+    private MerchantUserService merchantUserService;
+
+    private MerchantUserDto merchantUserDto;
+    private MerchantUserRequest merchantUserRequest;
+    private MerchantUserResponse merchantUserResponse;
+    private MerchantUserStatusRequest merchantUserStatusRequest;
+    private MerchantUserAssignedMIdsResponse assignedMIdsResponse;
+    private UserMenuPermissionEntityResponse userMenuResponse;
+
+    @BeforeEach
+    void setUp() {
+        merchantUserDto = new MerchantUserDto();
+        merchantUserDto.setId(UUID.randomUUID());
+        merchantUserDto.setUserName("testUser");
+        merchantUserDto.setRole("ADMIN");
+
+        merchantUserRequest = new MerchantUserRequest();
+        merchantUserRequest.setUserName("testUser");
+
+        merchantUserResponse = new MerchantUserResponse();
+        merchantUserResponse.setUserName("testUser");
+
+        merchantUserStatusRequest = new MerchantUserStatusRequest();
+        merchantUserStatusRequest.setUserName("testUser");
+        merchantUserStatusRequest.setUserStatus("ACTIVE");
+
+        assignedMIdsResponse = new MerchantUserAssignedMIdsResponse();
+        userMenuResponse = new UserMenuPermissionEntityResponse();
+    }
+
+    @Test
+    void testGetMerchantUserAccess_Success() {
+        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
+        when(merchantUserDao.getRoleNameByRoleId(anyString())).thenReturn("Admin");
+        when(merchantUserDao.getUserMenuPermission(any())).thenReturn(List.of(userMenuResponse));
+
+        MerchantResponse<MerchantUserAccessResponse> response = merchantUserService.getMerchantUserAccess();
+
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        verify(merchantUserDao, times(1)).getByUserName(anyString(), any());
+    }
+
+    @Test
+    void testGetMerchantUserAccess_UserNotFound() {
+        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(null);
+
+        Exception exception = assertThrows(MerchantException.class, () -> {
+            merchantUserService.getMerchantUserAccess();
+        });
+
+        assertTrue(exception.getMessage().contains("UserName"));
+    }
+
+    @Test
+    void testCreateMerchantUser_Success() {
+        doNothing().when(merchantUserValidator).validateMerchantUserRequest(any(), eq(true));
+        when(merchantMapper.mapMerchantUserRequestToMerchantUserDto(any())).thenReturn(merchantUserDto);
+        when(merchantUserDao.saveMerchantUser(any(), anyString())).thenReturn(merchantUserDto);
+        when(merchantMapper.mapMerchantUserDtoToResponse(any())).thenReturn(merchantUserResponse);
+
+        MerchantResponse<MerchantUserResponse> response = merchantUserService.createMerchantUser(merchantUserRequest);
+
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        verify(merchantUserValidator, times(1)).validateMerchantUserRequest(any(), eq(true));
+    }
+
+    @Test
+    void testUpdateMerchantUser_Success() {
+        doNothing().when(merchantUserValidator).validateMerchantUserRequest(any(), eq(false));
+        when(merchantMapper.mapMerchantUserRequestToMerchantUserDto(any())).thenReturn(merchantUserDto);
+        when(merchantUserDao.updateMerchantUser(any(), eq(false))).thenReturn(merchantUserDto);
+        when(merchantMapper.mapMerchantUserDtoToResponse(any())).thenReturn(merchantUserResponse);
+
+        MerchantResponse<MerchantUserResponse> response = merchantUserService.updateMerchantUser(merchantUserRequest);
+
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        verify(merchantUserValidator, times(1)).validateMerchantUserRequest(any(), eq(false));
+    }
+
+    @Test
+    void testUpdateUserStatus_Success() {
+        doNothing().when(merchantUserValidator).validateUpdateUserStatus(any());
+        when(merchantUserDao.updateUserStatusByUserName(anyString(), anyString(), anyString())).thenReturn(merchantUserResponse);
+
+        MerchantResponse<MerchantUserResponse> response = merchantUserService.updateUserStatus(merchantUserStatusRequest);
+
+        assertNotNull(response);
+        assertEquals("SUCCESS", response.getStatus());
+        verify(merchantUserValidator, times(1)).validateUpdateUserStatus(any());
+    }
+
+    @Test
+    void testSearchMerchantUsers_Success() {
+        Page<MerchantUserDto> mockPage = mock(Page.class);
+        when(mockPage.getContent()).thenReturn(List.of(merchantUserDto));
+        when(mockPage.getTotalElements()).thenReturn(1L);
+        when(merchantUserDao.findMerchantUsers(any(Pageable.class), any())).thenReturn(mockPage);
+        when(merchantMapper.mapMerchantUserDTOListToResponseList(any())).thenReturn(List.of(merchantUserResponse));
+
+        MerchantResponse<MerchantUserResponse> response = merchantUserService.searchMerchantUsers(mock(Pageable.class), new MerchantUserSearchRequest());
+
+        assertNotNull(response);
+        assertEquals(1, response.getTotal());
+    }
+
+    @Test
+    void testAssignedMIdsToUser_Success() {
+        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
+        doNothing().when(merchantUserValidator).validatePostMapping(anyString(), any(), anyList());
+        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(anyString())).thenReturn(List.of());
+
+        MerchantResponse<String> response = merchantUserService.assignedMIdsToUser("testUser", List.of("MID123"));
+
+        assertNotNull(response);
+        assertEquals("MIds is assigned Successfully", response.getData().get(0));
+    }
+
+    @Test
+    void testAssignedMenuAccessToUser_Success() {
+        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
+        doNothing().when(merchantUserValidator).validateMenuPostMapping(anyString(), any(), anyList());
+        when(merchantUserDao.getUserMenuPermission(any())).thenReturn(List.of(userMenuResponse));
+
+        MerchantResponse<String> response = merchantUserService.assignedMenuAccessToUser("testUser", List.of("MENU123"));
+
+        assertNotNull(response);
+        assertEquals("Menus is assigned Successfully", response.getData().get(0));
+    }
+}
+
+
+
+
+
+
+
 public class MerchantUserService {
 
     private final MerchantInfoDao merchantInfoDao;
