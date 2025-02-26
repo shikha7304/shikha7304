@@ -1,3 +1,172 @@
+package com.epay.merchant.service;
+
+import com.epay.merchant.dao.LoginDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.exception.MerchantException;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.model.request.MerchantLoginRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.MerchantLoginValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static com.epay.merchant.util.MerchantConstant.RESPONSE_FAILURE;
+import static com.epay.merchant.util.MerchantConstant.SUCCESS_MESSAGE;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class LoginServiceTest {
+
+    @InjectMocks
+    private LoginService loginService;
+
+    @Mock
+    private MerchantLoginValidator merchantLoginValidator;
+
+    @Mock
+    private TokenService tokenService;
+
+    @Mock
+    private LoginDao loginDao;
+
+    private MerchantLoginRequest merchantLoginRequest;
+    private UUID requestId;
+
+    @BeforeEach
+    void setUp() {
+        requestId = UUID.randomUUID();
+        merchantLoginRequest = MerchantLoginRequest.builder()
+                .userName("testUser")
+                .password("hashpassword")
+                .requestId(requestId)
+                .build();
+    }
+
+    @Test
+    void testMerchantLogin_SuccessfulLogin() {
+        doNothing().when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+        doNothing().when(loginDao).saveLoginAudit(anyString(), eq(RequestType.LOGIN), eq(true), anyString());
+        doNothing().when(loginDao).updateCaptchaIsVerified(requestId);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertNotNull(response.getData());
+        assertTrue(response.getData().get(0).toString().contains("Logged In User Found"));
+
+        verify(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
+        verify(loginDao).updateCaptchaIsVerified(requestId);
+    }
+
+    @Test
+    void testMerchantLogin_ValidationException() {
+        ValidationException validationException = new ValidationException(List.of(new ErrorDto(ErrorConstants.MANDATORY_ERROR_CODE, "Mandatory field missing")));
+        doThrow(validationException).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+
+        assertThrows(ValidationException.class, () -> loginService.merchantLogin(merchantLoginRequest));
+
+        verify(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+        verify(loginDao, never()).saveLoginAudit(anyString(), any(), anyBoolean(), anyString());
+    }
+
+    @Test
+    void testMerchantLogin_MerchantException() {
+        MerchantException merchantException = new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, "User not found");
+        doThrow(merchantException).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertEquals(1, response.getErrors().size());
+        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, response.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testMerchantLogin_GenericException() {
+        doThrow(new RuntimeException("Unexpected error")).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertEquals(1, response.getErrors().size());
+        assertEquals(ErrorConstants.GENERIC_ERROR_CODE, response.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testHandleLoginFailure_UserExists() {
+        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(3);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertEquals(1, response.getData().size());
+        assertTrue(response.getData().get(0).toString().contains("loginFailAttempt"));
+
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(false), anyString());
+    }
+
+    @Test
+    void testHandleLoginFailure_UserNotFound() {
+        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(0);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertNotNull(response.getErrors());
+    }
+
+    @Test
+    void testHandleLoginFailure_MerchantException() {
+        doThrow(new MerchantException(ErrorConstants.LOCKED_ERROR_CODE, "Account locked"))
+                .when(tokenService).updateMerchantUserForLogin(anyString(), anyBoolean());
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertEquals(ErrorConstants.LOCKED_ERROR_CODE, response.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testHandleLoginFailure_GenericException() {
+        doThrow(new RuntimeException("DB Connection Failed"))
+                .when(tokenService).updateMerchantUserForLogin(anyString(), anyBoolean());
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertEquals(ErrorConstants.GENERIC_ERROR_CODE, response.getErrors().get(0).getErrorCode());
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+######
+
 Below is an example user story for the “Generate Report Alert on Report Generation” task. This story mirrors the level of detail provided in the captcha implementation user story while focusing on consuming the reporting service and generating an alert message.
 
 User Story Title:
