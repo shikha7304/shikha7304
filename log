@@ -1,240 +1,327 @@
-package com.epay.merchant.service;
+public class MerchantUserService {
 
-import com.epay.merchant.dao.LoginDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.model.request.MerchantLoginRequest;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.validator.MerchantLoginValidator;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
-
-import java.text.MessageFormat;
-import java.util.List;
-import java.util.UUID;
-
-import static com.epay.merchant.util.MerchantConstant.RESPONSE_FAILURE;
-import static com.epay.merchant.util.MerchantConstant.SUCCESS_MESSAGE;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
-class LoginServiceTest {
-
-    @InjectMocks
-    private LoginService loginService;
-
-    @Mock
-    private MerchantLoginValidator merchantLoginValidator;
-
-    @Mock
-    private TokenService tokenService;
-
-    @Mock
-    private LoginDao loginDao;
-
-    private MerchantLoginRequest merchantLoginRequest;
-    private UUID requestId;
-
-    @BeforeEach
-    void setUp() {
-        requestId=UUID.randomUUID();
-        merchantLoginRequest=MerchantLoginRequest.builder().userName("testUser").password("hashpassword").requestId(requestId).build();
-    }
-
-    @Test
-    void testMerchantLogin_SuccessfulLogin() {
-        doNothing().when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
-        doNothing().when(loginDao).saveLoginAudit(merchantLoginRequest.getUserName(), RequestType.LOGIN, true, MessageFormat.format(SUCCESS_MESSAGE, "Logged In User Found"));
-        doNothing().when(loginDao).updateCaptchaIsVerified(merchantLoginRequest.getRequestId());
-        MerchantResponse<Object> response= loginService.merchantLogin(merchantLoginRequest);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        assertNotNull(response.getData());
-        assertTrue(true);
-        assertEquals(1, ((List<?>) response.getData()).size());
-        assertTrue(((List<?>) response.getData()).getFirst().toString().contains("Logged In User Found"));
-
-        verify(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
-        verify(loginDao).updateCaptchaIsVerified(requestId);
-
-    }
-
-    @Test
-    void testMerchantLogin_ValidationException() {
-        ValidationException validationException = new ValidationException(List.of(new ErrorDto(ErrorConstants.MANDATORY_ERROR_CODE, "Mandatory field missing")));
-        doThrow(validationException).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
-
-        assertThrows(ValidationException.class, () -> loginService.merchantLogin(merchantLoginRequest));
-
-        verify(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
-        verify(loginDao, never()).saveLoginAudit(anyString(), any(), anyBoolean(), anyString());
-    }
-
-    @Test
-    void testMerchantLogin_MerchantException() {
-        MerchantException merchantException = new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, "User not found");
-        doThrow(merchantException).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
-
-        assertEquals(RESPONSE_FAILURE, response.getStatus());
-        assertNotNull(response.getErrors());
-        assertEquals(1, response.getErrors().size());
-        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, response.getErrors().getFirst().getErrorCode());
-    }
-
-    @Test
-    void testMerchantLogin_GenericException() {
-        doThrow(new RuntimeException("Unexpected error")).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
-
-        assertEquals(RESPONSE_FAILURE, response.getStatus());
-        assertNotNull(response.getErrors());
-        assertEquals(1, response.getErrors().size());
-        assertEquals(ErrorConstants.GENERIC_ERROR_CODE, response.getErrors().getFirst().getErrorCode());
-    }
-
-    @Test
-    void testHandleLoginFailure_UserExists() {
-        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(3);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
-    }
-
-    @Test
-    void testHandleLoginFailure_UserNotFound() {
-        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(0);
-
-        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
-
-        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
-        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
-    }
-}
-
-package com.epay.merchant.service;
-
-import com.epay.merchant.dao.LoginDao;
-import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.model.request.MerchantLoginRequest;
-import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.ErrorConstants;
-import com.epay.merchant.util.MerchantConstant;
-import com.epay.merchant.util.enums.RequestType;
-import com.epay.merchant.validator.MerchantLoginValidator;
-import com.sbi.epay.logging.utility.LoggerFactoryUtility;
-import com.sbi.epay.logging.utility.LoggerUtility;
-import lombok.RequiredArgsConstructor;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.stereotype.Service;
-
-import java.text.MessageFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
-import static com.epay.merchant.util.MerchantConstant.SUCCESS_MESSAGE;
-
-/**
- * Class Name: LoginService
- * *
- * Description: LoginService is responsible for validating the merchant login.
- * Validate the UserName and PWD to login
- * *
- * Author: Ravi Rathore
- * <p>
- * Copyright (c) 2024 [State Bank of India]
- * All rights reserved
- * *
- * Version:1.0
- */
-
-@Service
-@RequiredArgsConstructor
-public class LoginService {
-
-    private final MerchantLoginValidator merchantLoginValidator;
-    private final TokenService tokenService;
-    private final LoginDao loginDao;
+    private final MerchantInfoDao merchantInfoDao;
+    private final MerchantUserDao merchantUserDao;
+    private final MerchantUserRoleDao merchantUserRoleDao;
+    private final MerchantUserValidator merchantUserValidator;
+    private final MerchantMapper merchantMapper;
+    private final CSVGenerator csvGenerator;
+    protected static final List<String> USER_DOWNLOAD_HEADER = List.of("User Id", "Name", "Email", "Mobile No.", "User Type", "Status", "Creation Date");
     private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
 
-    /**
-     * Validates the user based on the provided validation request.
-     * @param merchantLoginRequest The login validation request containing user login details with captcha.
-     * @return MerchantResponse containing success or failure details.
-     */
-    public MerchantResponse<Object> merchantLogin(MerchantLoginRequest merchantLoginRequest) {
-        log.info("Started merchantLogin for userName: {}", merchantLoginRequest.getUserName());
-        try {
-            log.info("validating Merchant login request for userName : {}", merchantLoginRequest.getUserName());
-            merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest);
-            loginDao.saveLoginAudit(merchantLoginRequest.getUserName(), RequestType.LOGIN, true, MessageFormat.format(SUCCESS_MESSAGE, "Logged In User Found"));
-            loginDao.updateCaptchaIsVerified(merchantLoginRequest.getRequestId());
-            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, "Logged In User Found"))).build();
-        } catch (ValidationException e) {
-            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
-                throw e;
-            });
-            log.error("Login Validation Failed for userName {} with error {}", merchantLoginRequest.getUserName(), e.getErrorMessages().toString());
-            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")), e.getErrorMessages());
-        } catch (MerchantException e) {
-            log.error("MerchantException : Login Failed for userName {} ", merchantLoginRequest.getUserName());
-            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessage(), List.of(ErrorDto.builder().errorCode(e.getErrorCode()).errorMessage(e.getErrorMessage()).build()));
-        } catch (Exception e) {
-            log.error("GenericException : Login Failed for userName {} ", merchantLoginRequest.getUserName(), e.getMessage());
-            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getLocalizedMessage(), List.of(ErrorDto.builder().errorCode(ErrorConstants.GENERIC_ERROR_CODE).errorMessage(e.getMessage()).build()));
-        }
-    }
-    /**
-     * Handles the login failure process, such as logging and updating failure count.
-     * MerchantResponse failure and save Login Audit details
-     * @param userName String
-     * @param e String
-     * @param errors List<ErrorDto>
-     */
-    private MerchantResponse<Object> handleLoginFailure(String userName, String e, List<ErrorDto> errors) {
-        log.info("Started handleLoginFailure for userName: {}",userName);
-        int loginFailureCount = 0;
-        if (StringUtils.isNotEmpty(userName)) {
-            try {
-                log.info("Updating login failure count for userName: {}",userName);
-                loginFailureCount = tokenService.updateMerchantUserForLogin(userName, false);
-                if(loginFailureCount > 0) {
-                    log.info("Saving login audit for userName: {},loginFailureCount :{}",userName,loginFailureCount);
-                    loginDao.saveLoginAudit(userName, RequestType.LOGIN, false, e);
+    private static List<String> getNewMenuMappingList(List<String> menuList, List<UserMenuPermissionEntityResponse> assignedMenus) {
+        List<String> newMappedMenu = new ArrayList<>();
+        for (String menu : menuList){
+            boolean mIdFound = false;
+            for (UserMenuPermissionEntityResponse assignedMenu : assignedMenus) {
+                if (menu.equalsIgnoreCase(assignedMenu.getMenuCode())) {
+                   mIdFound = true;
+                    break;
                 }
-            } catch (MerchantException ex) {
-                log.error("MerchantException in handleLoginFailure for userName {}", userName, ex.getErrorMessage());
-            } catch (Exception ex) {
-                log.error("GenericException  in handleLoginFailure for userName {}", userName, ex.getMessage());
+            }
+            if(!mIdFound){
+                newMappedMenu.add(menu);
             }
         }
-        if(loginFailureCount > 0) {
-            log.info("Returning  response with  login failure count :{} for userName ;{}",loginFailureCount,userName);
-            return MerchantResponse.builder().data(List.of(Map.of("loginFailAttempt", loginFailureCount))).status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
-        } else {
-            log.info("Returning  failure response for userName ;{}",userName);
-            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
-        }
+        return newMappedMenu;
     }
 
-}
+    private static List<String> getNewMIdMappingList(List<String> mIds, List<MerchantInfoDto> assignedMIds) {
+        List<String> newMappedMIds = new ArrayList<>();
+        for (String mId : mIds) {
+            boolean mIdFound = false;
+            for (MerchantInfoDto assignedMId : assignedMIds) {
+                if (mId.equalsIgnoreCase(assignedMId.getMId())) {
+                    mIdFound = true;
+                    break;
+                }
+            }
+            if (!mIdFound) {
+                newMappedMIds.add(mId);
+            }
+        }
+        return newMappedMIds;
+    }
+public MerchantResponse<MerchantUserAccessResponse> getMerchantUserAccess() {
+        log.info("Fetching merchant user access for the logged-in user");
+        // Step 1 : Get UserName from Security Context
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+
+        // Step 2 : Get Merchant User Info of Logged in Merchant User
+        MerchantUserDto merchantUserDto = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+        merchantUserDto.setRoleName(merchantUserDao.getRoleNameByRoleId(merchantUserDto.getRole()));
+        if (ObjectUtils.isEmpty(merchantUserDto)) {
+            log.error("No active merchant user found for username: {}", userName);
+            throw new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "UserName"));
+        }
+
+        // Step 3 : Get Merchant Permission Info of Logged in Merchant User
+        List<UserMenuPermissionEntityResponse> userAccess = merchantUserDao.getUserMenuPermission(merchantUserDto.getId());
+
+        // Step 4 : Build Merchant User Access Response
+        MerchantUserAccessResponse merchantUserAccessResponse = MerchantUserAccessResponse.builder().userInfo(merchantUserDto).userAccess(userAccess).build();
+
+        log.info("Successfully fetched merchant user access for {}", userName);
+        // Step 4 : Building the response
+        return MerchantResponse.<MerchantUserAccessResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(merchantUserAccessResponse)).build();
+    }
+public MerchantResponse<MerchantUserResponse> createMerchantUser(MerchantUserRequest merchantUserRequest) {
+        log.info("Creating a new merchant user");
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, true);
+        log.info("Merchant user created successfully with username: {}", merchantUserRequest.getUserName());
+        return saveMerchantUser(merchantUserRequest, false, false);
+    }
+
+    /**
+     * Updates an existing merchant user's details based on the provided request.
+     * Validates the request before updating the user data.
+     *
+     * @param merchantUserRequest Request object containing updated user details.
+     * @return MerchantResponse containing the updated user's details.
+     */
+    public MerchantResponse<MerchantUserResponse> updateMerchantUser(MerchantUserRequest merchantUserRequest) {
+        log.info("Updating merchant user details for username: {}", merchantUserRequest.getUserName());
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserRequest(merchantUserRequest, false);
+
+        log.info("Merchant user updated successfully for username: {}", merchantUserRequest.getUserName());
+
+        return saveMerchantUser(merchantUserRequest, false, true);
+    }
+
+    /**
+     * Updates the profile of the logged-in merchant user.
+     * Validates the request before performing the update.
+     *
+     * @param merchantUserRequest Request object containing profile details.
+     * @return MerchantResponse containing the updated profile information.
+     */
+    public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
+        log.info("Updating profile for merchant user: {}", merchantUserRequest.getUserName());
+        //Step 1 : MerchantUserRequest validation
+        merchantUserValidator.validateMerchantUserProfile(merchantUserRequest);
+
+        log.info("Merchant user profile updated successfully for username: {}", merchantUserRequest.getUserName());
+        return saveMerchantUser(merchantUserRequest, true, true);
+    }
+
+    /**
+     * Update Merchant User Status
+     *
+     * @param merchantUserStatusRequest MerchantUserStatusRequest
+     * @return MerchantResponse<MerchantUserResponse> - Response containing updated user information
+     */
+    public MerchantResponse<MerchantUserResponse> updateUserStatus(MerchantUserStatusRequest merchantUserStatusRequest) {
+        log.info("Updating status Request {}", merchantUserStatusRequest);
+        merchantUserValidator.validateUpdateUserStatus(merchantUserStatusRequest);
+        MerchantUserResponse merchantUserResponse = merchantUserDao.updateUserStatusByUserName(merchantUserStatusRequest.getUserName(), merchantUserStatusRequest.getUserStatus(), merchantUserStatusRequest.getRemark());
+        log.info("User status updated successfully for username: {}", merchantUserStatusRequest.getUserName());
+        return MerchantResponse.<MerchantUserResponse>builder().data(List.of(merchantUserResponse)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).total(1L).build();
+    }
+
+    /**
+     * Saves the merchant user details to the database.
+     * Handles both new user creation and user updates.
+     *
+     * @param merchantUserRequest Request object containing user details.
+     * @param isProfileUpdate     Indicates if the update is specific to a profile.
+     * @param isUpdate            Indicates if the operation is an update.
+     * @return MerchantResponse containing the saved user's details.
+     */
+    private MerchantResponse<MerchantUserResponse> saveMerchantUser(MerchantUserRequest merchantUserRequest, boolean isProfileUpdate, boolean isUpdate) {
+        log.info("{} merchant user with username: {}", isUpdate ? "Updating" : "Creating", merchantUserRequest.getUserName());
+        //Step 1 : Save the Merchant User Data in DB
+        MerchantUserDto merchantUserDto = merchantMapper.mapMerchantUserRequestToMerchantUserDto(merchantUserRequest);
+        if (isUpdate) {
+            merchantUserDto = merchantUserDao.updateMerchantUser(merchantUserDto, isProfileUpdate);
+        } else {
+            merchantUserDto = merchantUserDao.saveMerchantUser(merchantUserDto, StringUtils.EMPTY);
+        }
+        //Step 2 : Build MerchantResponse and return to caller
+        MerchantUserResponse merchantUserResponse = merchantMapper.mapMerchantUserDtoToResponse(merchantUserDto);
+        merchantUserResponse.setRoleName(merchantUserDao.getUserRoleName(merchantUserDto.getRole()));
+        log.info("completed saveMerchantUser for username: {}", merchantUserRequest.getUserName());
+        return MerchantResponse.<MerchantUserResponse>builder().data(List.of(merchantUserResponse)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).build();
+    }
+
+    /**
+     * Searches for merchant users based on the provided search criteria.
+     * Returns a paginated list of matching merchant users.
+     *
+     * @param merchantUserSearchRequest Request object containing search criteria.
+     * @return MerchantResponse containing the search results.
+     */
+    public MerchantResponse<MerchantUserResponse> searchMerchantUsers(Pageable pageable, MerchantUserSearchRequest merchantUserSearchRequest) {
+        log.info("Search merchant users Request {}", merchantUserSearchRequest);
+        Page<MerchantUserDto> merchantUsers = merchantUserDao.findMerchantUsers(pageable, merchantUserSearchRequest);
+        List<MerchantUserResponse> merchantUserResponseList = merchantMapper.mapMerchantUserDTOListToResponseList(merchantUsers.getContent());
+        log.info("Returning list of merchant users {}", merchantUserResponseList);
+        return MerchantResponse.<MerchantUserResponse>builder().status(MerchantConstant.RESPONSE_SUCCESS).data(merchantUserResponseList).count(merchantUsers.stream().count()).total(merchantUsers.getTotalElements()).build();
+    }
+  public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(String userName) {
+        log.info("Fetching AssignedUnAssignedMIdsOfUser for userName: {} ",userName);
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+
+        //Step 3  : Get Assigned MIds
+        List<MerchantInfoDto> assignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
+
+        //Step 4  : Get UnAssigned MIds from ParentUser
+        List<MerchantInfoResponse> unAssignedMerchantInfo = getParentAssignedMIds(merchantUser, assignedMIds);
+
+        //Step 5  : Build MerchantUserAssignedMIdsResponse
+        List<MerchantInfoResponse> assignedMerchantInfo = merchantMapper.mapMerchantInfoDTOListToResponseList(assignedMIds);
+        MerchantUserAssignedMIdsResponse userAssignedMIdsResponse = MerchantUserAssignedMIdsResponse.builder().assignedMIds(assignedMerchantInfo).unAssignedMIds(unAssignedMerchantInfo).build();
+
+        log.info("Returning MerchantUserAssignedMIdsResponse for userName: {} ",userName);
+        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMIdsResponse
+        return MerchantResponse.<MerchantUserAssignedMIdsResponse>builder().data(List.of(userAssignedMIdsResponse)).build();
+    }
+
+    /**
+     * Assigns a list of MIDs to the specified user.
+     * Validates the request and updates the database with the new mappings.
+     *
+     * @param userName Username of the merchant user.
+     * @param mIds     List of MIDs to be assigned to the user.
+     * @return MerchantResponse confirming the successful assignment.
+     */
+    public MerchantResponse<String> assignedMIdsToUser(String userName, List<String> mIds) {
+        log.info("Fetching list of MIDs assigned to the userName: {},mIds: {} ",userName,mIds);
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatePostMapping(userName, merchantUser, mIds);
+
+        //Step 3  : Build Remove and new Assigned MIds list from current data
+        List<MerchantInfoDto> assignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
+        List<String> removedMIds = assignedMIds.stream().map(MerchantInfoDto::getMId).filter(mId -> !mIds.contains(mId)).toList();
+        List<String> newMappedMIds = getNewMIdMappingList(mIds, assignedMIds);
+
+        //Step 4 : Update the data in DB as per remove and new MIDs list
+        merchantUserDao.assignedMIds(newMappedMIds, removedMIds, merchantUser.getId());
+
+        log.info("Completed assignedMIdsToUser for userName: {},mIds: {} ",userName,mIds);
+        //Step 5 :  Build MerchantResponse Object of MerchantUserAssignedMIdsResponse
+        return MerchantResponse.<String>builder().data(List.of("MIds is assigned Successfully")).build();
+    }
+
+    /**
+     * Retrieves the assigned and unassigned menus for a specific user.
+     *
+     * @param userName The username of the merchant user.
+     * @return A response containing assigned and unassigned menus of the user.
+     */
+    public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
+        log.info("Starting to fetch assigned and unassigned menu access for user: {}", userName);
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+
+        //Step 3  : Get Assigned Menus
+        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+
+        //Step 4  : Get UnAssigned Menus from ParentUser
+        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
+
+        //Step 5  : Build MerchantUserAssignedMenusResponse
+        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder().assignedMenus(assignedMenus).unAssignedMenus(unAssignedMenus).build();
+        log.info("Successfully fetched assigned and unassigned menus for username: {}", userName);
+        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMenusResponse
+        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder().data(List.of(userAssignedMenusResponse)).build();
+    }
+
+    /**
+     * Assigns a list of menus to a user while removing the previously assigned menus not in the new list.
+     *
+     * @param userName The username of the merchant user.
+     * @param menuList The list of menu codes to assign to the user.
+     * @return A response indicating successful assignment of menus.
+     */
+    public MerchantResponse<String> assignedMenuAccessToUser(String userName, List<String> menuList) {
+        log.info("Starting to assign menu access for username: {}", userName);
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validateMenuPostMapping(userName, merchantUser, menuList);
+
+        //Step 3  : Build Remove and new Assigned Menu list from current data
+        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+        List<UUID> removedMenus = assignedMenus.stream().filter(assignedMenu -> !menuList.contains(assignedMenu.getMenuCode())).map(UserMenuPermissionEntityResponse::getMenuId).toList();
+        List<String> newMappedMenus = getNewMenuMappingList(menuList, assignedMenus);
+
+        //Step 4 : Update the data in DB as per remove and new Menu list
+        merchantUserDao.assignedMenus(newMappedMenus, removedMenus, merchantUser.getId());
+        log.info("Menu access assigned successfully for username: {}", userName);
+        //Step 5 :  Build MerchantResponse
+        return MerchantResponse.<String>builder().data(List.of("Menus is assigned Successfully")).build();
+    }
+
+    /**
+     * Retrieves the unassigned MIDs for a specified user by comparing the parent's
+     * accessible MIDs with the user's currently assigned MIDs.
+     *
+     * @param merchantUser Merchant user details.
+     * @param assignedMIds List of currently assigned MIDs for the user.
+     * @return List of unassigned MIDs available for the user.
+     */
+    private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
+        log.info("Fetching unassigned MIDs for user ID: {}", merchantUser.getId());
+        List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
+
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            //Step 2: Get Parent Assigned MIDs List
+            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
+
+            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
+            parentAssignedMIds.removeAll(assignedMIds);
+            if (CollectionUtils.isNotEmpty(parentAssignedMIds)) {
+                unAssignedMerchantInfo.addAll(merchantMapper.mapMerchantInfoDTOListToResponseList(parentAssignedMIds));
+            }
+        }
+        log.info("Successfully fetched unassigned MIDs for user ID: {}", merchantUser.getId());
+        return unAssignedMerchantInfo;
+    }
+
+    /**
+     * Retrieves the unassigned menus for a specified user by comparing the parent's
+     * accessible menus with the user's currently assigned menus.
+     *
+     * @param merchantUser Merchant user details.
+     * @param assignedMenus List of currently assigned menus for the user.
+     * @return List of unassigned menus available for the user.
+     */
+    private List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
+        log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
+        List<UserMenuPermissionEntityResponse> unAssignedMerchantInfo = new ArrayList<>();
+
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            //Step 2: Get Parent Assigned MIDs List
+            List<UserMenuPermissionEntityResponse> parentAssignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getParentUserId());
+
+            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
+            parentAssignedMenus.removeAll(assignedMenus);
+            for (UserMenuPermissionEntityResponse p : parentAssignedMenus) {
+                boolean isFound = false;
+                for (UserMenuPermissionEntityResponse a : assignedMenus) {
+                    if (a.getMenuCode().equalsIgnoreCase(p.getMenuCode())) {
+                        isFound = true;
+                        break;
+                    }
+                }
+                if(!isFound) {
+                    unAssignedMerchantInfo.add(p);
+                }
+            }
+        }
+        log.info("Successfully fetched unassigned menus for user ID: {}", merchantUser.getId());
+        return unAssignedMerchantInfo;
+    }
