@@ -1,5 +1,186 @@
 package com.epay.merchant.validator;
 
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.MerchantBankDao;
+import com.epay.merchant.dao.MerchantInfoDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.dto.MerchantBankAccountDto;
+import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.externalservice.AdminServicesClient;
+import com.epay.merchant.model.request.MerchantBankAccountApprovalRequest;
+import com.epay.merchant.model.request.MerchantBankAccountRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.EPayIdentityUtil;
+import com.epay.merchant.util.EncryptionDecryptionUtil;
+import com.epay.merchant.util.enums.AccountType;
+import com.epay.merchant.util.enums.MerchantStatus;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
+
+import static com.epay.merchant.util.ErrorConstants.*;
+import static com.epay.merchant.util.MerchantConstant.RESPONSE_FAILURE;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class MerchantBankAccountValidatorTest {
+
+    @Mock
+    private MerchantBankDao merchantBankDao;
+
+    @Mock
+    private MerchantInfoDao merchantInfoDao;
+
+    @Mock
+    private AdminServicesClient adminServicesClient;
+
+    @Mock
+    private MerchantConfig merchantConfig;
+
+    @Mock
+    private LoggerUtility logger;
+
+    @InjectMocks
+    private MerchantBankAccountValidator validator;
+
+    private MerchantBankAccountRequest request;
+    private MerchantBankAccountApprovalRequest approvalRequest;
+
+    @BeforeEach
+    void setUp() {
+        request = new MerchantBankAccountRequest();
+        request.setBankName("SBI");
+        request.setBranchName("Mumbai");
+        request.setIfscCode("SBIN0001234");
+        request.setAccountType(AccountType.SAVING.name());
+        request.setAccountNumber("1234567890");
+        request.setAccountHolderName("John Doe");
+        request.setAccountUniqueIdentifier("UID123");
+        request.setMId("MID123");
+
+        approvalRequest = new MerchantBankAccountApprovalRequest();
+        approvalRequest.setAccountName("John Doe");
+        approvalRequest.setMId("MID123");
+        approvalRequest.setAccountUniqueIdentifier("UID123");
+        approvalRequest.setApproved(true);
+    }
+
+    @Test
+    void testValidateMerchantAccountRequest_Create() {
+        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(false);
+        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(false);
+        when(adminServicesClient.validateBankDetails(anyString(), anyString(), anyString()))
+                .thenReturn(new MerchantResponse<>());
+
+        assertDoesNotThrow(() -> validator.validateMerchantAccountRequest(request, true));
+    }
+
+    @Test
+    void testValidateMerchantAccountRequest_Update() {
+        MerchantBankAccountDto dbAccount = new MerchantBankAccountDto();
+        dbAccount.setAccountNumber("9876543210");
+
+        when(merchantBankDao.getAccountByAccountUniqueIdentifier(anyString())).thenReturn(dbAccount);
+        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(false);
+
+        assertDoesNotThrow(() -> validator.validateMerchantAccountRequest(request, false));
+    }
+
+    @Test
+    void testValidateMerchantAccountApprovalRequest() {
+        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(true);
+        assertDoesNotThrow(() -> validator.validateMerchantAccountApprovalRequest(approvalRequest));
+    }
+
+    @Test
+    void testValidateMerchantAccountApprovalRequest_InvalidUniqueIdentifier() {
+        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(false);
+        ValidationException exception = assertThrows(ValidationException.class,
+                () -> validator.validateMerchantAccountApprovalRequest(approvalRequest));
+        assertEquals(NOT_FOUND_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidateMId_Valid() {
+        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(anyString()))
+                .thenReturn(List.of(new MerchantInfoDto("MID123", MerchantStatus.ACTIVE.name())));
+
+        assertDoesNotThrow(() -> validator.validateMId("MID123"));
+    }
+
+    @Test
+    void testValidateMId_Invalid() {
+        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(anyString()))
+                .thenReturn(List.of(new MerchantInfoDto("MID999", MerchantStatus.INACTIVE.name())));
+
+        ValidationException exception = assertThrows(ValidationException.class, () -> validator.validateMId("MID123"));
+        assertEquals(INVALID_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidateFieldValue_InvalidDecryption() {
+        when(merchantConfig.getDecryptionKey()).thenReturn("invalidKey");
+
+        doThrow(new RuntimeException("Decryption failed"))
+                .when(() -> EncryptionDecryptionUtil.decryptValue(anyString(), anyString()));
+
+        ValidationException exception = assertThrows(ValidationException.class,
+                () -> validator.validateMerchantAccountRequest(request, true));
+        assertEquals(INVALID_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidateBankDetails_InvalidResponse() {
+        MerchantResponse<String> response = new MerchantResponse<>();
+        response.setStatus(RESPONSE_FAILURE);
+        response.setErrors(List.of(new ErrorDto(INVALID_ERROR_CODE, "Invalid bank details")));
+
+        when(adminServicesClient.validateBankDetails(anyString(), anyString(), anyString())).thenReturn(response);
+
+        ValidationException exception = assertThrows(ValidationException.class,
+                () -> validator.validateMerchantAccountRequest(request, true));
+        assertEquals(INVALID_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidateAccountUniqueIdentifier_AlreadyExists() {
+        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(true);
+        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(true);
+
+        ValidationException exception = assertThrows(ValidationException.class,
+                () -> validator.validateMerchantAccountRequest(request, true));
+        assertEquals(ALREADY_EXIST_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidateAccountUniqueIdentifierForUpdate_AccountNumberChanged() {
+        MerchantBankAccountDto dbAccount = new MerchantBankAccountDto();
+        dbAccount.setAccountNumber("9876543210");
+
+        when(merchantBankDao.getAccountByAccountUniqueIdentifier(anyString())).thenReturn(dbAccount);
+        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(true);
+
+        ValidationException exception = assertThrows(ValidationException.class,
+                () -> validator.validateMerchantAccountRequest(request, false));
+        assertEquals(ALREADY_EXIST_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+    }
+}
+
+
+
+
+
+package com.epay.merchant.validator;
+
 
 import com.epay.merchant.config.MerchantConfig;
 import com.epay.merchant.dao.MerchantBankDao;
