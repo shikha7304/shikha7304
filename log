@@ -1,342 +1,239 @@
-package com.epay.merchant.validator;
+package com.epay.merchant.service;
 
-import com.epay.merchant.config.MerchantConfig;
-import com.epay.merchant.dao.MerchantBankDao;
-import com.epay.merchant.dao.MerchantInfoDao;
+import com.epay.merchant.dao.LoginDao;
 import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.dto.MerchantBankAccountDto;
-import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.exception.MerchantException;
 import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.externalservice.AdminServicesClient;
-import com.epay.merchant.model.request.MerchantBankAccountApprovalRequest;
-import com.epay.merchant.model.request.MerchantBankAccountRequest;
+import com.epay.merchant.model.request.MerchantLoginRequest;
 import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.EPayIdentityUtil;
-import com.epay.merchant.util.EncryptionDecryptionUtil;
-import com.epay.merchant.util.enums.AccountType;
-import com.epay.merchant.util.enums.MerchantStatus;
-import com.sbi.epay.logging.utility.LoggerUtility;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.MerchantLoginValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+import java.text.MessageFormat;
 import java.util.List;
+import java.util.UUID;
 
-import static com.epay.merchant.util.ErrorConstants.*;
 import static com.epay.merchant.util.MerchantConstant.RESPONSE_FAILURE;
+import static com.epay.merchant.util.MerchantConstant.SUCCESS_MESSAGE;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class MerchantBankAccountValidatorTest {
-
-    @Mock
-    private MerchantBankDao merchantBankDao;
-
-    @Mock
-    private MerchantInfoDao merchantInfoDao;
-
-    @Mock
-    private AdminServicesClient adminServicesClient;
-
-    @Mock
-    private MerchantConfig merchantConfig;
-
-    @Mock
-    private LoggerUtility logger;
+@MockitoSettings(strictness = Strictness.LENIENT)
+class LoginServiceTest {
 
     @InjectMocks
-    private MerchantBankAccountValidator validator;
+    private LoginService loginService;
 
-    private MerchantBankAccountRequest request;
-    private MerchantBankAccountApprovalRequest approvalRequest;
+    @Mock
+    private MerchantLoginValidator merchantLoginValidator;
+
+    @Mock
+    private TokenService tokenService;
+
+    @Mock
+    private LoginDao loginDao;
+
+    private MerchantLoginRequest merchantLoginRequest;
+    private UUID requestId;
 
     @BeforeEach
     void setUp() {
-        request = new MerchantBankAccountRequest();
-        request.setBankName("SBI");
-        request.setBranchName("Mumbai");
-        request.setIfscCode("SBIN0001234");
-        request.setAccountType(AccountType.SAVING.name());
-        request.setAccountNumber("1234567890");
-        request.setAccountHolderName("John Doe");
-        request.setAccountUniqueIdentifier("UID123");
-        request.setMId("MID123");
-
-        approvalRequest = new MerchantBankAccountApprovalRequest();
-        approvalRequest.setAccountName("John Doe");
-        approvalRequest.setMId("MID123");
-        approvalRequest.setAccountUniqueIdentifier("UID123");
-        approvalRequest.setApproved(true);
+        requestId=UUID.randomUUID();
+        merchantLoginRequest=MerchantLoginRequest.builder().userName("testUser").password("hashpassword").requestId(requestId).build();
     }
 
     @Test
-    void testValidateMerchantAccountRequest_Create() {
-        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(false);
-        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(false);
-        when(adminServicesClient.validateBankDetails(anyString(), anyString(), anyString()))
-                .thenReturn(new MerchantResponse<>());
+    void testMerchantLogin_SuccessfulLogin() {
+        doNothing().when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+        doNothing().when(loginDao).saveLoginAudit(merchantLoginRequest.getUserName(), RequestType.LOGIN, true, MessageFormat.format(SUCCESS_MESSAGE, "Logged In User Found"));
+        doNothing().when(loginDao).updateCaptchaIsVerified(merchantLoginRequest.getRequestId());
+        MerchantResponse<Object> response= loginService.merchantLogin(merchantLoginRequest);
 
-        assertDoesNotThrow(() -> validator.validateMerchantAccountRequest(request, true));
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        assertNotNull(response.getData());
+        assertTrue(true);
+        assertEquals(1, ((List<?>) response.getData()).size());
+        assertTrue(((List<?>) response.getData()).getFirst().toString().contains("Logged In User Found"));
+
+        verify(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
+        verify(loginDao).updateCaptchaIsVerified(requestId);
+
     }
 
     @Test
-    void testValidateMerchantAccountRequest_Update() {
-        MerchantBankAccountDto dbAccount = new MerchantBankAccountDto();
-        dbAccount.setAccountNumber("9876543210");
+    void testMerchantLogin_ValidationException() {
+        ValidationException validationException = new ValidationException(List.of(new ErrorDto(ErrorConstants.MANDATORY_ERROR_CODE, "Mandatory field missing")));
+        doThrow(validationException).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
 
-        when(merchantBankDao.getAccountByAccountUniqueIdentifier(anyString())).thenReturn(dbAccount);
-        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(false);
+        assertThrows(ValidationException.class, () -> loginService.merchantLogin(merchantLoginRequest));
 
-        assertDoesNotThrow(() -> validator.validateMerchantAccountRequest(request, false));
+        verify(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+        verify(loginDao, never()).saveLoginAudit(anyString(), any(), anyBoolean(), anyString());
     }
 
     @Test
-    void testValidateMerchantAccountApprovalRequest() {
-        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(true);
-        assertDoesNotThrow(() -> validator.validateMerchantAccountApprovalRequest(approvalRequest));
+    void testMerchantLogin_MerchantException() {
+        MerchantException merchantException = new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, "User not found");
+        doThrow(merchantException).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertNotNull(response.getErrors());
+        assertEquals(1, response.getErrors().size());
+        assertEquals(ErrorConstants.NOT_FOUND_ERROR_CODE, response.getErrors().getFirst().getErrorCode());
     }
 
     @Test
-    void testValidateMerchantAccountApprovalRequest_InvalidUniqueIdentifier() {
-        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(false);
-        ValidationException exception = assertThrows(ValidationException.class,
-                () -> validator.validateMerchantAccountApprovalRequest(approvalRequest));
-        assertEquals(NOT_FOUND_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+    void testMerchantLogin_GenericException() {
+        doThrow(new RuntimeException("Unexpected error")).when(merchantLoginValidator).validateMerchantLoginRequest(merchantLoginRequest);
+
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(RESPONSE_FAILURE, response.getStatus());
+        assertNotNull(response.getErrors());
+        assertEquals(1, response.getErrors().size());
+        assertEquals(ErrorConstants.GENERIC_ERROR_CODE, response.getErrors().getFirst().getErrorCode());
     }
 
     @Test
-    void testValidateMId_Valid() {
-        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(anyString()))
-                .thenReturn(List.of(new MerchantInfoDto("MID123", MerchantStatus.ACTIVE.name())));
+    void testHandleLoginFailure_UserExists() {
+        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(3);
 
-        assertDoesNotThrow(() -> validator.validateMId("MID123"));
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
+
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
     }
 
     @Test
-    void testValidateMId_Invalid() {
-        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(anyString()))
-                .thenReturn(List.of(new MerchantInfoDto("MID999", MerchantStatus.INACTIVE.name())));
+    void testHandleLoginFailure_UserNotFound() {
+        when(tokenService.updateMerchantUserForLogin("testUser", false)).thenReturn(0);
 
-        ValidationException exception = assertThrows(ValidationException.class, () -> validator.validateMId("MID123"));
-        assertEquals(INVALID_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
-    }
+        MerchantResponse<Object> response = loginService.merchantLogin(merchantLoginRequest);
 
-    @Test
-    void testValidateFieldValue_InvalidDecryption() {
-        when(merchantConfig.getDecryptionKey()).thenReturn("invalidKey");
-
-        doThrow(new RuntimeException("Decryption failed"))
-                .when(() -> EncryptionDecryptionUtil.decryptValue(anyString(), anyString()));
-
-        ValidationException exception = assertThrows(ValidationException.class,
-                () -> validator.validateMerchantAccountRequest(request, true));
-        assertEquals(INVALID_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
-    }
-
-    @Test
-    void testValidateBankDetails_InvalidResponse() {
-        MerchantResponse<String> response = new MerchantResponse<>();
-        response.setStatus(RESPONSE_FAILURE);
-        response.setErrors(List.of(new ErrorDto(INVALID_ERROR_CODE, "Invalid bank details")));
-
-        when(adminServicesClient.validateBankDetails(anyString(), anyString(), anyString())).thenReturn(response);
-
-        ValidationException exception = assertThrows(ValidationException.class,
-                () -> validator.validateMerchantAccountRequest(request, true));
-        assertEquals(INVALID_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
-    }
-
-    @Test
-    void testValidateAccountUniqueIdentifier_AlreadyExists() {
-        when(merchantBankDao.isExistByAccountUniqueIdentifier(anyString())).thenReturn(true);
-        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(true);
-
-        ValidationException exception = assertThrows(ValidationException.class,
-                () -> validator.validateMerchantAccountRequest(request, true));
-        assertEquals(ALREADY_EXIST_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
-    }
-
-    @Test
-    void testValidateAccountUniqueIdentifierForUpdate_AccountNumberChanged() {
-        MerchantBankAccountDto dbAccount = new MerchantBankAccountDto();
-        dbAccount.setAccountNumber("9876543210");
-
-        when(merchantBankDao.getAccountByAccountUniqueIdentifier(anyString())).thenReturn(dbAccount);
-        when(merchantBankDao.isExistByAccountNumber(anyString())).thenReturn(true);
-
-        ValidationException exception = assertThrows(ValidationException.class,
-                () -> validator.validateMerchantAccountRequest(request, false));
-        assertEquals(ALREADY_EXIST_ERROR_CODE, exception.getErrors().get(0).getErrorCode());
+        assertEquals(MerchantConstant.RESPONSE_SUCCESS, response.getStatus());
+        verify(loginDao).saveLoginAudit(eq("testUser"), eq(RequestType.LOGIN), eq(true), anyString());
     }
 }
 
+package com.epay.merchant.service;
 
-
-
-
-package com.epay.merchant.validator;
-
-
-import com.epay.merchant.config.MerchantConfig;
-import com.epay.merchant.dao.MerchantBankDao;
-import com.epay.merchant.dao.MerchantInfoDao;
+import com.epay.merchant.dao.LoginDao;
 import com.epay.merchant.dto.ErrorDto;
-import com.epay.merchant.dto.MerchantBankAccountDto;
-import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.exception.MerchantException;
 import com.epay.merchant.exception.ValidationException;
-import com.epay.merchant.externalservice.AdminServicesClient;
-import com.epay.merchant.model.request.MerchantBankAccountApprovalRequest;
-import com.epay.merchant.model.request.MerchantBankAccountRequest;
+import com.epay.merchant.model.request.MerchantLoginRequest;
 import com.epay.merchant.model.response.MerchantResponse;
-import com.epay.merchant.util.EPayIdentityUtil;
-import com.epay.merchant.util.EncryptionDecryptionUtil;
-import com.epay.merchant.util.enums.AccountType;
-import com.epay.merchant.util.enums.MerchantStatus;
+import com.epay.merchant.util.ErrorConstants;
+import com.epay.merchant.util.MerchantConstant;
+import com.epay.merchant.util.enums.RequestType;
+import com.epay.merchant.validator.MerchantLoginValidator;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
 
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-import static com.epay.merchant.util.ErrorConstants.*;
-import static com.epay.merchant.util.MerchantConstant.RESPONSE_FAILURE;
+import static com.epay.merchant.util.MerchantConstant.SUCCESS_MESSAGE;
+
 /**
- * Class Name: MerchantBankAccountValidator
+ * Class Name: LoginService
  * *
- * Description: MerchantBankAccountValidator is responsible for validating the bank account details of a merchant.
- * It checks whether the account number, bank name, and other related information are valid.
+ * Description: LoginService is responsible for validating the merchant login.
+ * Validate the UserName and PWD to login
  * *
- * Author: Ranu Jain
+ * Author: Ravi Rathore
+ * <p>
  * Copyright (c) 2024 [State Bank of India]
- * ALl rights reserved
+ * All rights reserved
  * *
- * Version: 1.0
+ * Version:1.0
  */
+
+@Service
 @RequiredArgsConstructor
-@Component
-public class MerchantBankAccountValidator extends BaseValidator {
-    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
-    private final MerchantBankDao merchantBankDao;
-    private final MerchantInfoDao merchantInfoDao;
-    private final AdminServicesClient adminServicesClient;
-    private final MerchantConfig merchantConfig;
+public class LoginService {
+
+    private final MerchantLoginValidator merchantLoginValidator;
+    private final TokenService tokenService;
+    private final LoginDao loginDao;
+    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
 
     /**
-     * Validate merchant account request
-     * @param merchantBankAccountRequest MerchantBankAccountRequest
-     * @param isCreate boolean
+     * Validates the user based on the provided validation request.
+     * @param merchantLoginRequest The login validation request containing user login details with captcha.
+     * @return MerchantResponse containing success or failure details.
      */
-    public void validateMerchantAccountRequest(MerchantBankAccountRequest merchantBankAccountRequest, boolean isCreate) {
-        logger.debug("Merchant bank account details validation start for {}", merchantBankAccountRequest);
-        errorDtoList = new ArrayList<>();
-        validatedMandatoryFields(merchantBankAccountRequest);
-        validateFieldValue(merchantBankAccountRequest);
-        validateMId(merchantBankAccountRequest.getMId());
-        if (isCreate) {
-            validateAccountUniqueIdentifier(merchantBankAccountRequest);
-        } else {
-            validateAccountUniqueIdentifierForUpdate(merchantBankAccountRequest);
-        }
-        validateBankDetails(merchantBankAccountRequest);
-        logger.debug("Merchant bank account details validation completed for {}", merchantBankAccountRequest);
-    }
-
-    /**
-     * Validate merchant account approval request
-     * @param merchantBankAccountApprovalRequest MerchantBankAccountApprovalRequest
-     */
-    public void validateMerchantAccountApprovalRequest(MerchantBankAccountApprovalRequest merchantBankAccountApprovalRequest) {
-        logger.debug("Merchant bank account approval validation start for {}", merchantBankAccountApprovalRequest);
-        errorDtoList = new ArrayList<>();
-        validateMandatoryFields(merchantBankAccountApprovalRequest);
-        validateMId(merchantBankAccountApprovalRequest.getMId());
-        validateAccountUniqueIdentifier(merchantBankAccountApprovalRequest.getAccountUniqueIdentifier());
-    }
-
-    public void validateMId(String mId) {
-        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
-        List<MerchantInfoDto> merchantInfoForMerchantUser = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
-        List<String> validMIds = merchantInfoForMerchantUser.stream().filter(m -> MerchantStatus.ACTIVE.name().equalsIgnoreCase(m.getStatus())).map(MerchantInfoDto::getMId).toList();
-        if (validMIds.contains(mId)) {
-            return;
-        }
-        throw new ValidationException(INVALID_ERROR_CODE, MessageFormat.format(INVALID_ERROR_MESSAGE, MID, MID_ACCESS));
-    }
-
-    private void validateFieldValue(MerchantBankAccountRequest merchantBankAccountRequest) {
-        validateFieldValue(merchantBankAccountRequest.getAccountType(), List.of(AccountType.SAVING.name(), AccountType.CURRENT.name()), ACCOUNT_TYPE);
-        throwIfErrors();
+    public MerchantResponse<Object> merchantLogin(MerchantLoginRequest merchantLoginRequest) {
+        log.info("Started merchantLogin for userName: {}", merchantLoginRequest.getUserName());
         try {
-            EncryptionDecryptionUtil.decryptValue(merchantConfig.getDecryptionKey(), merchantBankAccountRequest.getAccountNumber());
+            log.info("validating Merchant login request for userName : {}", merchantLoginRequest.getUserName());
+            merchantLoginValidator.validateMerchantLoginRequest(merchantLoginRequest);
+            loginDao.saveLoginAudit(merchantLoginRequest.getUserName(), RequestType.LOGIN, true, MessageFormat.format(SUCCESS_MESSAGE, "Logged In User Found"));
+            loginDao.updateCaptchaIsVerified(merchantLoginRequest.getRequestId());
+            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_SUCCESS).data(List.of(MessageFormat.format(MerchantConstant.SUCCESS_MESSAGE, "Logged In User Found"))).build();
+        } catch (ValidationException e) {
+            e.getErrorMessages().stream().filter(errorCode -> ErrorConstants.MANDATORY_ERROR_CODE.equals(errorCode.getErrorCode())).forEach(errorCode -> {
+                throw e;
+            });
+            log.error("Login Validation Failed for userName {} with error {}", merchantLoginRequest.getUserName(), e.getErrorMessages().toString());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessages().stream().map(ErrorDto::toString).collect(Collectors.joining(", ")), e.getErrorMessages());
+        } catch (MerchantException e) {
+            log.error("MerchantException : Login Failed for userName {} ", merchantLoginRequest.getUserName());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getErrorMessage(), List.of(ErrorDto.builder().errorCode(e.getErrorCode()).errorMessage(e.getErrorMessage()).build()));
         } catch (Exception e) {
-            throw new ValidationException(INVALID_ERROR_CODE, MessageFormat.format(INVALID_ERROR_MESSAGE, ACCOUNT_NUMBER, DECRYPTION_FAILED));
+            log.error("GenericException : Login Failed for userName {} ", merchantLoginRequest.getUserName(), e.getMessage());
+            return handleLoginFailure(merchantLoginRequest.getUserName(), e.getLocalizedMessage(), List.of(ErrorDto.builder().errorCode(ErrorConstants.GENERIC_ERROR_CODE).errorMessage(e.getMessage()).build()));
         }
     }
-
-    private void validatedMandatoryFields(MerchantBankAccountRequest merchantBankAccountRequest) {
-        checkMandatoryField(merchantBankAccountRequest.getBankName(), BANK_NAME);
-        checkMandatoryField(merchantBankAccountRequest.getBranchName(), BRANCH_NAME);
-        checkMandatoryField(merchantBankAccountRequest.getIfscCode(), IFSC_CODE);
-        checkMandatoryField(merchantBankAccountRequest.getAccountType(), ACCOUNT_TYPE);
-        checkMandatoryField(merchantBankAccountRequest.getAccountNumber(), ACCOUNT_NUMBER);
-        checkMandatoryField(merchantBankAccountRequest.getAccountHolderName(), ACCOUNT_HOLDER_NAME);
-        checkMandatoryField(merchantBankAccountRequest.getAccountUniqueIdentifier(), ACCOUNT_UNIQUE_IDENTIFIER);
-        checkMandatoryField(merchantBankAccountRequest.getMId(), MID);
-        throwIfErrors();
-    }
-
-    private void validateMandatoryFields(MerchantBankAccountApprovalRequest merchantBankAccountApprovalRequest) {
-        checkMandatoryField(merchantBankAccountApprovalRequest.getAccountName(), ACCOUNT_HOLDER_NAME);
-        checkMandatoryField(merchantBankAccountApprovalRequest.getMId(), MID);
-        checkMandatoryField(merchantBankAccountApprovalRequest.getAccountUniqueIdentifier(), ACCOUNT_UNIQUE_IDENTIFIER);
-        if(!merchantBankAccountApprovalRequest.isApproved()) {
-            checkMandatoryField(merchantBankAccountApprovalRequest.getRemarks(), REMARK);
-        }
-    }
-
-    private void validateBankDetails(MerchantBankAccountRequest merchantBankAccountRequest) {
-        MerchantResponse<String> response = adminServicesClient.validateBankDetails(merchantBankAccountRequest.getBankName(), merchantBankAccountRequest.getBranchName(), merchantBankAccountRequest.getIfscCode());
-        if (response.getStatus() == RESPONSE_FAILURE) {
-            throw new ValidationException(response.getErrors());
-        }
-    }
-
-    private void validateAccountUniqueIdentifier(MerchantBankAccountRequest merchantBankAccountRequest) {
-        boolean existByAccountUniqueIdentifier = merchantBankDao.isExistByAccountUniqueIdentifier(merchantBankAccountRequest.getAccountUniqueIdentifier());
-        if (existByAccountUniqueIdentifier) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ALREADY_EXIST_ERROR_MESSAGE, "AccountUniqueIdentifier")).build());
-        }
-        boolean existByAccountNumber = merchantBankDao.isExistByAccountNumber(merchantBankAccountRequest.getAccountNumber());
-        if (existByAccountNumber) {
-            errorDtoList.add(ErrorDto.builder().errorCode(ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ALREADY_EXIST_ERROR_MESSAGE, ACCOUNT_NUMBER)).build());
-        }
-        throwIfErrors();
-    }
-
-    private void validateAccountUniqueIdentifier(String uniqueIdentifier) {
-        boolean existByAccountUniqueIdentifier = merchantBankDao.isExistByAccountUniqueIdentifier(uniqueIdentifier);
-        if(!existByAccountUniqueIdentifier) {
-            errorDtoList.add(ErrorDto.builder().errorCode(NOT_FOUND_ERROR_CODE).errorMessage(MessageFormat.format(NOT_FOUND_ERROR_MESSAGE, ACCOUNT_UNIQUE_IDENTIFIER)).build());
-        }
-        throwIfErrors();
-    }
-
-    private void validateAccountUniqueIdentifierForUpdate(MerchantBankAccountRequest merchantBankAccountRequest) {
-        MerchantBankAccountDto dbMerchantBankAccount = merchantBankDao.getAccountByAccountUniqueIdentifier(merchantBankAccountRequest.getAccountUniqueIdentifier());
-        if (!merchantBankAccountRequest.getAccountNumber().equalsIgnoreCase(dbMerchantBankAccount.getAccountNumber())) {
-            boolean existByAccountNumber = merchantBankDao.isExistByAccountNumber(merchantBankAccountRequest.getAccountNumber());
-            if (existByAccountNumber) {
-                errorDtoList.add(ErrorDto.builder().errorCode(ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ALREADY_EXIST_ERROR_MESSAGE, ACCOUNT_NUMBER)).build());
+    /**
+     * Handles the login failure process, such as logging and updating failure count.
+     * MerchantResponse failure and save Login Audit details
+     * @param userName String
+     * @param e String
+     * @param errors List<ErrorDto>
+     */
+    private MerchantResponse<Object> handleLoginFailure(String userName, String e, List<ErrorDto> errors) {
+        log.info("Started handleLoginFailure for userName: {}",userName);
+        int loginFailureCount = 0;
+        if (StringUtils.isNotEmpty(userName)) {
+            try {
+                log.info("Updating login failure count for userName: {}",userName);
+                loginFailureCount = tokenService.updateMerchantUserForLogin(userName, false);
+                if(loginFailureCount > 0) {
+                    log.info("Saving login audit for userName: {},loginFailureCount :{}",userName,loginFailureCount);
+                    loginDao.saveLoginAudit(userName, RequestType.LOGIN, false, e);
+                }
+            } catch (MerchantException ex) {
+                log.error("MerchantException in handleLoginFailure for userName {}", userName, ex.getErrorMessage());
+            } catch (Exception ex) {
+                log.error("GenericException  in handleLoginFailure for userName {}", userName, ex.getMessage());
             }
-            throwIfErrors();
+        }
+        if(loginFailureCount > 0) {
+            log.info("Returning  response with  login failure count :{} for userName ;{}",loginFailureCount,userName);
+            return MerchantResponse.builder().data(List.of(Map.of("loginFailAttempt", loginFailureCount))).status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
+        } else {
+            log.info("Returning  failure response for userName ;{}",userName);
+            return MerchantResponse.builder().status(MerchantConstant.RESPONSE_FAILURE).errors(errors).build();
         }
     }
 
