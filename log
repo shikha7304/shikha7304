@@ -1,225 +1,162 @@
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.mockStatic;
+package com.epay.merchant.validator;
 
-import java.io.ByteArrayOutputStream;
-import java.util.UUID;
 
-import javax.servlet.http.HttpServletResponse;
+import com.epay.merchant.config.MerchantConfig;
+import com.epay.merchant.dao.MerchantBankDao;
+import com.epay.merchant.dao.MerchantInfoDao;
+import com.epay.merchant.dto.ErrorDto;
+import com.epay.merchant.dto.MerchantBankAccountDto;
+import com.epay.merchant.dto.MerchantInfoDto;
+import com.epay.merchant.exception.ValidationException;
+import com.epay.merchant.externalservice.AdminServicesClient;
+import com.epay.merchant.model.request.MerchantBankAccountApprovalRequest;
+import com.epay.merchant.model.request.MerchantBankAccountRequest;
+import com.epay.merchant.model.response.MerchantResponse;
+import com.epay.merchant.util.EPayIdentityUtil;
+import com.epay.merchant.util.EncryptionDecryptionUtil;
+import com.epay.merchant.util.enums.AccountType;
+import com.epay.merchant.util.enums.MerchantStatus;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Spy;
-import org.mockito.InjectMocks;
-import org.mockito.junit.jupiter.MockitoExtension;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
 
-// Import your project’s classes. For example:
-import com.epay.merchant.constant.ErrorConstants;
-import com.epay.merchant.constant.KeyType;
-import com.epay.merchant.dto.KeyGenerationRequest;
-import com.epay.merchant.exception.MerchantException;
-import com.epay.merchant.response.KMSAPIKeysResponse;
-import com.epay.merchant.response.KMSEncryptionKeysResponse;
-import com.epay.merchant.service.KeyService;
-import com.epay.merchant.validator.KeyValidator;
-import com.epay.merchant.dao.KeyDao;
-import com.epay.merchant.pdf.PDFService;
-import com.epay.merchant.pdf.APIKeyPDFBuilder;
-import com.epay.merchant.password.PasswordGenerator;
-
-@ExtendWith(MockitoExtension.class)
-class KeyServiceTest {
-
-    // Use a spy so that we can stub internal methods.
-    @Spy
-    @InjectMocks
-    private KeyService keyService;
-
-    @Mock
-    private KeyValidator keyValidator;
-
-    @Mock
-    private KeyDao keyDao;
-
-    @Mock
-    private PasswordGenerator passwordGenerator;
-
-    @Mock
-    private HttpServletResponse response;
+import static com.epay.merchant.util.ErrorConstants.*;
+import static com.epay.merchant.util.MerchantConstant.RESPONSE_FAILURE;
+/**
+ * Class Name: MerchantBankAccountValidator
+ * *
+ * Description: MerchantBankAccountValidator is responsible for validating the bank account details of a merchant.
+ * It checks whether the account number, bank name, and other related information are valid.
+ * *
+ * Author: Ranu Jain
+ * Copyright (c) 2024 [State Bank of India]
+ * ALl rights reserved
+ * *
+ * Version: 1.0
+ */
+@RequiredArgsConstructor
+@Component
+public class MerchantBankAccountValidator extends BaseValidator {
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+    private final MerchantBankDao merchantBankDao;
+    private final MerchantInfoDao merchantInfoDao;
+    private final AdminServicesClient adminServicesClient;
+    private final MerchantConfig merchantConfig;
 
     /**
-     * Test the API branch of generateKey.
+     * Validate merchant account request
+     * @param merchantBankAccountRequest MerchantBankAccountRequest
+     * @param isCreate boolean
      */
-    @Test
-    void testGenerateKey_api() throws Exception {
-        // Arrange
-        KeyGenerationRequest request = new KeyGenerationRequest();
-        request.setMId("12345");
-
-        // Prepare a dummy API response.
-        KMSAPIKeysResponse apiResponse = new KMSAPIKeysResponse();
-        UUID apiResponseId = UUID.randomUUID();
-        apiResponse.setId(apiResponseId);
-
-        String generatedPassword = "securePwd";
-        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-        pdfStream.write("API PDF content".getBytes());
-
-        // Stub keyValidator to do nothing.
-        doNothing().when(keyValidator).validateKeyGenerationRequest(request);
-
-        // Stub keyDao.generateApiKey to return our dummy response.
-        when(keyDao.generateApiKey(request.getMId())).thenReturn(apiResponse);
-
-        // Stub password generation.
-        when(passwordGenerator.generatePassword()).thenReturn(generatedPassword);
-
-        // Stub the static PDFService.generatePDF call.
-        try (MockedStatic<PDFService> pdfServiceMock = mockStatic(PDFService.class)) {
-            pdfServiceMock.when(() -> PDFService.generatePDF(any(APIKeyPDFBuilder.class), 
-                                                             eq(apiResponse), 
-                                                             eq(generatedPassword)))
-                          .thenReturn(pdfStream);
-
-            // Stub keyDao.saveNotification for API.
-            doNothing().when(keyDao)
-                       .saveNotification(eq(KeyType.API), 
-                                         eq(apiResponseId), 
-                                         eq("API Key PDF File Password is :" + generatedPassword), 
-                                         eq(request.getMId()));
-
-            // Stub fileResponse in keyService.
-            doNothing().when(keyService)
-                       .fileResponse(eq(KeyType.API), eq(request), eq(response), eq(pdfStream));
-
-            // Act
-            keyService.generateKey(KeyType.API, request, response);
-
-            // Assert / Verify that collaborators were called.
-            verify(keyValidator).validateKeyGenerationRequest(request);
-            verify(keyDao).generateApiKey(request.getMId());
-            verify(keyDao).saveNotification(eq(KeyType.API), 
-                                            eq(apiResponseId), 
-                                            eq("API Key PDF File Password is :" + generatedPassword), 
-                                            eq(request.getMId()));
-            verify(keyService).fileResponse(eq(KeyType.API), eq(request), eq(response), eq(pdfStream));
-        }
-    }
-
-    /**
-     * Test the ENCRYPTION branch of generateKey.
-     */
-    @Test
-    void testGenerateKey_encryption() throws Exception {
-        // Arrange
-        KeyGenerationRequest request = new KeyGenerationRequest();
-        request.setMId("12345");
-
-        // Prepare a dummy encryption response.
-        KMSEncryptionKeysResponse encryptionResponse = new KMSEncryptionKeysResponse();
-        encryptionResponse.setMek("testKey");
-        UUID encryptionResponseId = UUID.randomUUID();
-        encryptionResponse.setId(encryptionResponseId);
-
-        ByteArrayOutputStream pdfStream = new ByteArrayOutputStream();
-        pdfStream.write("Encryption PDF content".getBytes());
-
-        // Stub keyValidator.
-        doNothing().when(keyValidator).validateKeyGenerationRequest(request);
-
-        // Stub keyDao.generateEncryptionKey to return our dummy response.
-        when(keyDao.generateEncryptionKey(request)).thenReturn(encryptionResponse);
-
-        // Stub the pdfFileGenerator method in keyService (remember keyService is a spy).
-        doReturn(pdfStream).when(keyService)
-                          .pdfFileGenerator(eq(request.getMId()), 
-                                            eq(encryptionResponse.getMek()), 
-                                            eq(encryptionResponseId));
-
-        // Stub fileResponse.
-        doNothing().when(keyService)
-                   .fileResponse(eq(KeyType.ENCRYPTION), eq(request), eq(response), eq(pdfStream));
-
-        // Act
-        keyService.generateKey(KeyType.ENCRYPTION, request, response);
-
-        // Assert / Verify.
-        verify(keyValidator).validateKeyGenerationRequest(request);
-        verify(keyDao).generateEncryptionKey(request);
-        verify(keyService).pdfFileGenerator(eq(request.getMId()), 
-                                            eq(encryptionResponse.getMek()), 
-                                            eq(encryptionResponseId));
-        verify(keyService).fileResponse(eq(KeyType.ENCRYPTION), eq(request), eq(response), eq(pdfStream));
-    }
-
-    /**
-     * Test that an invalid KeyType results in a MerchantException.
-     */
-    @Test
-    void testGenerateKey_invalidType() {
-        // Arrange
-        KeyGenerationRequest request = new KeyGenerationRequest();
-        request.setMId("12345");
-
-        doNothing().when(keyValidator).validateKeyGenerationRequest(request);
-
-        // Act & Assert: Passing a KeyType that is not API or ENCRYPTION should throw an exception.
-        MerchantException exception = assertThrows(MerchantException.class, () -> {
-            keyService.generateKey(null, request, response);
-        });
-        // Optionally, check the exception message or error code:
-        // assertEquals(ErrorConstants.INVALID_ERROR_CODE, exception.getErrorCode());
-    }
-}
-
-
-
-
-
-public void generateKey(KeyType type, KeyGenerationRequest keyGenerationRequest, HttpServletResponse response) {
-        logger.info("Started generateKey for type: {}", type);
-        ByteArrayOutputStream pdfStream;
-        // Step 1 : Validate the KMSKeyGenerationRequest
-        keyValidator.validateKeyGenerationRequest(keyGenerationRequest);
-        switch (type) {
-            case API -> pdfStream = apiKeyGeneration(keyGenerationRequest);
-            case ENCRYPTION -> pdfStream = encryptionKeyGeneration(keyGenerationRequest);
-            default -> {
-                logger.error("Invalid KeyType provided: {}", type);
-                throw new MerchantException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "KeyType", "Valid Key Type are " + Arrays.toString(KeyType.values())));
-            }
-        }
-        fileResponse(type, keyGenerationRequest, response, pdfStream);
-        logger.info("Completed generateKey for type: {}", type);
-    }
-    public void validateKeyGenerationRequest(KeyGenerationRequest keyGenerationRequest) {
+    public void validateMerchantAccountRequest(MerchantBankAccountRequest merchantBankAccountRequest, boolean isCreate) {
+        logger.debug("Merchant bank account details validation start for {}", merchantBankAccountRequest);
         errorDtoList = new ArrayList<>();
-        validatedMandatoryField(keyGenerationRequest);
-        validateMId(keyGenerationRequest.getMId());
+        validatedMandatoryFields(merchantBankAccountRequest);
+        validateFieldValue(merchantBankAccountRequest);
+        validateMId(merchantBankAccountRequest.getMId());
+        if (isCreate) {
+            validateAccountUniqueIdentifier(merchantBankAccountRequest);
+        } else {
+            validateAccountUniqueIdentifierForUpdate(merchantBankAccountRequest);
+        }
+        validateBankDetails(merchantBankAccountRequest);
+        logger.debug("Merchant bank account details validation completed for {}", merchantBankAccountRequest);
     }
-  private ByteArrayOutputStream apiKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
-        logger.info("Started apiKeyGeneration for request: {}", keyGenerationRequest);
-        // Step 1 : Call the KMS APIs
-        KMSAPIKeysResponse kmsapiKeysResponse = keyDao.generateApiKey(keyGenerationRequest.getMId());
-        // Step 2 : Generate the pwd-protected PDF File
-        String password = passwordGenerator.generatePassword();
-        ByteArrayOutputStream byteArrayOutputStream = PDFService.generatePDF(new APIKeyPDFBuilder(), kmsapiKeysResponse, password);
-        // Step 3 : Send Notification to Merchant
-        keyDao.saveNotification(KeyType.API, kmsapiKeysResponse.getId(), "API Key PDF File Password is :" + password, keyGenerationRequest.getMId());
-        logger.info("Completed apiKeyGeneration for request: {}", keyGenerationRequest);
-        return byteArrayOutputStream;
+
+    /**
+     * Validate merchant account approval request
+     * @param merchantBankAccountApprovalRequest MerchantBankAccountApprovalRequest
+     */
+    public void validateMerchantAccountApprovalRequest(MerchantBankAccountApprovalRequest merchantBankAccountApprovalRequest) {
+        logger.debug("Merchant bank account approval validation start for {}", merchantBankAccountApprovalRequest);
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(merchantBankAccountApprovalRequest);
+        validateMId(merchantBankAccountApprovalRequest.getMId());
+        validateAccountUniqueIdentifier(merchantBankAccountApprovalRequest.getAccountUniqueIdentifier());
     }
- private ByteArrayOutputStream encryptionKeyGeneration(KeyGenerationRequest keyGenerationRequest) {
-        logger.info("Started encryptionKeyGeneration for request: {}", keyGenerationRequest);
-        // Step 1 : Call the KMS APIs
-        KMSEncryptionKeysResponse kmsEncryptionKeysResponse = keyDao.generateEncryptionKey(keyGenerationRequest);
-        // Step 2 : Generate the pwd-protected PDF File
-        return pdfFileGenerator(keyGenerationRequest.getMId(), kmsEncryptionKeysResponse.getMek(), kmsEncryptionKeysResponse.getId());
+
+    public void validateMId(String mId) {
+        String userName = EPayIdentityUtil.getUserPrincipal().getUsername();
+        List<MerchantInfoDto> merchantInfoForMerchantUser = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
+        List<String> validMIds = merchantInfoForMerchantUser.stream().filter(m -> MerchantStatus.ACTIVE.name().equalsIgnoreCase(m.getStatus())).map(MerchantInfoDto::getMId).toList();
+        if (validMIds.contains(mId)) {
+            return;
+        }
+        throw new ValidationException(INVALID_ERROR_CODE, MessageFormat.format(INVALID_ERROR_MESSAGE, MID, MID_ACCESS));
     }
+
+    private void validateFieldValue(MerchantBankAccountRequest merchantBankAccountRequest) {
+        validateFieldValue(merchantBankAccountRequest.getAccountType(), List.of(AccountType.SAVING.name(), AccountType.CURRENT.name()), ACCOUNT_TYPE);
+        throwIfErrors();
+        try {
+            EncryptionDecryptionUtil.decryptValue(merchantConfig.getDecryptionKey(), merchantBankAccountRequest.getAccountNumber());
+        } catch (Exception e) {
+            throw new ValidationException(INVALID_ERROR_CODE, MessageFormat.format(INVALID_ERROR_MESSAGE, ACCOUNT_NUMBER, DECRYPTION_FAILED));
+        }
+    }
+
+    private void validatedMandatoryFields(MerchantBankAccountRequest merchantBankAccountRequest) {
+        checkMandatoryField(merchantBankAccountRequest.getBankName(), BANK_NAME);
+        checkMandatoryField(merchantBankAccountRequest.getBranchName(), BRANCH_NAME);
+        checkMandatoryField(merchantBankAccountRequest.getIfscCode(), IFSC_CODE);
+        checkMandatoryField(merchantBankAccountRequest.getAccountType(), ACCOUNT_TYPE);
+        checkMandatoryField(merchantBankAccountRequest.getAccountNumber(), ACCOUNT_NUMBER);
+        checkMandatoryField(merchantBankAccountRequest.getAccountHolderName(), ACCOUNT_HOLDER_NAME);
+        checkMandatoryField(merchantBankAccountRequest.getAccountUniqueIdentifier(), ACCOUNT_UNIQUE_IDENTIFIER);
+        checkMandatoryField(merchantBankAccountRequest.getMId(), MID);
+        throwIfErrors();
+    }
+
+    private void validateMandatoryFields(MerchantBankAccountApprovalRequest merchantBankAccountApprovalRequest) {
+        checkMandatoryField(merchantBankAccountApprovalRequest.getAccountName(), ACCOUNT_HOLDER_NAME);
+        checkMandatoryField(merchantBankAccountApprovalRequest.getMId(), MID);
+        checkMandatoryField(merchantBankAccountApprovalRequest.getAccountUniqueIdentifier(), ACCOUNT_UNIQUE_IDENTIFIER);
+        if(!merchantBankAccountApprovalRequest.isApproved()) {
+            checkMandatoryField(merchantBankAccountApprovalRequest.getRemarks(), REMARK);
+        }
+    }
+
+    private void validateBankDetails(MerchantBankAccountRequest merchantBankAccountRequest) {
+        MerchantResponse<String> response = adminServicesClient.validateBankDetails(merchantBankAccountRequest.getBankName(), merchantBankAccountRequest.getBranchName(), merchantBankAccountRequest.getIfscCode());
+        if (response.getStatus() == RESPONSE_FAILURE) {
+            throw new ValidationException(response.getErrors());
+        }
+    }
+
+    private void validateAccountUniqueIdentifier(MerchantBankAccountRequest merchantBankAccountRequest) {
+        boolean existByAccountUniqueIdentifier = merchantBankDao.isExistByAccountUniqueIdentifier(merchantBankAccountRequest.getAccountUniqueIdentifier());
+        if (existByAccountUniqueIdentifier) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ALREADY_EXIST_ERROR_MESSAGE, "AccountUniqueIdentifier")).build());
+        }
+        boolean existByAccountNumber = merchantBankDao.isExistByAccountNumber(merchantBankAccountRequest.getAccountNumber());
+        if (existByAccountNumber) {
+            errorDtoList.add(ErrorDto.builder().errorCode(ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ALREADY_EXIST_ERROR_MESSAGE, ACCOUNT_NUMBER)).build());
+        }
+        throwIfErrors();
+    }
+
+    private void validateAccountUniqueIdentifier(String uniqueIdentifier) {
+        boolean existByAccountUniqueIdentifier = merchantBankDao.isExistByAccountUniqueIdentifier(uniqueIdentifier);
+        if(!existByAccountUniqueIdentifier) {
+            errorDtoList.add(ErrorDto.builder().errorCode(NOT_FOUND_ERROR_CODE).errorMessage(MessageFormat.format(NOT_FOUND_ERROR_MESSAGE, ACCOUNT_UNIQUE_IDENTIFIER)).build());
+        }
+        throwIfErrors();
+    }
+
+    private void validateAccountUniqueIdentifierForUpdate(MerchantBankAccountRequest merchantBankAccountRequest) {
+        MerchantBankAccountDto dbMerchantBankAccount = merchantBankDao.getAccountByAccountUniqueIdentifier(merchantBankAccountRequest.getAccountUniqueIdentifier());
+        if (!merchantBankAccountRequest.getAccountNumber().equalsIgnoreCase(dbMerchantBankAccount.getAccountNumber())) {
+            boolean existByAccountNumber = merchantBankDao.isExistByAccountNumber(merchantBankAccountRequest.getAccountNumber());
+            if (existByAccountNumber) {
+                errorDtoList.add(ErrorDto.builder().errorCode(ALREADY_EXIST_ERROR_CODE).errorMessage(MessageFormat.format(ALREADY_EXIST_ERROR_MESSAGE, ACCOUNT_NUMBER)).build());
+            }
+            throwIfErrors();
+        }
+    }
+
+}
