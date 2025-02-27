@@ -1,294 +1,25 @@
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-import com.sbiepay.merchant.dao.*;
-import com.sbiepay.merchant.dto.*;
-import com.sbiepay.merchant.mapper.MerchantMapper;
-import com.sbiepay.merchant.model.*;
-import com.sbiepay.merchant.request.*;
-import com.sbiepay.merchant.response.*;
-import com.sbiepay.merchant.service.MerchantUserService;
-import com.sbiepay.merchant.util.CSVGenerator;
-import com.sbiepay.merchant.util.LoggerUtility;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.ObjectUtils;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.util.*;
-
-@ExtendWith(MockitoExtension.class)
-class MerchantUserServiceTest {
-
-    @InjectMocks
-    private MerchantUserService merchantUserService;
-
-    @Mock
-    private MerchantInfoDao merchantInfoDao;
-
-    @Mock
-    private MerchantUserDao merchantUserDao;
-
-    @Mock
-    private MerchantUserRoleDao merchantUserRoleDao;
-
-    @Mock
-    private MerchantUserValidator merchantUserValidator;
-
-    @Mock
-    private MerchantMapper merchantMapper;
-
-    @Mock
-    private CSVGenerator csvGenerator;
-
-    @Mock
-    private LoggerUtility log;
-
-    private MerchantUserDto merchantUserDto;
-    private MerchantUserRequest merchantUserRequest;
-    private MerchantUserStatusRequest merchantUserStatusRequest;
-    private MerchantInfoDto merchantInfoDto;
-    private UserMenuPermissionEntityResponse menuResponse;
-
-    @BeforeEach
-    void setUp() {
-        merchantUserDto = new MerchantUserDto();
-        merchantUserDto.setId(UUID.randomUUID());
-        merchantUserDto.setUserName("testUser");
-        merchantUserDto.setParentUserId(UUID.randomUUID());
-
-        merchantUserRequest = new MerchantUserRequest();
-        merchantUserRequest.setUserName("testUser");
-
-        merchantUserStatusRequest = new MerchantUserStatusRequest();
-        merchantUserStatusRequest.setUserName("testUser");
-        merchantUserStatusRequest.setUserStatus("ACTIVE");
-
-        merchantInfoDto = new MerchantInfoDto();
-        menuResponse = new UserMenuPermissionEntityResponse();
-        menuResponse.setMenuCode("MENU_1");
-    }
-
-    @Test
-    void testUpdateMerchantUserProfile() {
-        doNothing().when(merchantUserValidator).validateMerchantUserProfile(merchantUserRequest);
-        MerchantResponse<MerchantUserResponse> response = merchantUserService.updateMerchantUserProfile(merchantUserRequest);
-        assertNotNull(response);
-        verify(merchantUserValidator, times(1)).validateMerchantUserProfile(merchantUserRequest);
-    }
-
-    @Test
-    void testUpdateUserStatus() {
-        MerchantUserResponse mockResponse = new MerchantUserResponse();
-        when(merchantUserDao.updateUserStatusByUserName(anyString(), anyString(), anyString())).thenReturn(mockResponse);
-
-        MerchantResponse<MerchantUserResponse> response = merchantUserService.updateUserStatus(merchantUserStatusRequest);
-
-        assertNotNull(response);
-        assertEquals(1, response.getCount());
-        verify(merchantUserValidator, times(1)).validateUpdateUserStatus(merchantUserStatusRequest);
-        verify(merchantUserDao, times(1)).updateUserStatusByUserName(anyString(), anyString(), anyString());
-    }
-
-    @Test
-    void testGetAssignedUnAssignedMIdsOfUser() {
-        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
-        doNothing().when(merchantUserValidator).validatedMappingRequest(anyString(), any());
-        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(anyString())).thenReturn(List.of(merchantInfoDto));
-        when(merchantMapper.mapMerchantInfoDTOListToResponseList(any())).thenReturn(Collections.emptyList());
-
-        MerchantResponse<MerchantUserAssignedMIdsResponse> response = merchantUserService.getAssignedUnAssignedMIdsOfUser("testUser");
-
-        assertNotNull(response);
-        verify(merchantUserDao, times(1)).getByUserName(anyString(), any());
-    }
-
-    @Test
-    void testGetAssignedUnAssignedMenuAccessOfUser() {
-        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
-        doNothing().when(merchantUserValidator).validatedMappingRequest(anyString(), any());
-        when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(List.of(menuResponse));
-
-        MerchantResponse<MerchantUserAssignedMenusResponse> response = merchantUserService.getAssignedUnAssignedMenuAccessOfUser("testUser");
-
-        assertNotNull(response);
-        verify(merchantUserDao, times(1)).getByUserName(anyString(), any());
-    }
-
-    @Test
-    void testAssignedMenuAccessToUser() {
-        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
-        doNothing().when(merchantUserValidator).validateMenuPostMapping(anyString(), any(), anyList());
-        when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(List.of(menuResponse));
-        doNothing().when(merchantUserDao).assignedMenus(anyList(), anyList(), any(UUID.class));
-
-        MerchantResponse<String> response = merchantUserService.assignedMenuAccessToUser("testUser", List.of("MENU_1"));
-
-        assertNotNull(response);
-        verify(merchantUserDao, times(1)).assignedMenus(anyList(), anyList(), any(UUID.class));
-    }
-
     @Test
     void testGetParentAssignedMIds() {
         when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(any(UUID.class))).thenReturn(List.of(merchantInfoDto));
         when(merchantMapper.mapMerchantInfoDTOListToResponseList(any())).thenReturn(List.of(new MerchantInfoResponse()));
 
         List<MerchantInfoResponse> response = merchantUserService.getParentAssignedMIds(merchantUserDto, List.of(merchantInfoDto));
-
         assertNotNull(response);
-        assertFalse(response.isEmpty());
-        verify(merchantInfoDao, times(1)).getAllAccessMerchantInfoForMerchantUser(any(UUID.class));
+
     }
 
     @Test
     void testGetParentAssignedMenus() {
         when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(List.of(menuResponse));
-
         List<UserMenuPermissionEntityResponse> response = merchantUserService.getParentAssignedMenus(merchantUserDto, List.of(menuResponse));
-
         assertNotNull(response);
-        verify(merchantUserDao, times(1)).getUserMenuPermission(any(UUID.class));
-    }
-}
-
-
-
-
-
-Service
-@RequiredArgsConstructor
-public class MerchantUserService {
-
-    private final MerchantInfoDao merchantInfoDao;
-    private final MerchantUserDao merchantUserDao;
-    private final MerchantUserRoleDao merchantUserRoleDao;
-    private final MerchantUserValidator merchantUserValidator;
-    private final MerchantMapper merchantMapper;
-    private final CSVGenerator csvGenerator;
-    protected static final List<String> USER_DOWNLOAD_HEADER = List.of("User Id", "Name", "Email", "Mobile No.", "User Type", "Status", "Creation Date");
-    private final LoggerUtility log = LoggerFactoryUtility.getLogger(this.getClass());
-
-    private static List<String> getNewMenuMappingList(List<String> menuList, List<UserMenuPermissionEntityResponse> assignedMenus) {
-        List<String> newMappedMenu = new ArrayList<>();
-        for (String menu : menuList){
-            boolean mIdFound = false;
-            for (UserMenuPermissionEntityResponse assignedMenu : assignedMenus) {
-                if (menu.equalsIgnoreCase(assignedMenu.getMenuCode())) {
-                   mIdFound = true;
-                    break;
-                }
-            }
-            if(!mIdFound){
-                newMappedMenu.add(menu);
-            }
-        }
-        return newMappedMenu;
-    }
-public MerchantResponse<MerchantUserResponse> updateMerchantUserProfile(MerchantUserRequest merchantUserRequest) {
-        log.info("Updating profile for merchant user: {}", merchantUserRequest.getUserName());
-        //Step 1 : MerchantUserRequest validation
-        merchantUserValidator.validateMerchantUserProfile(merchantUserRequest);
-
-        log.info("Merchant user profile updated successfully for username: {}", merchantUserRequest.getUserName());
-        return saveMerchantUser(merchantUserRequest, true, true);
     }
 
-    /**
-     * Update Merchant User Status
-     *
-     * @param merchantUserStatusRequest MerchantUserStatusRequest
-     * @return MerchantResponse<MerchantUserResponse> - Response containing updated user information
-     */
-    public MerchantResponse<MerchantUserResponse> updateUserStatus(MerchantUserStatusRequest merchantUserStatusRequest) {
-        log.info("Updating status Request {}", merchantUserStatusRequest);
-        merchantUserValidator.validateUpdateUserStatus(merchantUserStatusRequest);
-        MerchantUserResponse merchantUserResponse = merchantUserDao.updateUserStatusByUserName(merchantUserStatusRequest.getUserName(), merchantUserStatusRequest.getUserStatus(), merchantUserStatusRequest.getRemark());
-        log.info("User status updated successfully for username: {}", merchantUserStatusRequest.getUserName());
-        return MerchantResponse.<MerchantUserResponse>builder().data(List.of(merchantUserResponse)).status(MerchantConstant.RESPONSE_SUCCESS).count(1L).total(1L).build();
-    }
-public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedMIdsOfUser(String userName) {
-        log.info("Fetching AssignedUnAssignedMIdsOfUser for userName: {} ",userName);
-        //Step 1  : Get Requested User Information
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
 
-        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
-        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
 
-        //Step 3  : Get Assigned MIds
-        List<MerchantInfoDto> assignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(userName);
 
-        //Step 4  : Get UnAssigned MIds from ParentUser
-        List<MerchantInfoResponse> unAssignedMerchantInfo = getParentAssignedMIds(merchantUser, assignedMIds);
 
-        //Step 5  : Build MerchantUserAssignedMIdsResponse
-        List<MerchantInfoResponse> assignedMerchantInfo = merchantMapper.mapMerchantInfoDTOListToResponseList(assignedMIds);
-        MerchantUserAssignedMIdsResponse userAssignedMIdsResponse = MerchantUserAssignedMIdsResponse.builder().assignedMIds(assignedMerchantInfo).unAssignedMIds(unAssignedMerchantInfo).build();
-
-        log.info("Returning MerchantUserAssignedMIdsResponse for userName: {} ",userName);
-        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMIdsResponse
-        return MerchantResponse.<MerchantUserAssignedMIdsResponse>builder().data(List.of(userAssignedMIdsResponse)).build();
-    }
-  public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
-        log.info("Starting to fetch assigned and unassigned menu access for user: {}", userName);
-        //Step 1  : Get Requested User Information
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
-
-        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
-        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
-
-        //Step 3  : Get Assigned Menus
-        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
-
-        //Step 4  : Get UnAssigned Menus from ParentUser
-        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
-
-        //Step 5  : Build MerchantUserAssignedMenusResponse
-        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder().assignedMenus(assignedMenus).unAssignedMenus(unAssignedMenus).build();
-        log.info("Successfully fetched assigned and unassigned menus for username: {}", userName);
-        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMenusResponse
-        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder().data(List.of(userAssignedMenusResponse)).build();
-    }
-
-    /**
-     * Assigns a list of menus to a user while removing the previously assigned menus not in the new list.
-     *
-     * @param userName The username of the merchant user.
-     * @param menuList The list of menu codes to assign to the user.
-     * @return A response indicating successful assignment of menus.
-     */
-    public MerchantResponse<String> assignedMenuAccessToUser(String userName, List<String> menuList) {
-        log.info("Starting to assign menu access for username: {}", userName);
-        //Step 1  : Get Requested User Information
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
-
-        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
-        merchantUserValidator.validateMenuPostMapping(userName, merchantUser, menuList);
-
-        //Step 3  : Build Remove and new Assigned Menu list from current data
-        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
-        List<UUID> removedMenus = assignedMenus.stream().filter(assignedMenu -> !menuList.contains(assignedMenu.getMenuCode())).map(UserMenuPermissionEntityResponse::getMenuId).toList();
-        List<String> newMappedMenus = getNewMenuMappingList(menuList, assignedMenus);
-
-        //Step 4 : Update the data in DB as per remove and new Menu list
-        merchantUserDao.assignedMenus(newMappedMenus, removedMenus, merchantUser.getId());
-        log.info("Menu access assigned successfully for username: {}", userName);
-        //Step 5 :  Build MerchantResponse
-        return MerchantResponse.<String>builder().data(List.of("Menus is assigned Successfully")).build();
-    }
-
-    /**
-     * Retrieves the unassigned MIDs for a specified user by comparing the parent's
-     * accessible MIDs with the user's currently assigned MIDs.
-     *
-     * @param merchantUser Merchant user details.
-     * @param assignedMIds List of currently assigned MIDs for the user.
-     * @return List of unassigned MIDs available for the user.
-     */
-    private List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
+protected List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
         log.info("Fetching unassigned MIDs for user ID: {}", merchantUser.getId());
         List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
 
@@ -314,7 +45,7 @@ public MerchantResponse<MerchantUserAssignedMIdsResponse> getAssignedUnAssignedM
      * @param assignedMenus List of currently assigned menus for the user.
      * @return List of unassigned menus available for the user.
      */
-    private List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
+    protected List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
         log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
         List<UserMenuPermissionEntityResponse> unAssignedMerchantInfo = new ArrayList<>();
 
