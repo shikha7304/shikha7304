@@ -1,39 +1,36 @@
-@Test
-void testGetParentAssignedMenus() {
-    // Ensure parentAssignedMenus is mutable
-    List<UserMenuPermissionEntityResponse> parentAssignedMenus = new ArrayList<>(List.of(menuResponse, menuResponse));
-
-    // Mock DAO call to return the mutable list
-    when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(new ArrayList<>(parentAssignedMenus));
-
-    // Invoke the method under test
-    List<UserMenuPermissionEntityResponse> response = merchantUserService.getParentAssignedMenus(merchantUserDto, List.of(menuResponse));
-
-    // Validate the response
-    assertNotNull(response);
-}
-
-
-
-
-
-@Test
-    void testGetParentAssignedMenus() {
-        List<MerchantInfoDto> parentAssignedMids = new ArrayList<>(List.of(merchantInfoDto, merchantInfoDto));
+    @Test
+    void testGetAssignedUnAssignedMenuAccessOfUser() {
+        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
+        doNothing().when(merchantUserValidator).validatedMappingRequest(anyString(), any());
         when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(List.of(menuResponse));
-        List<UserMenuPermissionEntityResponse> response = merchantUserService.getParentAssignedMenus(merchantUserDto, List.of(menuResponse));
+
+        MerchantResponse<MerchantUserAssignedMenusResponse> response = merchantUserService.getAssignedUnAssignedMenuAccessOfUser("testUser");
+
         assertNotNull(response);
+        verify(merchantUserDao, times(1)).getByUserName(anyString(), any());
     }
 
 
-java.lang.UnsupportedOperationException
-	at java.base/java.util.ImmutableCollections.uoe(ImmutableCollections.java:142)
-	at java.base/java.util.ImmutableCollections$AbstractImmutableCollection.removeAll(ImmutableCollections.java:151)
-	at com.epay.merchant.service.MerchantUserService.getParentAssignedMenus(MerchantUserService.java:434)
-	at com.epay.merchant.service.MerchantUserServiceTest.testGetParentAssignedMenus(MerchantUserServiceTest.java:328)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+ public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
+        log.info("Starting to fetch assigned and unassigned menu access for user: {}", userName);
+        //Step 1  : Get Requested User Information
+        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
+
+        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
+        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
+
+        //Step 3  : Get Assigned Menus
+        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
+
+        //Step 4  : Get UnAssigned Menus from ParentUser
+        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
+
+        //Step 5  : Build MerchantUserAssignedMenusResponse
+        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder().assignedMenus(assignedMenus).unAssignedMenus(unAssignedMenus).build();
+        log.info("Successfully fetched assigned and unassigned menus for username: {}", userName);
+        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMenusResponse
+        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder().data(List.of(userAssignedMenusResponse)).build();
+    }
 
 protected List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
         log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
@@ -61,3 +58,14 @@ protected List<UserMenuPermissionEntityResponse> getParentAssignedMenus(Merchant
         log.info("Successfully fetched unassigned menus for user ID: {}", merchantUser.getId());
         return unAssignedMerchantInfo;
     }
+
+java.lang.UnsupportedOperationException
+	at java.base/java.util.ImmutableCollections.uoe(ImmutableCollections.java:142)
+	at java.base/java.util.ImmutableCollections$AbstractImmutableCollection.removeAll(ImmutableCollections.java:151)
+	at com.epay.merchant.service.MerchantUserService.getParentAssignedMIds(MerchantUserService.java:408)
+	at com.epay.merchant.service.MerchantUserServiceTest.testGetParentAssignedMIds(MerchantUserServiceTest.java:318)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
