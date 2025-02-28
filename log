@@ -1,3 +1,24 @@
+@Test
+void testGetParentAssignedMIds() {
+    // Create a mutable list for parentAssignedMids
+    List<MerchantInfoDto> parentAssignedMids = new ArrayList<>(List.of(merchantInfoDto, merchantInfoDto));
+
+    // Mock DAO call to return the mutable list
+    when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(any(UUID.class))).thenReturn(parentAssignedMids);
+
+    // Mock the mapper call
+    when(merchantMapper.mapMerchantInfoDTOListToResponseList(any())).thenReturn(List.of(new MerchantInfoResponse()));
+
+    // Invoke the method under test
+    List<MerchantInfoResponse> response = merchantUserService.getParentAssignedMIds(merchantUserDto, List.of(merchantInfoDto));
+
+    // Validate the response
+    assertNotNull(response);
+}
+
+
+
+
 protected List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
         log.info("Fetching unassigned MIDs for user ID: {}", merchantUser.getId());
         List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
