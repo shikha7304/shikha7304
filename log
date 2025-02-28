@@ -28,3 +28,17 @@ java.lang.UnsupportedOperationException
 
 
 > Task :test
+
+  
+    @Test
+    void testGetParentAssignedMIds() {
+        
+        
+         List<MerchantInfoDto> parentAssignedMids = List.of(merchantInfoDto,merchantInfoDto);
+        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(any(UUID.class))).thenReturn(parentAssignedMids);
+        when(merchantMapper.mapMerchantInfoDTOListToResponseList(any())).thenReturn(List.of(new MerchantInfoResponse()));
+
+        List<MerchantInfoResponse> response = merchantUserService.getParentAssignedMIds(merchantUserDto, List.of(merchantInfoDto));
+        assertNotNull(response);
+
+    }
