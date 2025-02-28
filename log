@@ -15,3 +15,16 @@ protected List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merch
         log.info("Successfully fetched unassigned MIDs for user ID: {}", merchantUser.getId());
         return unAssignedMerchantInfo;
     }
+2025-02-27 22:43:14.605 INFO | com.epay.merchant.service.MerchantUserService:400 | principal=  | scenario= | operation= | correlation= | getParentAssignedMIds | Fetching unassigned MIDs for user ID: f16f7c50-3d32-4ac3-a4d3-32f2467e4384
+
+java.lang.UnsupportedOperationException
+	at java.base/java.util.ImmutableCollections.uoe(ImmutableCollections.java:142)
+	at java.base/java.util.ImmutableCollections$AbstractImmutableCollection.removeAll(ImmutableCollections.java:151)
+	at com.epay.merchant.service.MerchantUserService.getParentAssignedMIds(MerchantUserService.java:408)
+	at com.epay.merchant.service.MerchantUserServiceTest.testGetParentAssignedMIds(MerchantUserServiceTest.java:318)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+> Task :test
