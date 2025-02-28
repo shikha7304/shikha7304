@@ -1,96 +1,78 @@
+public class MerchantBankDao {
 
-@Test
-void testGetAssignedUnAssignedMenuAccessOfUser() {
-    // Mocking merchantUserDao to return a valid MerchantUserDto
-    when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
+    private final MerchantBankAccountRepository merchantBankAccountRepository;
+    private final AlertDao alertDao;
+    private final MerchantMapper mapper;
+    private final MerchantConfig merchantConfig;
 
-    // Mocking merchantUserValidator to do nothing
-    doNothing().when(merchantUserValidator).validatedMappingRequest(anyString(), any());
-
-    // Ensure getUserMenuPermission returns a **mutable list**
-    when(merchantUserDao.getUserMenuPermission(any(UUID.class)))
-        .thenReturn(new ArrayList<>(List.of(menuResponse))); // Convert to mutable list
-
-    // Execute the service method
-    MerchantResponse<MerchantUserAssignedMenusResponse> response = merchantUserService.getAssignedUnAssignedMenuAccessOfUser("testUser");
-
-    // Assertions
-    assertNotNull(response);
-    verify(merchantUserDao, times(1)).getByUserName(anyString(), any());
-}
-
-
-
-
-
-@Test
-    void testGetAssignedUnAssignedMenuAccessOfUser() {
-        when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
-        doNothing().when(merchantUserValidator).validatedMappingRequest(anyString(), any());
-        when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(List.of(menuResponse));
-
-        MerchantResponse<MerchantUserAssignedMenusResponse> response = merchantUserService.getAssignedUnAssignedMenuAccessOfUser("testUser");
-
-        assertNotNull(response);
-        verify(merchantUserDao, times(1)).getByUserName(anyString(), any());
+    /**
+     * Saves or updates a merchant bank account.
+     * This method maps the provided DTO to an entity, decrypts and masks the account number,
+     * checks whether the account is the primary one, and then saves it to the database.
+     *
+     * @param merchantBankAccountDto The DTO representing the merchant bank account to be saved.
+     * @param isCreate               Indicates if the operation is a creation (true) or update (false).
+     */
+    @Transactional
+    public void saveMerchantBankAccount(MerchantBankAccountDto merchantBankAccountDto, boolean isCreate) {
+        MerchantBankAccount merchantBankAccount = mapper.mapDtoToEntity(merchantBankAccountDto);
+        //Before masking decrypt the account Number
+        String accountNumber = decryptValue(merchantConfig.getDecryptionKey(), merchantBankAccountDto.getAccountNumber());
+        //Masking accountNumber
+        merchantBankAccount.setAccountNumberMasked(maskAccountNumber(accountNumber));
+        checkPrimaryAccountAndUpdate(merchantBankAccount);
+        saveMerchantBankAccount(isCreate, merchantBankAccount);
     }
 
-
- public MerchantResponse<MerchantUserAssignedMenusResponse> getAssignedUnAssignedMenuAccessOfUser(String userName) {
-        log.info("Starting to fetch assigned and unassigned menu access for user: {}", userName);
-        //Step 1  : Get Requested User Information
-        MerchantUserDto merchantUser = merchantUserDao.getByUserName(userName, UserStatus.ACTIVE);
-
-        //Step 2: Get LoggedIn USer Information to validated with requested Us̥er Parent data
-        merchantUserValidator.validatedMappingRequest(userName, merchantUser);
-
-        //Step 3  : Get Assigned Menus
-        List<UserMenuPermissionEntityResponse> assignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getId());
-
-        //Step 4  : Get UnAssigned Menus from ParentUser
-        List<UserMenuPermissionEntityResponse> unAssignedMenus = getParentAssignedMenus(merchantUser, assignedMenus);
-
-        //Step 5  : Build MerchantUserAssignedMenusResponse
-        MerchantUserAssignedMenusResponse userAssignedMenusResponse = MerchantUserAssignedMenusResponse.builder().assignedMenus(assignedMenus).unAssignedMenus(unAssignedMenus).build();
-        log.info("Successfully fetched assigned and unassigned menus for username: {}", userName);
-        //Step 6 :  Build MerchantResponse Object of MerchantUserAssignedMenusResponse
-        return MerchantResponse.<MerchantUserAssignedMenusResponse>builder().data(List.of(userAssignedMenusResponse)).build();
+    /**
+     * Retrieves a list of merchant bank accounts for a given merchant ID (mId).
+     * The list is paginated using the provided Pageable object.
+     *
+     * @param mId      The merchant ID whose bank accounts are to be retrieved.
+     * @param pageable The Pageable object for pagination.
+     * @return A list of MerchantBankAccountDto objects representing the merchant's bank accounts.
+     */
+    public Page<MerchantBankAccountDto> getMerchantBankAccountByMId(String mId, Pageable pageable) {
+        Page<MerchantBankAccount> merchantBankAccounts = merchantBankAccountRepository.findAllBymId(mId, pageable);
+        return merchantBankAccounts.map(this::convertEntityToDTO);
+    }
+public MerchantBankAccountDto getAccountByAccountUniqueIdentifier(String accountUniqueIdentifier) {
+        MerchantBankAccount merchantBankAccount = getMerchantBankAccount(accountUniqueIdentifier);
+        return mapper.mapEntityToDto(merchantBankAccount);
+    }
+ private MerchantBankAccount getMerchantBankAccount(String accountUniqueIdentifier) {
+        return merchantBankAccountRepository.findByAccountUniqueIdentifier(accountUniqueIdentifier).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Account Information")));
     }
 
-protected List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
-        log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
-        List<UserMenuPermissionEntityResponse> unAssignedMerchantInfo = new ArrayList<>();
+    /**
+     * Converts a MerchantInfo entity to a MerchantInfoDto.
+     *
+     * @param merchantInfo The MerchantInfo entity to convert.
+     * @return A MerchantInfoDto object representing the merchant information.
+     */
+    private MerchantInfoDto convertEntityToDTO(MerchantInfo merchantInfo) {
+        return mapper.mapMerchantInfoEntityToMerchantInfoDto(merchantInfo);
+    }
+ private void saveMerchantBankAccount(boolean isCreate, MerchantBankAccount merchantBankAccount) {
+        merchantBankAccount.setStatus(AccountStatus.APPROVAL_PENDING);
+        if (!isCreate) {
+            setMerchantAccountDBValueOnUpdate(merchantBankAccount);
+        }
+        merchantBankAccountRepository.save(merchantBankAccount);
+    }
 
-        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
-            //Step 2: Get Parent Assigned MIDs List
-            List<UserMenuPermissionEntityResponse> parentAssignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getParentUserId());
-
-            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
-            parentAssignedMenus.removeAll(assignedMenus);
-            for (UserMenuPermissionEntityResponse p : parentAssignedMenus) {
-                boolean isFound = false;
-                for (UserMenuPermissionEntityResponse a : assignedMenus) {
-                    if (a.getMenuCode().equalsIgnoreCase(p.getMenuCode())) {
-                        isFound = true;
-                        break;
-                    }
-                }
-                if(!isFound) {
-                    unAssignedMerchantInfo.add(p);
-                }
+    /**
+     * Checks if the given bank account is the primary account for the merchant.
+     * If it is, the previous primary account is updated to no longer be primary.
+     *
+     * @param merchantBankAccount The MerchantBankAccount entity to check and update.
+     */
+    private void checkPrimaryAccountAndUpdate(MerchantBankAccount merchantBankAccount) {
+        if (merchantBankAccount.isPrimary()) {
+            Optional<MerchantBankAccount> merchantPrimaryBankAccount = merchantBankAccountRepository.findBymIdAndIsPrimaryTrue(merchantBankAccount.getMId());
+            if (merchantPrimaryBankAccount.isPresent()) {
+                merchantPrimaryBankAccount.get().setPrimary(false);
+                merchantBankAccountRepository.save(merchantPrimaryBankAccount.get());
             }
         }
-        log.info("Successfully fetched unassigned menus for user ID: {}", merchantUser.getId());
-        return unAssignedMerchantInfo;
     }
-
-java.lang.UnsupportedOperationException
-	at java.base/java.util.ImmutableCollections.uoe(ImmutableCollections.java:142)
-	at java.base/java.util.ImmutableCollections$AbstractImmutableCollection.removeAll(ImmutableCollections.java:151)
-	at com.epay.merchant.service.MerchantUserService.getParentAssignedMIds(MerchantUserService.java:408)
-	at com.epay.merchant.service.MerchantUserServiceTest.testGetParentAssignedMIds(MerchantUserServiceTest.java:318)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-
-
