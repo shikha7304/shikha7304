@@ -1,65 +1,44 @@
-@Test
-void testGetParentAssignedMIds() {
-    // Create a mutable list for parentAssignedMids
-    List<MerchantInfoDto> parentAssignedMids = new ArrayList<>(List.of(merchantInfoDto, merchantInfoDto));
-
-    // Mock DAO call to return the mutable list
-    when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(any(UUID.class))).thenReturn(parentAssignedMids);
-
-    // Mock the mapper call
-    when(merchantMapper.mapMerchantInfoDTOListToResponseList(any())).thenReturn(List.of(new MerchantInfoResponse()));
-
-    // Invoke the method under test
-    List<MerchantInfoResponse> response = merchantUserService.getParentAssignedMIds(merchantUserDto, List.of(merchantInfoDto));
-
-    // Validate the response
-    assertNotNull(response);
-}
-
-
-
-
-protected List<MerchantInfoResponse> getParentAssignedMIds(MerchantUserDto merchantUser, List<MerchantInfoDto> assignedMIds) {
-        log.info("Fetching unassigned MIDs for user ID: {}", merchantUser.getId());
-        List<MerchantInfoResponse> unAssignedMerchantInfo = new ArrayList<>();
-
-        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
-            //Step 2: Get Parent Assigned MIDs List
-            List<MerchantInfoDto> parentAssignedMIds = merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(merchantUser.getParentUserId());
-
-            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
-            parentAssignedMIds.removeAll(assignedMIds);
-            if (CollectionUtils.isNotEmpty(parentAssignedMIds)) {
-                unAssignedMerchantInfo.addAll(merchantMapper.mapMerchantInfoDTOListToResponseList(parentAssignedMIds));
-            }
-        }
-        log.info("Successfully fetched unassigned MIDs for user ID: {}", merchantUser.getId());
-        return unAssignedMerchantInfo;
+ @Test
+    void testGetParentAssignedMenus() {
+        List<MerchantInfoDto> parentAssignedMids = new ArrayList<>(List.of(merchantInfoDto, merchantInfoDto));
+        when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(List.of(menuResponse));
+        List<UserMenuPermissionEntityResponse> response = merchantUserService.getParentAssignedMenus(merchantUserDto, List.of(menuResponse));
+        assertNotNull(response);
     }
-2025-02-27 22:43:14.605 INFO | com.epay.merchant.service.MerchantUserService:400 | principal=  | scenario= | operation= | correlation= | getParentAssignedMIds | Fetching unassigned MIDs for user ID: f16f7c50-3d32-4ac3-a4d3-32f2467e4384
+
 
 java.lang.UnsupportedOperationException
 	at java.base/java.util.ImmutableCollections.uoe(ImmutableCollections.java:142)
 	at java.base/java.util.ImmutableCollections$AbstractImmutableCollection.removeAll(ImmutableCollections.java:151)
-	at com.epay.merchant.service.MerchantUserService.getParentAssignedMIds(MerchantUserService.java:408)
-	at com.epay.merchant.service.MerchantUserServiceTest.testGetParentAssignedMIds(MerchantUserServiceTest.java:318)
+	at com.epay.merchant.service.MerchantUserService.getParentAssignedMenus(MerchantUserService.java:434)
+	at com.epay.merchant.service.MerchantUserServiceTest.testGetParentAssignedMenus(MerchantUserServiceTest.java:328)
 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 
+protected List<UserMenuPermissionEntityResponse> getParentAssignedMenus(MerchantUserDto merchantUser, List<UserMenuPermissionEntityResponse> assignedMenus) {
+        log.info("Fetching unassigned menus for user ID: {}", merchantUser.getId());
+        List<UserMenuPermissionEntityResponse> unAssignedMerchantInfo = new ArrayList<>();
 
-> Task :test
+        if (ObjectUtils.isNotEmpty(merchantUser.getParentUserId())) {
+            //Step 2: Get Parent Assigned MIDs List
+            List<UserMenuPermissionEntityResponse> parentAssignedMenus = merchantUserDao.getUserMenuPermission(merchantUser.getParentUserId());
 
-  
-    @Test
-    void testGetParentAssignedMIds() {
-        
-        
-         List<MerchantInfoDto> parentAssignedMids = List.of(merchantInfoDto,merchantInfoDto);
-        when(merchantInfoDao.getAllAccessMerchantInfoForMerchantUser(any(UUID.class))).thenReturn(parentAssignedMids);
-        when(merchantMapper.mapMerchantInfoDTOListToResponseList(any())).thenReturn(List.of(new MerchantInfoResponse()));
-
-        List<MerchantInfoResponse> response = merchantUserService.getParentAssignedMIds(merchantUserDto, List.of(merchantInfoDto));
-        assertNotNull(response);
-
+            //Step 3: Remove Assigned MIDs List from Parent Assigned MIDs List
+            parentAssignedMenus.removeAll(assignedMenus);
+            for (UserMenuPermissionEntityResponse p : parentAssignedMenus) {
+                boolean isFound = false;
+                for (UserMenuPermissionEntityResponse a : assignedMenus) {
+                    if (a.getMenuCode().equalsIgnoreCase(p.getMenuCode())) {
+                        isFound = true;
+                        break;
+                    }
+                }
+                if(!isFound) {
+                    unAssignedMerchantInfo.add(p);
+                }
+            }
+        }
+        log.info("Successfully fetched unassigned menus for user ID: {}", merchantUser.getId());
+        return unAssignedMerchantInfo;
     }
