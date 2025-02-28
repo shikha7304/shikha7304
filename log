@@ -1,4 +1,29 @@
-    @Test
+
+@Test
+void testGetAssignedUnAssignedMenuAccessOfUser() {
+    // Mocking merchantUserDao to return a valid MerchantUserDto
+    when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
+
+    // Mocking merchantUserValidator to do nothing
+    doNothing().when(merchantUserValidator).validatedMappingRequest(anyString(), any());
+
+    // Ensure getUserMenuPermission returns a **mutable list**
+    when(merchantUserDao.getUserMenuPermission(any(UUID.class)))
+        .thenReturn(new ArrayList<>(List.of(menuResponse))); // Convert to mutable list
+
+    // Execute the service method
+    MerchantResponse<MerchantUserAssignedMenusResponse> response = merchantUserService.getAssignedUnAssignedMenuAccessOfUser("testUser");
+
+    // Assertions
+    assertNotNull(response);
+    verify(merchantUserDao, times(1)).getByUserName(anyString(), any());
+}
+
+
+
+
+
+@Test
     void testGetAssignedUnAssignedMenuAccessOfUser() {
         when(merchantUserDao.getByUserName(anyString(), any())).thenReturn(merchantUserDto);
         doNothing().when(merchantUserValidator).validatedMappingRequest(anyString(), any());
