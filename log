@@ -1,4 +1,23 @@
- @Test
+@Test
+void testGetParentAssignedMenus() {
+    // Ensure parentAssignedMenus is mutable
+    List<UserMenuPermissionEntityResponse> parentAssignedMenus = new ArrayList<>(List.of(menuResponse, menuResponse));
+
+    // Mock DAO call to return the mutable list
+    when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(new ArrayList<>(parentAssignedMenus));
+
+    // Invoke the method under test
+    List<UserMenuPermissionEntityResponse> response = merchantUserService.getParentAssignedMenus(merchantUserDto, List.of(menuResponse));
+
+    // Validate the response
+    assertNotNull(response);
+}
+
+
+
+
+
+@Test
     void testGetParentAssignedMenus() {
         List<MerchantInfoDto> parentAssignedMids = new ArrayList<>(List.of(merchantInfoDto, merchantInfoDto));
         when(merchantUserDao.getUserMenuPermission(any(UUID.class))).thenReturn(List.of(menuResponse));
