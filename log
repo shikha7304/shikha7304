@@ -1,4 +1,72 @@
-    public static byte[] generateHash(byte @NonNull [] data, @NonNull HashAlgorithm algorithm) throws EncryptionDecryptionException {
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+
+class HashingServiceTest {
+
+    @Test
+    void testGenerateHashSuccess() throws EncryptionDecryptionException {
+        String input = "TestData";
+        byte[] inputData = input.getBytes(StandardCharsets.UTF_8);
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        byte[] hashedData = HashingService.generateHash(inputData, algorithm);
+        assertNotNull(hashedData);
+        assertTrue(hashedData.length > 0);
+    }
+
+    @Test
+    void testGenerateHashWithNullDataThrowsException() {
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(null, algorithm));
+    }
+
+    @Test
+    void testGenerateHashWithNullAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(inputData, null));
+    }
+
+    @Test
+    void testGenerateHashWithInvalidAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        HashAlgorithm invalidAlgorithm = new HashAlgorithm("INVALID"); // Simulating an invalid algorithm
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> HashingService.generateHash(inputData, invalidAlgorithm)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+    }
+
+    @Test
+    void testGenerateHashWithGenericException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        HashAlgorithm algorithm = new HashAlgorithm("") { // Simulating a failure scenario
+            @Override
+            public String getAlgorithmName() {
+                throw new RuntimeException("Unexpected error");
+            }
+        };
+
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> HashingService.generateHash(inputData, algorithm)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, exception.getErrorCode());
+    }
+}
+
+
+
+
+
+
+
+public static byte[] generateHash(byte @NonNull [] data, @NonNull HashAlgorithm algorithm) throws EncryptionDecryptionException {
         try {
             log.debug("HashingService :: generateHash  data {}, algorithm {}", data, algorithm);
             MessageDigest digest = MessageDigest.getInstance(algorithm.getAlgorithmName());
