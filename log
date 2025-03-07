@@ -1,194 +1,45 @@
-@ExtendWith(MockitoExtension.class)
-class MerchantBankDaoTest {
+    public static byte[] generateHash(byte @NonNull [] data, @NonNull HashAlgorithm algorithm) throws EncryptionDecryptionException {
+        try {
+            log.debug("HashingService :: generateHash  data {}, algorithm {}", data, algorithm);
+            MessageDigest digest = MessageDigest.getInstance(algorithm.getAlgorithmName());
+            return digest.digest(data);
+        } catch (NoSuchAlgorithmException e) {
+            log.error("HashingService :: generateHash {}", e);
+            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.INVALID_ERROR_CODE, MessageFormat.format(EncryptionDecryptionConstants.INVALID_ERROR_MESSAGE, "hash algorithm"));
+        } catch (Exception e) {
+            log.error("HashingService :: generateHash {}", e);
+            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, EncryptionDecryptionConstants.GENERIC_ERROR_MESSAGE);
+        }
+    }
 
-    @InjectMocks
-    private MerchantBankDao merchantBankDao;
-
-    @Mock
-    private MerchantBankAccountRepository merchantBankAccountRepository;
-
-    @Mock
-    private AlertDao alertDao;
-
-    @Mock
-    private MerchantMapper mapper;
-
-    @Mock
-    private MerchantConfig merchantConfig;
+}
+public class HashingServiceTest {
 
     @Test
-    void testSaveMerchantBankAccount() {
-        // Arrange
-        MerchantBankAccountDto dto = new MerchantBankAccountDto();
-        dto.setAccountNumber("encryptedAccount123");
+    void testGenerateHashSuccess() throws EncryptionDecryptionException {
+        String input = "TestData";
+        byte[] inputData = input.getBytes(StandardCharsets.UTF_8);
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        byte[] hashedData = HashingService.generateHash(inputData, algorithm);
+        assertNotNull(hashedData);
+        assertTrue(hashedData.length > 0);
+    }
 
-        MerchantBankAccount entity = new MerchantBankAccount();
-        entity.setMId("merchant123");
 
-        when(mapper.mapDtoToEntity(dto)).thenReturn(entity);
-        when(merchantConfig.getDecryptionKey()).thenReturn("testKey");
 
-        // Mock decryption logic
-        String decryptedAccountNumber = "1234567890";
-        doReturn(decryptedAccountNumber).when(merchantBankDao).decryptValue(anyString(), anyString());
-
-        // Act
-        merchantBankDao.saveMerchantBankAccount(dto, true);
-
-        // Assert
-        verify(merchantBankAccountRepository, times(1)).save(any(MerchantBankAccount.class));
+    @Test
+    void testGenerateHashWithNullDataThrowsException() {
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(null, algorithm));
     }
 
     @Test
-    void testGetMerchantBankAccountByMId() {
-        // Arrange
-        String mId = "merchant123";
-        Pageable pageable = PageRequest.of(0, 10);
+    void testGenerateHashWithNullAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
 
-        MerchantBankAccount entity = new MerchantBankAccount();
-        Page<MerchantBankAccount> page = new PageImpl<>(List.of(entity));
-
-        when(merchantBankAccountRepository.findAllBymId(mId, pageable)).thenReturn(page);
-        when(mapper.mapEntityToDto(any())).thenReturn(new MerchantBankAccountDto());
-
-        // Act
-        Page<MerchantBankAccountDto> result = merchantBankDao.getMerchantBankAccountByMId(mId, pageable);
-
-        // Assert
-        assertNotNull(result);
-        assertEquals(1, result.getContent().size());
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(inputData, null));
     }
 
-    @Test
-    void testGetAccountByAccountUniqueIdentifier() {
-        // Arrange
-        String accountUniqueIdentifier = "unique123";
-        MerchantBankAccount entity = new MerchantBankAccount();
-        when(merchantBankAccountRepository.findByAccountUniqueIdentifier(accountUniqueIdentifier))
-            .thenReturn(Optional.of(entity));
-        when(mapper.mapEntityToDto(entity)).thenReturn(new MerchantBankAccountDto());
 
-        // Act
-        MerchantBankAccountDto result = merchantBankDao.getAccountByAccountUniqueIdentifier(accountUniqueIdentifier);
-
-        // Assert
-        assertNotNull(result);
-        verify(merchantBankAccountRepository, times(1)).findByAccountUniqueIdentifier(accountUniqueIdentifier);
-    }
-
-    @Test
-    void testGetAccountByAccountUniqueIdentifier_NotFound() {
-        // Arrange
-        String accountUniqueIdentifier = "invalid123";
-        when(merchantBankAccountRepository.findByAccountUniqueIdentifier(accountUniqueIdentifier))
-            .thenReturn(Optional.empty());
-
-        // Act & Assert
-        assertThrows(MerchantException.class, () -> merchantBankDao.getAccountByAccountUniqueIdentifier(accountUniqueIdentifier));
-    }
-
-    @Test
-    void testCheckPrimaryAccountAndUpdate() {
-        // Arrange
-        MerchantBankAccount entity = new MerchantBankAccount();
-        entity.setPrimary(true);
-        entity.setMId("merchant123");
-
-        MerchantBankAccount existingPrimaryAccount = new MerchantBankAccount();
-        existingPrimaryAccount.setPrimary(true);
-        existingPrimaryAccount.setMId("merchant123");
-
-        when(merchantBankAccountRepository.findBymIdAndIsPrimaryTrue("merchant123"))
-            .thenReturn(Optional.of(existingPrimaryAccount));
-
-        // Act
-        merchantBankDao.checkPrimaryAccountAndUpdate(entity);
-
-        // Assert
-        verify(merchantBankAccountRepository, times(1)).save(existingPrimaryAccount);
-    }
 }
 
-
-
-
-
-
-public class MerchantBankDao {
-
-    private final MerchantBankAccountRepository merchantBankAccountRepository;
-    private final AlertDao alertDao;
-    private final MerchantMapper mapper;
-    private final MerchantConfig merchantConfig;
-
-    /**
-     * Saves or updates a merchant bank account.
-     * This method maps the provided DTO to an entity, decrypts and masks the account number,
-     * checks whether the account is the primary one, and then saves it to the database.
-     *
-     * @param merchantBankAccountDto The DTO representing the merchant bank account to be saved.
-     * @param isCreate               Indicates if the operation is a creation (true) or update (false).
-     */
-    @Transactional
-    public void saveMerchantBankAccount(MerchantBankAccountDto merchantBankAccountDto, boolean isCreate) {
-        MerchantBankAccount merchantBankAccount = mapper.mapDtoToEntity(merchantBankAccountDto);
-        //Before masking decrypt the account Number
-        String accountNumber = decryptValue(merchantConfig.getDecryptionKey(), merchantBankAccountDto.getAccountNumber());
-        //Masking accountNumber
-        merchantBankAccount.setAccountNumberMasked(maskAccountNumber(accountNumber));
-        checkPrimaryAccountAndUpdate(merchantBankAccount);
-        saveMerchantBankAccount(isCreate, merchantBankAccount);
-    }
-
-    /**
-     * Retrieves a list of merchant bank accounts for a given merchant ID (mId).
-     * The list is paginated using the provided Pageable object.
-     *
-     * @param mId      The merchant ID whose bank accounts are to be retrieved.
-     * @param pageable The Pageable object for pagination.
-     * @return A list of MerchantBankAccountDto objects representing the merchant's bank accounts.
-     */
-    public Page<MerchantBankAccountDto> getMerchantBankAccountByMId(String mId, Pageable pageable) {
-        Page<MerchantBankAccount> merchantBankAccounts = merchantBankAccountRepository.findAllBymId(mId, pageable);
-        return merchantBankAccounts.map(this::convertEntityToDTO);
-    }
-public MerchantBankAccountDto getAccountByAccountUniqueIdentifier(String accountUniqueIdentifier) {
-        MerchantBankAccount merchantBankAccount = getMerchantBankAccount(accountUniqueIdentifier);
-        return mapper.mapEntityToDto(merchantBankAccount);
-    }
- private MerchantBankAccount getMerchantBankAccount(String accountUniqueIdentifier) {
-        return merchantBankAccountRepository.findByAccountUniqueIdentifier(accountUniqueIdentifier).orElseThrow(() -> new MerchantException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Account Information")));
-    }
-
-    /**
-     * Converts a MerchantInfo entity to a MerchantInfoDto.
-     *
-     * @param merchantInfo The MerchantInfo entity to convert.
-     * @return A MerchantInfoDto object representing the merchant information.
-     */
-    private MerchantInfoDto convertEntityToDTO(MerchantInfo merchantInfo) {
-        return mapper.mapMerchantInfoEntityToMerchantInfoDto(merchantInfo);
-    }
- private void saveMerchantBankAccount(boolean isCreate, MerchantBankAccount merchantBankAccount) {
-        merchantBankAccount.setStatus(AccountStatus.APPROVAL_PENDING);
-        if (!isCreate) {
-            setMerchantAccountDBValueOnUpdate(merchantBankAccount);
-        }
-        merchantBankAccountRepository.save(merchantBankAccount);
-    }
-
-    /**
-     * Checks if the given bank account is the primary account for the merchant.
-     * If it is, the previous primary account is updated to no longer be primary.
-     *
-     * @param merchantBankAccount The MerchantBankAccount entity to check and update.
-     */
-    private void checkPrimaryAccountAndUpdate(MerchantBankAccount merchantBankAccount) {
-        if (merchantBankAccount.isPrimary()) {
-            Optional<MerchantBankAccount> merchantPrimaryBankAccount = merchantBankAccountRepository.findBymIdAndIsPrimaryTrue(merchantBankAccount.getMId());
-            if (merchantPrimaryBankAccount.isPresent()) {
-                merchantPrimaryBankAccount.get().setPrimary(false);
-                merchantBankAccountRepository.save(merchantPrimaryBankAccount.get());
-            }
-        }
-    }
