@@ -1,3 +1,88 @@
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+class HashingServiceTest {
+
+    @Test
+    void testGenerateHashSuccess() throws EncryptionDecryptionException {
+        String input = "TestData";
+        byte[] inputData = input.getBytes(StandardCharsets.UTF_8);
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        byte[] hashedData = HashingService.generateHash(inputData, algorithm);
+        assertNotNull(hashedData);
+        assertTrue(hashedData.length > 0);
+    }
+
+    @Test
+    void testGenerateHashWithNullDataThrowsException() {
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(null, algorithm));
+    }
+
+    @Test
+    void testGenerateHashWithNullAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(inputData, null));
+    }
+
+    @Test
+    void testGenerateHashWithInvalidAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Using reflection to pass an invalid algorithm name (forcing NoSuchAlgorithmException)
+        HashAlgorithm invalidAlgorithm = HashAlgorithm.SHA_256; // Just for reference, we override below
+        HashAlgorithm spyAlgorithm = new HashAlgorithm() {
+            @Override
+            public String getAlgorithmName() {
+                return "INVALID_ALGORITHM";
+            }
+        };
+
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> HashingService.generateHash(inputData, spyAlgorithm)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+    }
+
+    @Test
+    void testGenerateHashWithGenericException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+
+        // Mock MessageDigest to throw a RuntimeException
+        try {
+            MessageDigest mockDigest = MessageDigest.getInstance(algorithm.getAlgorithmName()) {
+                @Override
+                public byte[] digest(byte[] input) {
+                    throw new RuntimeException("Unexpected error");
+                }
+            };
+
+            EncryptionDecryptionException exception = assertThrows(
+                EncryptionDecryptionException.class,
+                () -> mockDigest.digest(inputData) // Simulating inside generateHash
+            );
+
+            assertEquals(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, exception.getErrorCode());
+
+        } catch (NoSuchAlgorithmException e) {
+            fail("Test setup failed: Could not instantiate MessageDigest");
+        }
+    }
+}
+
+
+
+
+
+
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import java.nio.charset.StandardCharsets;
