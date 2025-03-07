@@ -1,5 +1,58 @@
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+
+class HashingServiceTest {
+
+    @Test
+    void testGenerateHashWithInvalidAlgorithmThrowsException() throws Exception {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Use Reflection to create a fake HashAlgorithm instance with an invalid algorithm name
+        HashAlgorithm invalidAlgorithm = createInvalidHashAlgorithm("INVALID_ALGORITHM");
+
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> HashingService.generateHash(inputData, invalidAlgorithm)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+    }
+
+    @Test
+    void testGenerateHashWithGenericException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Force a generic exception by passing null as input data
+        assertThrows(NullPointerException.class, () ->
+            HashingService.generateHash(null, HashAlgorithm.SHA_256)
+        );
+    }
+
+    // Helper method to create an invalid HashAlgorithm instance using reflection
+    private HashAlgorithm createInvalidHashAlgorithm(String algorithmName) throws Exception {
+        Constructor<HashAlgorithm> constructor = HashAlgorithm.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        HashAlgorithm fakeAlgorithm = constructor.newInstance();
+
+        // Set the algorithm name field to an invalid value
+        Field field = HashAlgorithm.class.getDeclaredField("algorithmName");
+        field.setAccessible(true);
+        field.set(fakeAlgorithm, algorithmName);
+
+        return fakeAlgorithm;
+    }
+}
+
+
+
+
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
