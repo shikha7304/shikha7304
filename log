@@ -1,4 +1,24 @@
 
+
+
+
+    public static byte[] generateHash(byte @NonNull [] data, @NonNull HashAlgorithm algorithm) throws EncryptionDecryptionException {
+        try {
+            log.debug("HashingService :: generateHash  data {}, algorithm {}", data, algorithm);
+            MessageDigest digest = MessageDigest.getInstance(algorithm.getAlgorithmName());
+            return digest.digest(data);
+        } catch (NoSuchAlgorithmException e) {
+            log.error("HashingService :: generateHash {}", e);
+            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.INVALID_ERROR_CODE, MessageFormat.format(EncryptionDecryptionConstants.INVALID_ERROR_MESSAGE, "hash algorithm"));
+        } catch (Exception e) {
+            log.error("HashingService :: generateHash {}", e);
+            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, EncryptionDecryptionConstants.GENERIC_ERROR_MESSAGE);
+        }
+    }
+
+
+
+############
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import java.nio.charset.StandardCharsets;
