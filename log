@@ -1,3 +1,89 @@
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.util.Base64;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class KeyProviderServiceTest {
+
+    @Test
+    void testGetDecryptedMEKSuccess() throws EncryptionDecryptionException {
+        // Sample input data
+        String mek = "encryptedMEK";
+        String kek = "encryptedKEK";
+        String aeK = "encodedAEK";
+        EncryptionDecryptionAlgo algorithm = EncryptionDecryptionAlgo.AES_GCM_NOPADDING;
+        GCMIvLength gcmIvLength = GCMIvLength.BITS_96;
+        GCMTagLength gcmTagLength = GCMTagLength.BITS_128;
+
+        // Expected decrypted values
+        String decodedKeK = "decodedKEK";
+        String decodedMeK = "decodedMEK";
+
+        // Mock static methods
+        try (MockedStatic<DecryptionService> mockedStatic = Mockito.mockStatic(DecryptionService.class)) {
+            // Mock decryptValueByStringKey for KEK and MEK
+            mockedStatic.when(() -> DecryptionService.decryptValueByStringKey(kek, aeK, algorithm, gcmIvLength, gcmTagLength))
+                        .thenReturn(decodedKeK);
+            mockedStatic.when(() -> DecryptionService.decryptValueByStringKey(mek, decodedKeK, algorithm, gcmIvLength, gcmTagLength))
+                        .thenReturn(decodedMeK);
+
+            // Mock decodedValue to return a SecretKey
+            SecretKey expectedSecretKey = new SecretKeySpec(Base64.getDecoder().decode(decodedMeK), "AES");
+            mockedStatic.when(() -> DecryptionService.decodedValue(decodedMeK))
+                        .thenReturn(expectedSecretKey);
+
+            // Call the actual method
+            SecretKey result = KeyProviderService.getDecryptedMEK(mek, kek, aeK, algorithm, gcmIvLength, gcmTagLength);
+
+            // Validate the response
+            assertNotNull(result);
+            assertEquals(expectedSecretKey, result);
+        }
+    }
+
+    @Test
+    void testGetDecryptedMEKThrowsException() {
+        String mek = "encryptedMEK";
+        String kek = "encryptedKEK";
+        String aeK = "encodedAEK";
+        EncryptionDecryptionAlgo algorithm = EncryptionDecryptionAlgo.AES_GCM_NOPADDING;
+        GCMIvLength gcmIvLength = GCMIvLength.BITS_96;
+        GCMTagLength gcmTagLength = GCMTagLength.BITS_128;
+
+        // Mock static methods to throw an exception
+        try (MockedStatic<DecryptionService> mockedStatic = Mockito.mockStatic(DecryptionService.class)) {
+            mockedStatic.when(() -> DecryptionService.decryptValueByStringKey(kek, aeK, algorithm, gcmIvLength, gcmTagLength))
+                        .thenThrow(new EncryptionDecryptionException("DECRYPTION_ERROR", "Decryption failed"));
+
+            // Validate exception is thrown
+            EncryptionDecryptionException exception = assertThrows(
+                EncryptionDecryptionException.class,
+                () -> KeyProviderService.getDecryptedMEK(mek, kek, aeK, algorithm, gcmIvLength, gcmTagLength)
+            );
+
+            assertEquals("DECRYPTION_ERROR", exception.getErrorCode());
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
 public class KeyProviderService {
     private static final LoggerUtility log= LoggerFactoryUtility.getLogger(KeyProviderService.class);
 
