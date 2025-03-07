@@ -16,3 +16,118 @@ public class KeyProviderService {
         return DecryptionService.decodedValue(encodedMeK);
     }
 }
+package com.sbi.epay.encryptdecrypt.service;
+
+
+import com.sbi.epay.encryptdecrypt.constant.EncryptionDecryptionConstants;
+import com.sbi.epay.encryptdecrypt.exception.EncryptionDecryptionException;
+import com.sbi.epay.encryptdecrypt.util.enums.EncryptionDecryptionAlgo;
+import com.sbi.epay.encryptdecrypt.util.enums.GCMIvLength;
+import com.sbi.epay.encryptdecrypt.util.enums.GCMTagLength;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import jdk.jfr.Description;
+import lombok.NonNull;
+
+import javax.crypto.*;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
+
+
+/**
+ * Class Name: DecryptionService
+ * *
+ * Description:This class will be used for  decryption using AES-GSM-NOPADDING algorithm
+ * *
+ * Author: V1018212(Hrishikesh Pandirakar)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Description("This class will be used for  decryption using AES-GSM-NOPADDING algorithm")
+public class DecryptionService {
+    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(DecryptionService.class);
+
+    /**
+     * This method will be used for decryption of Keys .
+     *
+     * @param key          the SecretKey by which we want use for decrypt the given text
+     * @param value        String which we want to decrypt
+     * @param algorithm    EncryptionDecryptionAlgo algorithm
+     * @param gcmIvLength  algorithm iv length
+     * @param gcmTagLength algorithm tag length
+     * @return the String of original encoded KEK
+     */
+    public static String decryptValueByStringKey(String key, String value, @NonNull EncryptionDecryptionAlgo algorithm, @NonNull GCMIvLength gcmIvLength, @NonNull GCMTagLength gcmTagLength) throws EncryptionDecryptionException {
+        log.info("Decryption Service ::  key : {}, value : {}, algorithm : {}, gcmIvLength : {}, gcmTagLength : {}", key, value, algorithm, gcmIvLength, gcmTagLength);
+        return decryptValueBySecretKey(decodedValue(key), value, algorithm, gcmIvLength, gcmTagLength);
+    }
+
+    /**
+     * This method will be used for decryption of Value .
+     *
+     * @param value        String which we want to decrypt
+     * @param key          the SecretKey by which we want use for decrypt the given text
+     * @param algorithm    EncryptionDecryptionAlgo algorithm
+     * @param gcmIvLength  algorithm iv length
+     * @param gcmTagLength algorithm tag length
+     * @return the String of original encoded KEK
+     */
+    public static String decryptValueBySecretKey(@NonNull SecretKey key, @NonNull String value, @NonNull EncryptionDecryptionAlgo algorithm, @NonNull GCMIvLength gcmIvLength, @NonNull GCMTagLength gcmTagLength) throws EncryptionDecryptionException {
+        log.info("Decryption Service ::  key : {}, value : {}, algorithm : {}, gcmIvLength : {}, gcmTagLength : {}", key, value, algorithm, gcmIvLength, gcmTagLength);
+        try {
+            return decryptValue(key, value, algorithm, gcmIvLength, gcmTagLength);
+        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
+                 InvalidAlgorithmParameterException | IllegalArgumentException | UnsupportedOperationException |
+                 IllegalStateException | IllegalBlockSizeException | BadPaddingException e) {
+            log.error("DecryptionService :: decrypt {}", e);
+            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, EncryptionDecryptionConstants.GENERIC_ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * This method will be used for decode SecretKey .
+     *
+     * @param key encoded SecretKey
+     * @return a SecretKey
+     */
+    public static SecretKey decodedValue(String key) {
+        log.debug("DecryptionService :: decodedSecretKey key {}", key);
+        byte[] decodedKey = Base64.getDecoder().decode(key);
+        return new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+    }
+
+    public static String decryptValue(SecretKey key, String value, EncryptionDecryptionAlgo algorithm, GCMIvLength gcmIvLength, GCMTagLength gcmTagLength) throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
+        log.debug("DecryptionService :: decryptKeK key {}, value {}, algorithm {}, gcmIvLength {}, gcmTagLength {}", key, value, algorithm, gcmIvLength, gcmTagLength);
+
+        byte[] decodedData = Base64.getDecoder().decode(value);
+
+        // Dynamically determine IV length based on the provided parameter
+        int ivLength = gcmIvLength.getLengthInBytes();
+
+        // Extract the IV and ciphertext
+        byte[] iv = new byte[ivLength];
+        byte[] ciphertext = new byte[decodedData.length - ivLength];
+        System.arraycopy(decodedData, 0, iv, 0, ivLength);
+        System.arraycopy(decodedData, ivLength, ciphertext, 0, decodedData.length - ivLength);
+
+        // Initialize the Cipher in Decrypt Mode
+        Cipher cipher = Cipher.getInstance(algorithm.getName());
+        GCMParameterSpec gcmSpec = new GCMParameterSpec(gcmTagLength.getLengthInBits(), iv);
+        cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec);
+
+        // Decrypt the ciphertext
+        byte[] plainText = cipher.doFinal(ciphertext);
+
+        // Return the plaintext as a string
+        return new String(plainText, StandardCharsets.UTF_8);
+    }
+
+}
+
