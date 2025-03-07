@@ -1,5 +1,45 @@
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+
+class HashingServiceTest {
+
+    @Test
+    void testGenerateHashWithInvalidAlgorithmThrowsException() throws Exception {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+        
+        // Use Reflection to pass an invalid algorithm
+        Method method = HashAlgorithm.class.getDeclaredMethod("valueOf", String.class);
+        method.setAccessible(true);
+        HashAlgorithm invalidAlgorithm = (HashAlgorithm) method.invoke(null, "INVALID_ALGORITHM");
+
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> HashingService.generateHash(inputData, invalidAlgorithm)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+    }
+
+    @Test
+    void testGenerateHashWithGenericException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Force a generic exception by passing null to an array
+        assertThrows(EncryptionDecryptionException.class, () ->
+            HashingService.generateHash(null, HashAlgorithm.SHA_256)
+        );
+    }
+}
+
+
+
+
+
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 import org.mockito.Mockito;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
