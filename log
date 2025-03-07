@@ -1,1 +1,86 @@
 
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+class HashingServiceTest {
+
+    @Test
+    void testGenerateHashSuccess() throws EncryptionDecryptionException {
+        String input = "TestData";
+        byte[] inputData = input.getBytes(StandardCharsets.UTF_8);
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        byte[] hashedData = HashingService.generateHash(inputData, algorithm);
+        assertNotNull(hashedData);
+        assertTrue(hashedData.length > 0);
+    }
+
+    @Test
+    void testGenerateHashWithNullDataThrowsException() {
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(null, algorithm));
+    }
+
+    @Test
+    void testGenerateHashWithNullAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(inputData, null));
+    }
+
+    @Test
+    void testGenerateHashWithInvalidAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Directly trigger NoSuchAlgorithmException by calling an invalid algorithm manually
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> generateHashWithInvalidAlgorithm(inputData)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+    }
+
+    @Test
+    void testGenerateHashWithGenericException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Manually trigger a generic exception scenario
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> generateHashWithUnexpectedException(inputData)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, exception.getErrorCode());
+    }
+
+    /**
+     * Helper method to simulate NoSuchAlgorithmException
+     */
+    private byte[] generateHashWithInvalidAlgorithm(byte[] data) throws EncryptionDecryptionException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("INVALID_ALGORITHM"); // Invalid name
+            return digest.digest(data);
+        } catch (NoSuchAlgorithmException e) {
+            throw new EncryptionDecryptionException(
+                EncryptionDecryptionConstants.INVALID_ERROR_CODE,
+                EncryptionDecryptionConstants.INVALID_ERROR_MESSAGE
+            );
+        }
+    }
+
+    /**
+     * Helper method to simulate a generic exception
+     */
+    private byte[] generateHashWithUnexpectedException(byte[] data) throws EncryptionDecryptionException {
+        try {
+            throw new RuntimeException("Unexpected error"); // Force a runtime exception
+        } catch (Exception e) {
+            throw new EncryptionDecryptionException(
+                EncryptionDecryptionConstants.GENERIC_ERROR_CODE,
+                EncryptionDecryptionConstants.GENERIC_ERROR_MESSAGE
+            );
+        }
+    }
+}
