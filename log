@@ -1,3 +1,71 @@
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+import org.mockito.Mockito;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
+
+class HashingServiceTest {
+
+    @Test
+    void testGenerateHashSuccess() throws EncryptionDecryptionException {
+        String input = "TestData";
+        byte[] inputData = input.getBytes(StandardCharsets.UTF_8);
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        byte[] hashedData = HashingService.generateHash(inputData, algorithm);
+        assertNotNull(hashedData);
+        assertTrue(hashedData.length > 0);
+    }
+
+    @Test
+    void testGenerateHashWithNullDataThrowsException() {
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(null, algorithm));
+    }
+
+    @Test
+    void testGenerateHashWithNullAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+        assertThrows(NullPointerException.class, () -> HashingService.generateHash(inputData, null));
+    }
+
+    @Test
+    void testGenerateHashWithInvalidAlgorithmThrowsException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Use Mockito to return an invalid algorithm name, triggering NoSuchAlgorithmException
+        HashAlgorithm invalidAlgorithm = Mockito.mock(HashAlgorithm.class);
+        Mockito.when(invalidAlgorithm.getAlgorithmName()).thenReturn("INVALID_ALGORITHM");
+
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> HashingService.generateHash(inputData, invalidAlgorithm)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+    }
+
+    @Test
+    void testGenerateHashWithGenericException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+
+        // Use Mockito to force a RuntimeException when getAlgorithmName() is called
+        HashAlgorithm algorithm = Mockito.mock(HashAlgorithm.class);
+        Mockito.when(algorithm.getAlgorithmName()).thenThrow(new RuntimeException("Unexpected error"));
+
+        EncryptionDecryptionException exception = assertThrows(
+            EncryptionDecryptionException.class,
+            () -> HashingService.generateHash(inputData, algorithm)
+        );
+
+        assertEquals(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, exception.getErrorCode());
+    }
+}
+
+
+
+
+
+
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
