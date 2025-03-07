@@ -1,4 +1,62 @@
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class HashingServiceTest {
+
+    @Test
+    void testGenerateHashCatchesNoSuchAlgorithmException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+
+        try (MockedStatic<MessageDigest> mockedStatic = Mockito.mockStatic(MessageDigest.class)) {
+            // Mock MessageDigest.getInstance() to throw NoSuchAlgorithmException
+            mockedStatic.when(() -> MessageDigest.getInstance(algorithm.getAlgorithmName()))
+                        .thenThrow(new NoSuchAlgorithmException());
+
+            EncryptionDecryptionException exception = assertThrows(
+                EncryptionDecryptionException.class,
+                () -> HashingService.generateHash(inputData, algorithm)
+            );
+
+            assertEquals(EncryptionDecryptionConstants.INVALID_ERROR_CODE, exception.getErrorCode());
+        }
+    }
+
+    @Test
+    void testGenerateHashCatchesGenericException() {
+        byte[] inputData = "TestData".getBytes(StandardCharsets.UTF_8);
+        HashAlgorithm algorithm = HashAlgorithm.SHA_256;
+
+        try (MockedStatic<MessageDigest> mockedStatic = Mockito.mockStatic(MessageDigest.class)) {
+            // Mock MessageDigest.getInstance() to throw a RuntimeException (generic exception)
+            mockedStatic.when(() -> MessageDigest.getInstance(algorithm.getAlgorithmName()))
+                        .thenThrow(new RuntimeException("Unexpected error"));
+
+            EncryptionDecryptionException exception = assertThrows(
+                EncryptionDecryptionException.class,
+                () -> HashingService.generateHash(inputData, algorithm)
+            );
+
+            assertEquals(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, exception.getErrorCode());
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
