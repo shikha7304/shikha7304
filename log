@@ -4,6 +4,139 @@ import com.sbi.epay.authentication.model.AccessTokenRequest;
 import com.sbi.epay.authentication.model.TransactionTokenRequest;
 import com.sbi.epay.authentication.model.UserTokenRequest;
 import com.sbi.epay.authentication.validator.AuthRequestValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class AuthenticationServiceTest {
+
+    @Mock
+    private JwtService jwtService;
+
+    @InjectMocks
+    private AuthenticationService authenticationService;
+
+    private AccessTokenRequest accessTokenRequest;
+    private TransactionTokenRequest transactionTokenRequest;
+    private UserTokenRequest userTokenRequest;
+
+    @BeforeEach
+    void setUp() {
+        // Initialize mock requests
+        accessTokenRequest = new AccessTokenRequest();
+        accessTokenRequest.setApiKey("testApiKey");
+        accessTokenRequest.setSecretKey("testSecretKey");
+        accessTokenRequest.setUsername("testUser");
+        accessTokenRequest.setExpirationTime(System.currentTimeMillis() + 60000);
+
+        transactionTokenRequest = new TransactionTokenRequest();
+        transactionTokenRequest.setSbiOrderReferenceNumber("12345");
+        transactionTokenRequest.setMId("MID001");
+        transactionTokenRequest.setUsername("testUser");
+        transactionTokenRequest.setExpirationTime(System.currentTimeMillis() + 60000);
+
+        userTokenRequest = new UserTokenRequest();
+        userTokenRequest.setUsername("testUser");
+        userTokenRequest.setPassword("testPassword");
+        userTokenRequest.setExpirationTime(System.currentTimeMillis() + 60000);
+    }
+
+    @Test
+    void generateAccessToken_ValidRequest_ReturnsToken() {
+        String expectedToken = "mockAccessToken";
+        
+        // Mock JwtService response
+        when(jwtService.generateAccessToken(any(AccessTokenRequest.class))).thenReturn(expectedToken);
+
+        // Call the method
+        String actualToken = authenticationService.generateAccessToken(accessTokenRequest);
+
+        // Verify interactions and assertions
+        assertEquals(expectedToken, actualToken);
+        verify(jwtService, times(1)).generateAccessToken(accessTokenRequest);
+    }
+
+    @Test
+    void generateTransactionToken_ValidRequest_ReturnsToken() {
+        String expectedToken = "mockTransactionToken";
+
+        // Mock JwtService response
+        when(jwtService.generateTransactionToken(any(TransactionTokenRequest.class))).thenReturn(expectedToken);
+
+        // Call the method
+        String actualToken = authenticationService.generateTransactionToken(transactionTokenRequest);
+
+        // Verify interactions and assertions
+        assertEquals(expectedToken, actualToken);
+        verify(jwtService, times(1)).generateTransactionToken(transactionTokenRequest);
+    }
+
+    @Test
+    void generateUserToken_ValidRequest_ReturnsToken() {
+        String expectedToken = "mockUserToken";
+
+        // Mock JwtService response
+        when(jwtService.generateUserLoginToken(any(UserTokenRequest.class))).thenReturn(expectedToken);
+
+        // Call the method
+        String actualToken = authenticationService.generateUserToken(userTokenRequest);
+
+        // Verify interactions and assertions
+        assertEquals(expectedToken, actualToken);
+        verify(jwtService, times(1)).generateUserLoginToken(userTokenRequest);
+    }
+
+    @Test
+    void generateAccessToken_InvalidRequest_ThrowsException() {
+        AccessTokenRequest invalidRequest = new AccessTokenRequest(); // Missing required fields
+        
+        Exception exception = assertThrows(RuntimeException.class, () -> {
+            authenticationService.generateAccessToken(invalidRequest);
+        });
+
+        assertNotNull(exception.getMessage());
+    }
+
+    @Test
+    void generateTransactionToken_InvalidRequest_ThrowsException() {
+        TransactionTokenRequest invalidRequest = new TransactionTokenRequest(); // Missing required fields
+        
+        Exception exception = assertThrows(RuntimeException.class, () -> {
+            authenticationService.generateTransactionToken(invalidRequest);
+        });
+
+        assertNotNull(exception.getMessage());
+    }
+
+    @Test
+    void generateUserToken_InvalidRequest_ThrowsException() {
+        UserTokenRequest invalidRequest = new UserTokenRequest(); // Missing required fields
+        
+        Exception exception = assertThrows(RuntimeException.class, () -> {
+            authenticationService.generateUserToken(invalidRequest);
+        });
+
+        assertNotNull(exception.getMessage());
+    }
+}
+
+
+
+
+package com.sbi.epay.authentication.service;
+
+import com.sbi.epay.authentication.model.AccessTokenRequest;
+import com.sbi.epay.authentication.model.TransactionTokenRequest;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.validator.AuthRequestValidator;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
 import lombok.RequiredArgsConstructor;
