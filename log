@@ -1,110 +1,241 @@
-package com.sbi.epay.authentication.security;
+package com.sbi.epay.authentication.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sbi.epay.authentication.dto.AuthenticationResponse;
-import com.sbi.epay.authentication.dto.ErrorDto;
-import com.sbi.epay.authentication.util.LoggerFactoryUtility;
-import com.sbi.epay.authentication.util.LoggerUtility;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
+import com.sbi.epay.authentication.util.EPayJwtClaimsSet;
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.authentication.model.JwtAuthenticationToken;
+import io.jsonwebtoken.Claims;
+import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.ObjectUtils;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.stereotype.Component;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-class EPayAuthenticationEntryPointTest {
-
-    private EPayAuthenticationEntryPoint authenticationEntryPoint;
-
-    @Mock
-    private HttpServletRequest request;
-
-    @Mock
-    private HttpServletResponse response;
-
-    @Mock
-    private AuthenticationException authenticationException;
-
-    @Mock
-    private LoggerUtility logger;
-
-    private ObjectMapper objectMapper;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-        authenticationEntryPoint = new EPayAuthenticationEntryPoint();
-        objectMapper = new ObjectMapper();
-    }
-
-    @Test
-    void testCommence_UnauthorizedResponse() throws Exception {
-        // Arrange
-        String errorMessage = "Unauthorized access";
-        when(authenticationException.getMessage()).thenReturn(errorMessage);
-
-        // Mocking response writer
-        StringWriter stringWriter = new StringWriter();
-        PrintWriter printWriter = new PrintWriter(stringWriter);
-        when(response.getWriter()).thenReturn(printWriter);
-
-        // Act
-        authenticationEntryPoint.commence(request, response, authenticationException);
-
-        // Assert
-        verify(response, times(1)).setContentType(MediaType.APPLICATION_JSON_VALUE);
-        verify(response, times(1)).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-
-        // Parse JSON response
-        printWriter.flush(); // Ensure everything is written
-        String jsonResponse = stringWriter.toString();
-        AuthenticationResponse actualResponse = objectMapper.readValue(jsonResponse, AuthenticationResponse.class);
-
-        assertEquals(0, actualResponse.getStatus());
-        assertNotNull(actualResponse.getErrors());
-        assertEquals(1, actualResponse.getErrors().size());
-
-        ErrorDto errorDto = actualResponse.getErrors().get(0);
-        assertEquals(String.valueOf(HttpStatus.UNAUTHORIZED.value()), errorDto.getErrorCode());
-        assertEquals(errorMessage, errorDto.getErrorMessage());
-
-        verify(authenticationException, times(1)).getMessage();
-    }
-}
-
-
-
-
-
-
-
 @Component
-public class EPayAuthenticationEntryPoint implements AuthenticationEntryPoint {
+@RequiredArgsConstructor
+public class JwtAuthenticationProvider implements AuthenticationProvider {
 
-    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
+    private final JwtService jwtService;
+
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        JwtAuthenticationToken jwtToken = (JwtAuthenticationToken) authentication;
+        Claims claims =  jwtService.verifyJwtTokenAndGetClaims(jwtToken.getCredentials());
+        return createSuccessAuthentication(jwtToken.getCredentials(), claims);
+    }
+
+    private JwtAuthenticationToken createSuccessAuthentication(String jwt, Claims claims) {
+        EPayPrincipal principal = derivePrincipal(claims);
+        JwtAuthenticationToken result = new JwtAuthenticationToken(jwt, principal, principal.getAuthorities());
+        result.setDetails(claims.toString());
+        result.setAuthenticated(true);
+        return result;
+    }
+
+    private EPayPrincipal derivePrincipal(Claims claims) {
+        EPayPrincipal authenticateEntity = new EPayPrincipal();
+        if (ObjectUtils.isEmpty(claims.get(EPayJwtClaimsSet.ROLE))) {
+            authenticateEntity.setUserRole(List.of("ROLE_USER"));
+        } else {
+            authenticateEntity.setUserRole(claims.get(EPayJwtClaimsSet.ROLE, ArrayList.class));
+        }
+        authenticateEntity.setAuthenticationId(claims.get(EPayJwtClaimsSet.USERNAME, String.class));
+        authenticateEntity.setMId(claims.get(EPayJwtClaimsSet.MID, String.class));
+        authenticateEntity.setOrderRef(claims.get(EPayJwtClaimsSet.ORDER_NUMBER, String.class));
+        authenticateEntity.setTransactionRef(claims.get(EPayJwtClaimsSet.ATRN_NUMBER, String.class));
+        authenticateEntity.setTokenType(claims.get(EPayJwtClaimsSet.TYPE, String.class));
+        return authenticateEntity;
+    }
 
     @Override
-    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authenticationException) throws IOException {
-        logger.error("Error in Authentication for request {}, Error :{}", request, authenticationException.getMessage());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-
-        ErrorDto errorDto = ErrorDto.builder().errorCode(String.valueOf(HttpStatus.UNAUTHORIZED.value())).errorMessage(authenticationException.getMessage()).build();
-
-        AuthenticationResponse authenticationResponse = AuthenticationResponse.builder().status(0).errors(List.of(errorDto)).build();
-        logger.error("Error in Authentication for request {} and send the authenticationResponse :{}", request, authenticationResponse);
-
-        ObjectMapper mapper = new ObjectMapper();
-        response.getWriter().write(mapper.writeValueAsString(authenticationResponse));
+    public boolean supports(Class<?> authentication) {
+        return JwtAuthenticationToken.class.isAssignableFrom(authentication);
     }
+}
+package com.sbi.epay.authentication.service;
+
+import com.sbi.epay.authentication.exception.EPaySecurityException;
+import com.sbi.epay.authentication.model.AccessTokenRequest;
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.authentication.model.TransactionTokenRequest;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.util.EPayAuthenticationConstant;
+import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.security.Key;
+import java.text.MessageFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.sbi.epay.authentication.util.EPayJwtClaimsSet.*;
+
+/**
+ * Class Name: JwtService
+ * *
+ * Description: Service Class for generating and validating JSON Web Tokens (JWT).
+ * * This class provides methods to create signed JWTs using various inputs, including username/pwd, API keys, and hashed values.
+ * *
+ * Author: V1018217(Nirvay K. Bikram)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class JwtService {
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(JwtService.class);
+
+    private final AuthenticationUserService authenticationUserService;
+    @Value("${security.jwt.secret.key}")
+    private String secretKey;
+    @Value("${security.jwt.secret.issuer}")
+    private String issuer;
+
+    /**
+     * Generates a JWT token with the specified claims, username, and expiration time.
+     *
+     * @param claims         A map of claims to include in the token.
+     * @param userName       The username used to sign the token.
+     * @param expirationTime The expiration time of the token in milliseconds.
+     * @return A signed JWT token as a string.
+     */
+    private String generateToken(Map<String, Object> claims, String userName, long expirationTime) {
+        logger.info("ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, username, and expiration time.");
+        Claims jwtClaims = Jwts.claims(claims);
+        jwtClaims.setSubject(userName);
+        jwtClaims.setIssuer(issuer);
+        jwtClaims.setIssuedAt(new Date(System.currentTimeMillis()));
+        jwtClaims.setExpiration(new Date(expirationTime));
+        return Jwts.builder().setClaims(jwtClaims).signWith(getSignKey(), SignatureAlgorithm.HS512).compact();
+    }
+
+    /**
+     * Generates a JWT token using a username, expirationTime and role.
+     *
+     * @param userTokenRequest UserTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateUserLoginToken(UserTokenRequest userTokenRequest) {
+        logger.info("ClassName - JwtService,MethodName - generateTokenWithUsernamePwd, Generates a JWT token using a username, expirationTime and role.");
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(USERNAME, userTokenRequest.getUsername());
+        claims.put(ROLE, userTokenRequest.getRoles());
+        claims.put(TYPE, userTokenRequest.getTokenType());
+        return generateToken(claims, userTokenRequest.getUsername(), userTokenRequest.getExpirationTime());
+    }
+
+    /**
+     * GenerateAccessToken method generateAccessToken and takes accessTokenRequest as parameter.
+     *
+     * @param accessTokenRequest AccessTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateAccessToken(AccessTokenRequest accessTokenRequest) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(USERNAME, accessTokenRequest.getUsername());
+        claims.put(MID, accessTokenRequest.getMId());
+        claims.put(ROLE, accessTokenRequest.getRoles());
+        claims.put(TYPE, accessTokenRequest.getTokenType());
+        return generateToken(claims, accessTokenRequest.getUsername(), accessTokenRequest.getExpirationTime());
+    }
+
+    /**
+     * Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.
+     *
+     * @param transactionTokenRequest TransactionTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateTransactionToken(TransactionTokenRequest transactionTokenRequest) {
+        logger.info("ClassName - JwtService,MethodName - generateTokenWithHash, Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.");
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(ORDER_NUMBER, transactionTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(MID, transactionTokenRequest.getMId());
+        claims.put(USERNAME, transactionTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(ROLE, transactionTokenRequest.getRoles());
+        claims.put(TYPE, transactionTokenRequest.getTokenType());
+        claims.put(REFERENCE_ID, transactionTokenRequest.getReferenceId());
+        return generateToken(claims, transactionTokenRequest.getUsername(), transactionTokenRequest.getExpirationTime());
+    }
+
+    public Claims verifyJwtTokenAndGetClaims(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        if (issuer.equalsIgnoreCase(claims.getIssuer())) {
+            if (isTokenExpired(claims.getExpiration())) {
+                throw new IllegalStateException(EPayAuthenticationErrorConstants.TOKEN_EXPIRED);
+            } else if (authenticationUserService.isTokenInValid(token, claims.get(TYPE, String.class))) {
+                throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_TOKEN);
+            }
+            String userName = (String) claims.get(USERNAME);
+            String userNameWithTokenType = String.join(EPayAuthenticationConstant.JOINER, (String) claims.get(USERNAME), claims.get(TYPE, String.class));
+            logger.info("Token request received for userNameWithTokenType: {}", userNameWithTokenType);
+            EPayPrincipal ePayPrincipal = authenticationUserService.loadUserByUserName(userNameWithTokenType).orElseThrow(() -> new EPaySecurityException(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_MESSAGE, EPayAuthenticationErrorConstants.USER_NAME)));
+            logger.info("Token request received for userNameWithTokenType: {}", userNameWithTokenType);
+            if (!ePayPrincipal.getAuthenticationId().equalsIgnoreCase(userName)) {
+                throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_USER);
+            }
+        } else {
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_ISSUER);
+        }
+        return claims;
+    }
+
+
+    /**
+     * Get all claims from token. and @Param token
+     *
+     * @param token as a String
+     * @return Claims of the token
+     */
+    private Claims getAllClaimsFromToken(String token) {
+        try {
+            logger.info("ClassName - JwtService,MethodName - getAllClaimsFromToken, getting all claims from token.");
+            return Jwts.parserBuilder().setSigningKey(getSignKey()).build().parseClaimsJws(token).getBody();
+        } catch (ExpiredJwtException e) {
+            logger.error("Jwt Token is expired : {}", e.getLocalizedMessage());
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.TOKEN_EXPIRED);
+        }  catch (SignatureException e) {
+            logger.error("Jwt Token is expired : {}", e.getLocalizedMessage());
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_TOKEN);
+       }
+
+    }
+
+    /**
+     * Get SigningKey
+     *
+     * @return signed key
+     */
+    private Key getSignKey() {
+        logger.info("ClassName - JwtService,MethodName - getSignKey, getting SigningKey.");
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    /**
+     * Get expiration time from token
+     *
+     * @param expiration is as Date
+     * @return Boolean true if token is expired otherwise false.
+     */
+    private Boolean isTokenExpired(Date expiration) {
+        logger.info("ClassName - JwtService,MethodName - isTokenExpired, getting expiration time from token.");
+        return expiration.before(new Date());
+    }
+
 }
