@@ -1,3 +1,78 @@
+package com.sbi.epay.authentication.service;
+
+import com.sbi.epay.authentication.exception.EPaySecurityException;
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+
+import java.text.MessageFormat;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class AuthenticationUserDetailsServiceTest {
+
+    @Mock
+    private AuthenticationUserService userService;
+
+    @InjectMocks
+    private AuthenticationUserDetailsService authenticationUserDetailsService;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testUserDetailsService_Success() {
+        // Arrange
+        String username = "testUser";
+        EPayPrincipal mockUser = new EPayPrincipal();
+        when(userService.loadUserByUserName(username)).thenReturn(Optional.of(mockUser));
+
+        UserDetailsService userDetailsService = authenticationUserDetailsService.userDetailsService();
+
+        // Act
+        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+        // Assert
+        assertNotNull(userDetails);
+        assertEquals(mockUser, userDetails);
+        verify(userService, times(1)).loadUserByUserName(username);
+    }
+
+    @Test
+    void testUserDetailsService_UserNotFound() {
+        // Arrange
+        String username = "nonExistentUser";
+        when(userService.loadUserByUserName(username)).thenReturn(Optional.empty());
+
+        UserDetailsService userDetailsService = authenticationUserDetailsService.userDetailsService();
+
+        // Act & Assert
+        EPaySecurityException exception = assertThrows(EPaySecurityException.class, 
+            () -> userDetailsService.loadUserByUsername(username));
+
+        assertEquals(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
+        assertEquals(
+            MessageFormat.format(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_MESSAGE, EPayAuthenticationErrorConstants.USER_NAME),
+            exception.getMessage()
+        );
+
+        verify(userService, times(1)).loadUserByUserName(username);
+    }
+}
+
+
+
+
 @Service
 @RequiredArgsConstructor
 public class AuthenticationUserDetailsService {
