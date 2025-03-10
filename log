@@ -1,90 +1,21 @@
-package com.sbi.epay.authentication.service;
 
-import com.sbi.epay.authentication.exception.EPaySecurityException;
-import com.sbi.epay.authentication.model.EPayPrincipal;
-import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
+@Component
+public class EPayAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
-import java.text.MessageFormat;
-import java.util.Optional;
+    private final LoggerUtility logger = LoggerFactoryUtility.getLogger(this.getClass());
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+    @Override
+    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authenticationException) throws IOException {
+        logger.error("Error in Authentication for request {}, Error :{}", request, authenticationException.getMessage());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
 
-class AuthenticationUserDetailsServiceTest {
+        ErrorDto errorDto = ErrorDto.builder().errorCode(String.valueOf(HttpStatus.UNAUTHORIZED.value())).errorMessage(authenticationException.getMessage()).build();
 
-    @Mock
-    private AuthenticationUserService userService;
+        AuthenticationResponse authenticationResponse = AuthenticationResponse.builder().status(0).errors(List.of(errorDto)).build();
+        logger.error("Error in Authentication for request {} and send the authenticationResponse :{}", request, authenticationResponse);
 
-    @InjectMocks
-    private AuthenticationUserDetailsService authenticationUserDetailsService;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
+        ObjectMapper mapper = new ObjectMapper();
+        response.getWriter().write(mapper.writeValueAsString(authenticationResponse));
     }
-
-    @Test
-    void testUserDetailsService_Success() {
-        // Arrange
-        String username = "testUser";
-        EPayPrincipal mockUser = new EPayPrincipal();
-        when(userService.loadUserByUserName(username)).thenReturn(Optional.of(mockUser));
-
-        UserDetailsService userDetailsService = authenticationUserDetailsService.userDetailsService();
-
-        // Act
-        UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-
-        // Assert
-        assertNotNull(userDetails);
-        assertEquals(mockUser, userDetails);
-        verify(userService, times(1)).loadUserByUserName(username);
-    }
-
-    @Test
-    void testUserDetailsService_UserNotFound() {
-        // Arrange
-        String username = "nonExistentUser";
-        when(userService.loadUserByUserName(username)).thenReturn(Optional.empty());
-
-        UserDetailsService userDetailsService = authenticationUserDetailsService.userDetailsService();
-
-        // Act & Assert
-        EPaySecurityException exception = assertThrows(EPaySecurityException.class, 
-            () -> userDetailsService.loadUserByUsername(username));
-
-        assertEquals(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_CODE, exception.getErrorCode());
-        assertEquals(
-            MessageFormat.format(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_MESSAGE, EPayAuthenticationErrorConstants.USER_NAME),
-            exception.getMessage()
-        );
-
-        verify(userService, times(1)).loadUserByUserName(username);
-    }
-}
-
-
-
-
-@Service
-@RequiredArgsConstructor
-public class AuthenticationUserDetailsService {
-
-    private final AuthenticationUserService userService;
-
-    public UserDetailsService userDetailsService() {
-        return username -> userService.loadUserByUserName(username).orElseThrow(() -> new EPaySecurityException(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_MESSAGE, EPayAuthenticationErrorConstants.USER_NAME)));
-    }
-}
-public interface AuthenticationUserService {
-    Optional<EPayPrincipal> loadUserByUserName(String userName);
-
-    boolean isTokenInValid(String token, String tokenType);
 }
