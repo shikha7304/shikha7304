@@ -1,219 +1,353 @@
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
+package com.sbi.epay.authentication.service;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
-import java.util.Base64;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@ExtendWith(MockitoExtension.class)
-class KeyProviderServiceTest {
-
-    @Test
-    void testGetDecryptedMEKSuccess() throws EncryptionDecryptionException {
-        // Sample input data
-        String mek = "encryptedMEK";
-        String kek = "encryptedKEK";
-        String aeK = "encodedAEK";
-        EncryptionDecryptionAlgo algorithm = EncryptionDecryptionAlgo.AES_GCM_NOPADDING;
-        GCMIvLength gcmIvLength = GCMIvLength.BITS_96;
-        GCMTagLength gcmTagLength = GCMTagLength.BITS_128;
-
-        // Expected decrypted values
-        String decodedKeK = "decodedKEK";
-        String decodedMeK = "decodedMEK";
-
-        // Mock static methods
-        try (MockedStatic<DecryptionService> mockedStatic = Mockito.mockStatic(DecryptionService.class)) {
-            // Mock decryptValueByStringKey for KEK and MEK
-            mockedStatic.when(() -> DecryptionService.decryptValueByStringKey(kek, aeK, algorithm, gcmIvLength, gcmTagLength))
-                        .thenReturn(decodedKeK);
-            mockedStatic.when(() -> DecryptionService.decryptValueByStringKey(mek, decodedKeK, algorithm, gcmIvLength, gcmTagLength))
-                        .thenReturn(decodedMeK);
-
-            // Mock decodedValue to return a SecretKey
-            SecretKey expectedSecretKey = new SecretKeySpec(Base64.getDecoder().decode(decodedMeK), "AES");
-            mockedStatic.when(() -> DecryptionService.decodedValue(decodedMeK))
-                        .thenReturn(expectedSecretKey);
-
-            // Call the actual method
-            SecretKey result = KeyProviderService.getDecryptedMEK(mek, kek, aeK, algorithm, gcmIvLength, gcmTagLength);
-
-            // Validate the response
-            assertNotNull(result);
-            assertEquals(expectedSecretKey, result);
-        }
-    }
-
-    @Test
-    void testGetDecryptedMEKThrowsException() {
-        String mek = "encryptedMEK";
-        String kek = "encryptedKEK";
-        String aeK = "encodedAEK";
-        EncryptionDecryptionAlgo algorithm = EncryptionDecryptionAlgo.AES_GCM_NOPADDING;
-        GCMIvLength gcmIvLength = GCMIvLength.BITS_96;
-        GCMTagLength gcmTagLength = GCMTagLength.BITS_128;
-
-        // Mock static methods to throw an exception
-        try (MockedStatic<DecryptionService> mockedStatic = Mockito.mockStatic(DecryptionService.class)) {
-            mockedStatic.when(() -> DecryptionService.decryptValueByStringKey(kek, aeK, algorithm, gcmIvLength, gcmTagLength))
-                        .thenThrow(new EncryptionDecryptionException("DECRYPTION_ERROR", "Decryption failed"));
-
-            // Validate exception is thrown
-            EncryptionDecryptionException exception = assertThrows(
-                EncryptionDecryptionException.class,
-                () -> KeyProviderService.getDecryptedMEK(mek, kek, aeK, algorithm, gcmIvLength, gcmTagLength)
-            );
-
-            assertEquals("DECRYPTION_ERROR", exception.getErrorCode());
-        }
-    }
-}
-
-
-
-
-
-
-
-
-
-public class KeyProviderService {
-    private static final LoggerUtility log= LoggerFactoryUtility.getLogger(KeyProviderService.class);
-
-    /**
-     * This method will be used to get MEK .
-     *
-     * @param mek encrypted and encoded MEK (Merchant's Encryption Key)
-     * @param kek encrypted and encoded KEK (Key Encryption Key)
-     * @param aeK encoded AEK(Aggregators Encryption Key)
-     * @return a SecretKey MEK
-     */
-    public static SecretKey getDecryptedMEK(String mek, String kek, String aeK, EncryptionDecryptionAlgo algorithm, GCMIvLength gcmIvLength, GCMTagLength gcmTagLength) throws EncryptionDecryptionException {
-        log.debug("KeyProviderService :: getDecryptedMEK mek {}, kek {}, aeK {}, algorithm {}, gcmIvLength {} and gcmTagLength {}", mek, kek, aeK, algorithm, gcmIvLength, gcmTagLength);
-        String encodedKeK = DecryptionService.decryptValueByStringKey(kek, aeK, algorithm, gcmIvLength, gcmTagLength);
-        String encodedMeK = DecryptionService.decryptValueByStringKey(mek, encodedKeK, algorithm, gcmIvLength, gcmTagLength);
-        return DecryptionService.decodedValue(encodedMeK);
-    }
-}
-package com.sbi.epay.encryptdecrypt.service;
-
-
-import com.sbi.epay.encryptdecrypt.constant.EncryptionDecryptionConstants;
-import com.sbi.epay.encryptdecrypt.exception.EncryptionDecryptionException;
-import com.sbi.epay.encryptdecrypt.util.enums.EncryptionDecryptionAlgo;
-import com.sbi.epay.encryptdecrypt.util.enums.GCMIvLength;
-import com.sbi.epay.encryptdecrypt.util.enums.GCMTagLength;
+import com.sbi.epay.authentication.model.AccessTokenRequest;
+import com.sbi.epay.authentication.model.TransactionTokenRequest;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.validator.AuthRequestValidator;
 import com.sbi.epay.logging.utility.LoggerFactoryUtility;
 import com.sbi.epay.logging.utility.LoggerUtility;
-import jdk.jfr.Description;
-import lombok.NonNull;
-
-import javax.crypto.*;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
-
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 /**
- * Class Name: DecryptionService
+ * Class Name: AuthServiceImpl
  * *
- * Description:This class will be used for  decryption using AES-GSM-NOPADDING algorithm
+ * Description: This class implements AuthenticationService interface and it's methods for implementing services.
  * *
- * Author: V1018212(Hrishikesh Pandirakar)
+ * Author: V1018217(Nirvay K. Bikram)
  * Copyright (c) 2024 [State Bank of India]
  * All rights reserved
  * *
  * Version:1.0
  */
-@Description("This class will be used for  decryption using AES-GSM-NOPADDING algorithm")
-public class DecryptionService {
-    private static final LoggerUtility log = LoggerFactoryUtility.getLogger(DecryptionService.class);
+
+@Service
+@RequiredArgsConstructor
+public class AuthenticationService {
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(AuthenticationService.class);
+    private final JwtService jwtService;
 
     /**
-     * This method will be used for decryption of Keys .
+     * Generates an access token based on the provided request.
      *
-     * @param key          the SecretKey by which we want use for decrypt the given text
-     * @param value        String which we want to decrypt
-     * @param algorithm    EncryptionDecryptionAlgo algorithm
-     * @param gcmIvLength  algorithm iv length
-     * @param gcmTagLength algorithm tag length
-     * @return the String of original encoded KEK
+     * @param accessTokenRequest AccessTokenRequest
+     * @return JWT token in string form.
      */
-    public static String decryptValueByStringKey(String key, String value, @NonNull EncryptionDecryptionAlgo algorithm, @NonNull GCMIvLength gcmIvLength, @NonNull GCMTagLength gcmTagLength) throws EncryptionDecryptionException {
-        log.info("Decryption Service ::  key : {}, value : {}, algorithm : {}, gcmIvLength : {}, gcmTagLength : {}", key, value, algorithm, gcmIvLength, gcmTagLength);
-        return decryptValueBySecretKey(decodedValue(key), value, algorithm, gcmIvLength, gcmTagLength);
+    public String generateAccessToken(AccessTokenRequest accessTokenRequest) {
+        logger.debug("Initiate generateAccessToken for {}", accessTokenRequest);
+        AuthRequestValidator.validAuthRequest(accessTokenRequest);
+        return jwtService.generateAccessToken(accessTokenRequest);
     }
 
     /**
-     * This method will be used for decryption of Value .
+     * Generates a transaction token based on the provided request.
      *
-     * @param value        String which we want to decrypt
-     * @param key          the SecretKey by which we want use for decrypt the given text
-     * @param algorithm    EncryptionDecryptionAlgo algorithm
-     * @param gcmIvLength  algorithm iv length
-     * @param gcmTagLength algorithm tag length
-     * @return the String of original encoded KEK
+     * @param transactionTokenRequest TransactionTokenRequest
+     * @return JWT token in string form.
      */
-    public static String decryptValueBySecretKey(@NonNull SecretKey key, @NonNull String value, @NonNull EncryptionDecryptionAlgo algorithm, @NonNull GCMIvLength gcmIvLength, @NonNull GCMTagLength gcmTagLength) throws EncryptionDecryptionException {
-        log.info("Decryption Service ::  key : {}, value : {}, algorithm : {}, gcmIvLength : {}, gcmTagLength : {}", key, value, algorithm, gcmIvLength, gcmTagLength);
-        try {
-            return decryptValue(key, value, algorithm, gcmIvLength, gcmTagLength);
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException |
-                 InvalidAlgorithmParameterException | IllegalArgumentException | UnsupportedOperationException |
-                 IllegalStateException | IllegalBlockSizeException | BadPaddingException e) {
-            log.error("DecryptionService :: decrypt {}", e);
-            throw new EncryptionDecryptionException(EncryptionDecryptionConstants.GENERIC_ERROR_CODE, EncryptionDecryptionConstants.GENERIC_ERROR_MESSAGE);
+    public String generateTransactionToken(TransactionTokenRequest transactionTokenRequest) {
+        logger.debug("Initiate generateTransactionToken for {}", transactionTokenRequest);
+        AuthRequestValidator.validAuthRequest(transactionTokenRequest);
+        return jwtService.generateTransactionToken(transactionTokenRequest);
+    }
+
+    /**
+     * Generates a merchant user token based on the provided request.
+     *
+     * @param userTokenRequest UserTokenRequest
+     * @return JWT token in string form.
+     */
+    public String generateUserToken(UserTokenRequest userTokenRequest) {
+        logger.debug("Initiate generateUserToken for {}", userTokenRequest);
+        AuthRequestValidator.validAuthRequest(userTokenRequest);
+        return jwtService.generateUserLoginToken(userTokenRequest);
+    }
+
+}
+package com.sbi.epay.authentication.validator;
+
+import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
+import com.sbi.epay.authentication.dto.ErrorDto;
+import com.sbi.epay.authentication.exception.EPaySecurityException;
+import com.sbi.epay.authentication.model.*;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.CollectionUtils;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
+
+
+/**
+ * Class Name: AuthRequestValidator
+ * *
+ * Description: This class contains authentication request validator and checks null/empty of request variable.
+ * *
+ * Author: V1018217(Nirvay K. Bikram)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+public class AuthRequestValidator {
+    public static final String TOKEN_TYPE = "Token Type";
+    public static final String EXPIRY_TIME = "Expiry Time";
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(AuthRequestValidator.class);
+
+    /**
+     * Validate authentication respective request object based on token type.
+     *
+     * @param tokenRequest gets request for validation.
+     */
+    public static void validAuthRequest(TokenRequest tokenRequest) {
+        List<ErrorDto> errorDtoList = new ArrayList<>();
+        switch (tokenRequest.getTokenType()) {
+            case ACCESS -> validAccessTokenRequest((AccessTokenRequest) tokenRequest, errorDtoList);
+            case TRANSACTION -> validTransactionTokenRequest((TransactionTokenRequest) tokenRequest, errorDtoList);
+            case USER -> validUserTokenRequest((UserTokenRequest) tokenRequest, errorDtoList);
+            default ->
+                    errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, TOKEN_TYPE)));
+        }
+
+        if (!CollectionUtils.isEmpty(errorDtoList)) {
+            logger.error("Error -> ", errorDtoList);
+            throw new EPaySecurityException(errorDtoList);
         }
     }
 
     /**
-     * This method will be used for decode SecretKey .
+     * Validate Customer authentication request object.
      *
-     * @param key encoded SecretKey
-     * @return a SecretKey
+     * @param tokenRequest gets request related to Customer.
+     * @param errorDtoList handles error/errorList while validations.
      */
-    public static SecretKey decodedValue(String key) {
-        log.debug("DecryptionService :: decodedSecretKey key {}", key);
-        byte[] decodedKey = Base64.getDecoder().decode(key);
-        return new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+    private static void validAccessTokenRequest(AccessTokenRequest tokenRequest, List<ErrorDto> errorDtoList) {
+        if (StringUtils.isEmpty(tokenRequest.getApiKey())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "apiKey")));
+        } else if (StringUtils.isEmpty(tokenRequest.getSecretKey())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "secretKey")));
+        } else if (tokenRequest.getExpirationTime() <= System.currentTimeMillis()) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, EXPIRY_TIME)));
+        }
     }
 
-    public static String decryptValue(SecretKey key, String value, EncryptionDecryptionAlgo algorithm, GCMIvLength gcmIvLength, GCMTagLength gcmTagLength) throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, InvalidAlgorithmParameterException, IllegalBlockSizeException, BadPaddingException {
-        log.debug("DecryptionService :: decryptKeK key {}, value {}, algorithm {}, gcmIvLength {}, gcmTagLength {}", key, value, algorithm, gcmIvLength, gcmTagLength);
+    /**
+     * Validate Transaction authentication request object.
+     *
+     * @param tokenRequest gets request related to transaction.
+     * @param errorDtoList handles error/errorList while validations.
+     */
+    private static void validTransactionTokenRequest(TransactionTokenRequest tokenRequest, List<ErrorDto> errorDtoList) {
+        if (StringUtils.isEmpty(tokenRequest.getSbiOrderReferenceNumber())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "orderNumber")));
+        } else if (StringUtils.isEmpty(tokenRequest.getMId())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "merchant Id")));
+        } else if (tokenRequest.getExpirationTime() <= System.currentTimeMillis()) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, EXPIRY_TIME)));
+        }
+    }
 
-        byte[] decodedData = Base64.getDecoder().decode(value);
-
-        // Dynamically determine IV length based on the provided parameter
-        int ivLength = gcmIvLength.getLengthInBytes();
-
-        // Extract the IV and ciphertext
-        byte[] iv = new byte[ivLength];
-        byte[] ciphertext = new byte[decodedData.length - ivLength];
-        System.arraycopy(decodedData, 0, iv, 0, ivLength);
-        System.arraycopy(decodedData, ivLength, ciphertext, 0, decodedData.length - ivLength);
-
-        // Initialize the Cipher in Decrypt Mode
-        Cipher cipher = Cipher.getInstance(algorithm.getName());
-        GCMParameterSpec gcmSpec = new GCMParameterSpec(gcmTagLength.getLengthInBits(), iv);
-        cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec);
-
-        // Decrypt the ciphertext
-        byte[] plainText = cipher.doFinal(ciphertext);
-
-        // Return the plaintext as a string
-        return new String(plainText, StandardCharsets.UTF_8);
+    /**
+     * Validate Merchant authentication request object.
+     *
+     * @param userTokenRequest gets request related to merchant.
+     * @param errorDtoList         handles error/errorList while validations.
+     */
+    private static void validUserTokenRequest(UserTokenRequest userTokenRequest, List<ErrorDto> errorDtoList) {
+        if (StringUtils.isEmpty(userTokenRequest.getUsername())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "loginName")));
+        } else if (StringUtils.isEmpty(userTokenRequest.getPassword())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "loginPassword")));
+        } else if (userTokenRequest.getExpirationTime() <= System.currentTimeMillis()) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, EXPIRY_TIME)));
+        }
     }
 
 }
+package com.sbi.epay.authentication.service;
 
+import com.sbi.epay.authentication.exception.EPaySecurityException;
+import com.sbi.epay.authentication.model.AccessTokenRequest;
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.authentication.model.TransactionTokenRequest;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.util.EPayAuthenticationConstant;
+import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.security.Key;
+import java.text.MessageFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.sbi.epay.authentication.util.EPayJwtClaimsSet.*;
+
+/**
+ * Class Name: JwtService
+ * *
+ * Description: Service Class for generating and validating JSON Web Tokens (JWT).
+ * * This class provides methods to create signed JWTs using various inputs, including username/pwd, API keys, and hashed values.
+ * *
+ * Author: V1018217(Nirvay K. Bikram)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+@Component
+@RequiredArgsConstructor
+public class JwtService {
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(JwtService.class);
+
+    private final AuthenticationUserService authenticationUserService;
+    @Value("${security.jwt.secret.key}")
+    private String secretKey;
+    @Value("${security.jwt.secret.issuer}")
+    private String issuer;
+
+    /**
+     * Generates a JWT token with the specified claims, username, and expiration time.
+     *
+     * @param claims         A map of claims to include in the token.
+     * @param userName       The username used to sign the token.
+     * @param expirationTime The expiration time of the token in milliseconds.
+     * @return A signed JWT token as a string.
+     */
+    private String generateToken(Map<String, Object> claims, String userName, long expirationTime) {
+        logger.info("ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, username, and expiration time.");
+        Claims jwtClaims = Jwts.claims(claims);
+        jwtClaims.setSubject(userName);
+        jwtClaims.setIssuer(issuer);
+        jwtClaims.setIssuedAt(new Date(System.currentTimeMillis()));
+        jwtClaims.setExpiration(new Date(expirationTime));
+        return Jwts.builder().setClaims(jwtClaims).signWith(getSignKey(), SignatureAlgorithm.HS512).compact();
+    }
+
+    /**
+     * Generates a JWT token using a username, expirationTime and role.
+     *
+     * @param userTokenRequest UserTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateUserLoginToken(UserTokenRequest userTokenRequest) {
+        logger.info("ClassName - JwtService,MethodName - generateTokenWithUsernamePwd, Generates a JWT token using a username, expirationTime and role.");
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(USERNAME, userTokenRequest.getUsername());
+        claims.put(ROLE, userTokenRequest.getRoles());
+        claims.put(TYPE, userTokenRequest.getTokenType());
+        return generateToken(claims, userTokenRequest.getUsername(), userTokenRequest.getExpirationTime());
+    }
+
+    /**
+     * GenerateAccessToken method generateAccessToken and takes accessTokenRequest as parameter.
+     *
+     * @param accessTokenRequest AccessTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateAccessToken(AccessTokenRequest accessTokenRequest) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(USERNAME, accessTokenRequest.getUsername());
+        claims.put(MID, accessTokenRequest.getMId());
+        claims.put(ROLE, accessTokenRequest.getRoles());
+        claims.put(TYPE, accessTokenRequest.getTokenType());
+        return generateToken(claims, accessTokenRequest.getUsername(), accessTokenRequest.getExpirationTime());
+    }
+
+    /**
+     * Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.
+     *
+     * @param transactionTokenRequest TransactionTokenRequest
+     * @return A signed JWT token as a string.
+     */
+    public String generateTransactionToken(TransactionTokenRequest transactionTokenRequest) {
+        logger.info("ClassName - JwtService,MethodName - generateTokenWithHash, Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.");
+        Map<String, Object> claims = new HashMap<>();
+        claims.put(ORDER_NUMBER, transactionTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(MID, transactionTokenRequest.getMId());
+        claims.put(USERNAME, transactionTokenRequest.getSbiOrderReferenceNumber());
+        claims.put(ROLE, transactionTokenRequest.getRoles());
+        claims.put(TYPE, transactionTokenRequest.getTokenType());
+        claims.put(REFERENCE_ID, transactionTokenRequest.getReferenceId());
+        return generateToken(claims, transactionTokenRequest.getUsername(), transactionTokenRequest.getExpirationTime());
+    }
+
+    public Claims verifyJwtTokenAndGetClaims(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        if (issuer.equalsIgnoreCase(claims.getIssuer())) {
+            if (isTokenExpired(claims.getExpiration())) {
+                throw new IllegalStateException(EPayAuthenticationErrorConstants.TOKEN_EXPIRED);
+            } else if (authenticationUserService.isTokenInValid(token, claims.get(TYPE, String.class))) {
+                throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_TOKEN);
+            }
+            String userName = (String) claims.get(USERNAME);
+            String userNameWithTokenType = String.join(EPayAuthenticationConstant.JOINER, (String) claims.get(USERNAME), claims.get(TYPE, String.class));
+            logger.info("Token request received for userNameWithTokenType: {}", userNameWithTokenType);
+            EPayPrincipal ePayPrincipal = authenticationUserService.loadUserByUserName(userNameWithTokenType).orElseThrow(() -> new EPaySecurityException(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.NOT_FOUND_ERROR_MESSAGE, EPayAuthenticationErrorConstants.USER_NAME)));
+            logger.info("Token request received for userNameWithTokenType: {}", userNameWithTokenType);
+            if (!ePayPrincipal.getAuthenticationId().equalsIgnoreCase(userName)) {
+                throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_USER);
+            }
+        } else {
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_ISSUER);
+        }
+        return claims;
+    }
+
+
+    /**
+     * Get all claims from token. and @Param token
+     *
+     * @param token as a String
+     * @return Claims of the token
+     */
+    private Claims getAllClaimsFromToken(String token) {
+        try {
+            logger.info("ClassName - JwtService,MethodName - getAllClaimsFromToken, getting all claims from token.");
+            return Jwts.parserBuilder().setSigningKey(getSignKey()).build().parseClaimsJws(token).getBody();
+        } catch (ExpiredJwtException e) {
+            logger.error("Jwt Token is expired : {}", e.getLocalizedMessage());
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.TOKEN_EXPIRED);
+        }  catch (SignatureException e) {
+            logger.error("Jwt Token is expired : {}", e.getLocalizedMessage());
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_TOKEN);
+       }
+
+    }
+
+    /**
+     * Get SigningKey
+     *
+     * @return signed key
+     */
+    private Key getSignKey() {
+        logger.info("ClassName - JwtService,MethodName - getSignKey, getting SigningKey.");
+        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    /**
+     * Get expiration time from token
+     *
+     * @param expiration is as Date
+     * @return Boolean true if token is expired otherwise false.
+     */
+    private Boolean isTokenExpired(Date expiration) {
+        logger.info("ClassName - JwtService,MethodName - isTokenExpired, getting expiration time from token.");
+        return expiration.before(new Date());
+    }
+
+}
