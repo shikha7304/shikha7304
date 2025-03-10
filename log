@@ -1,3 +1,92 @@
+package com.sbi.epay.authentication.security;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sbi.epay.authentication.dto.AuthenticationResponse;
+import com.sbi.epay.authentication.dto.ErrorDto;
+import com.sbi.epay.authentication.util.LoggerFactoryUtility;
+import com.sbi.epay.authentication.util.LoggerUtility;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.AuthenticationException;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class EPayAuthenticationEntryPointTest {
+
+    private EPayAuthenticationEntryPoint authenticationEntryPoint;
+
+    @Mock
+    private HttpServletRequest request;
+
+    @Mock
+    private HttpServletResponse response;
+
+    @Mock
+    private AuthenticationException authenticationException;
+
+    @Mock
+    private LoggerUtility logger;
+
+    private ObjectMapper objectMapper;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+        authenticationEntryPoint = new EPayAuthenticationEntryPoint();
+        objectMapper = new ObjectMapper();
+    }
+
+    @Test
+    void testCommence_UnauthorizedResponse() throws Exception {
+        // Arrange
+        String errorMessage = "Unauthorized access";
+        when(authenticationException.getMessage()).thenReturn(errorMessage);
+
+        // Mocking response writer
+        StringWriter stringWriter = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(stringWriter);
+        when(response.getWriter()).thenReturn(printWriter);
+
+        // Act
+        authenticationEntryPoint.commence(request, response, authenticationException);
+
+        // Assert
+        verify(response, times(1)).setContentType(MediaType.APPLICATION_JSON_VALUE);
+        verify(response, times(1)).setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+
+        // Parse JSON response
+        printWriter.flush(); // Ensure everything is written
+        String jsonResponse = stringWriter.toString();
+        AuthenticationResponse actualResponse = objectMapper.readValue(jsonResponse, AuthenticationResponse.class);
+
+        assertEquals(0, actualResponse.getStatus());
+        assertNotNull(actualResponse.getErrors());
+        assertEquals(1, actualResponse.getErrors().size());
+
+        ErrorDto errorDto = actualResponse.getErrors().get(0);
+        assertEquals(String.valueOf(HttpStatus.UNAUTHORIZED.value()), errorDto.getErrorCode());
+        assertEquals(errorMessage, errorDto.getErrorMessage());
+
+        verify(authenticationException, times(1)).getMessage();
+    }
+}
+
+
+
+
+
+
 
 @Component
 public class EPayAuthenticationEntryPoint implements AuthenticationEntryPoint {
