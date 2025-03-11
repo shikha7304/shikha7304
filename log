@@ -1,3 +1,89 @@
+package com.sbi.epay.authentication.service;
+
+import com.sbi.epay.authentication.model.AccessTokenRequest;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.util.enums.TokenType;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.security.Key;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+@Nested
+@ExtendWith(MockitoExtension.class)
+class JwtServiceTest {
+
+    @InjectMocks
+    private JwtService jwtService;
+
+    @Mock
+    private AuthenticationUserService authenticationUserService;
+
+    private String secretKey;
+    private String issuer;
+    private Key signingKey;
+
+    @BeforeEach
+    void setUp() {
+        // Generate a secure key
+        signingKey = Keys.secretKeyFor(SignatureAlgorithm.HS512);
+        secretKey = Base64.getEncoder().encodeToString(signingKey.getEncoded()); // Encoded key
+        issuer = "testIssuer"; // Default issuer for testing
+    }
+
+    @Test
+    void testGenerateUserLoginToken() {
+        UserTokenRequest request = new UserTokenRequest();
+        request.setUsername("testUser");
+        request.setRoles(Collections.singletonList("ROLE_USER"));
+        request.setTokenType(TokenType.USER);
+        request.setPassword("password");
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateUserLoginToken(request);
+        assertNotNull(token);
+    }
+
+    @Test
+    void testGenerateAccessToken() {
+        AccessTokenRequest request = new AccessTokenRequest();
+        request.setUsername("testUser");
+        request.setMId("MID123");
+        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
+        request.setTokenType(TokenType.ACCESS);
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateAccessToken(request);
+        assertNotNull(token);
+    }
+
+    // Ensure JwtService uses this key
+    private Key getSignKey() {
+        return signingKey;
+    }
+}
+
+
+
+
+
+
+
 @Nested
 @ExtendWith(MockitoExtension.class)
 class JwtServiceTest {
