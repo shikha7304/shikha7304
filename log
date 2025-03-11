@@ -19,6 +19,146 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.security.Key;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class JwtServiceTest {
+
+    @InjectMocks
+    private JwtService jwtService;
+
+    @Mock
+    private AuthenticationUserService authenticationUserService;
+
+    @Mock
+    private Claims claims;
+
+    private final Key secretKey = Keys.secretKeyFor(SignatureAlgorithm.HS512); // Secure key
+
+    private final String issuer = "testIssuer";
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testGenerateUserLoginToken() {
+        UserTokenRequest request = new UserTokenRequest();
+        request.setUsername("testUser");
+        request.setRoles(Collections.singletonList("ROLE_USER"));
+        request.setTokenType(TokenType.USER);
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateUserLoginToken(request);
+        assertNotNull(token);
+    }
+
+    @Test
+    void testGenerateAccessToken() {
+        AccessTokenRequest request = new AccessTokenRequest();
+        request.setUsername("testUser");
+        request.setMId("MID123");
+        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
+        request.setTokenType(TokenType.ACCESS);
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateAccessToken(request);
+        assertNotNull(token);
+    }
+
+    @Test
+    void testGenerateTransactionToken() {
+        TransactionTokenRequest request = new TransactionTokenRequest();
+        request.setSbiOrderReferenceNumber("ORD123");
+        request.setMId("MID123");
+        request.setUsername("testUser");
+        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
+        request.setTokenType(TokenType.TRANSACTION);
+        request.setReferenceId("REF123");
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateTransactionToken(request);
+        assertNotNull(token);
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_Success() {
+        String token = Jwts.builder()
+                .setClaims(new HashMap<>())
+                .setIssuer(issuer)
+                .setSubject("testUser")
+                .setExpiration(new Date(System.currentTimeMillis() + 10000))
+                .signWith(secretKey, SignatureAlgorithm.HS512)
+                .compact();
+
+        Claims claims = jwtService.verifyJwtTokenAndGetClaims(token);
+        assertNotNull(claims);
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_ExpiredToken() {
+        String token = Jwts.builder()
+                .setClaims(new HashMap<>())
+                .setIssuer(issuer)
+                .setSubject("testUser")
+                .setExpiration(new Date(System.currentTimeMillis() - 10000)) // Expired token
+                .signWith(secretKey, SignatureAlgorithm.HS512)
+                .compact();
+
+        Exception exception = assertThrows(IllegalStateException.class, () -> jwtService.verifyJwtTokenAndGetClaims(token));
+        assertEquals(EPayAuthenticationErrorConstants.TOKEN_EXPIRED, exception.getMessage());
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_InvalidIssuer() {
+        String token = Jwts.builder()
+                .setClaims(new HashMap<>())
+                .setIssuer("WrongIssuer") // Invalid issuer
+                .setSubject("testUser")
+                .setExpiration(new Date(System.currentTimeMillis() + 10000))
+                .signWith(secretKey, SignatureAlgorithm.HS512)
+                .compact();
+
+        Exception exception = assertThrows(IllegalStateException.class, () -> jwtService.verifyJwtTokenAndGetClaims(token));
+        assertEquals(EPayAuthenticationErrorConstants.INVALID_ISSUER, exception.getMessage());
+    }
+
+    private Key getSignKey() {
+        return secretKey; // Returns the secure key
+    }
+}
+
+
+
+
+
+package com.sbi.epay.authentication.service;
+
+import com.sbi.epay.authentication.model.AccessTokenRequest;
+import com.sbi.epay.authentication.model.TransactionTokenRequest;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
+import com.sbi.epay.authentication.util.enums.TokenType;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Value;
+
+import java.security.Key;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
