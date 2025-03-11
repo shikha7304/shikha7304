@@ -1,86 +1,226 @@
-@Test
-void testDerivePrincipal_WithRole() {
-    String token = "jwtToken";
-    
-    // Use RETURNS_DEEP_STUBS to prevent issues with entrySet() calls
-    Claims claims = mock(Claims.class, RETURNS_DEEP_STUBS);
+package com.sbi.epay.authentication.service;
 
-    when(claims.getIssuer()).thenReturn("expectedIssuer");
-    when(claims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 100000));
-    when(claims.get(EPayJwtClaimsSet.ROLE, ArrayList.class)).thenReturn(new ArrayList<>(List.of("ROLE_ADMIN")));
-    when(claims.get(EPayJwtClaimsSet.USERNAME, String.class)).thenReturn("adminUser");
-    when(claims.get(EPayJwtClaimsSet.MID, String.class)).thenReturn("MID123");
-    when(claims.get(EPayJwtClaimsSet.ORDER_NUMBER, String.class)).thenReturn("ORD456");
-    when(claims.get(EPayJwtClaimsSet.ATRN_NUMBER, String.class)).thenReturn("ATRN789");
-    when(claims.get(EPayJwtClaimsSet.TYPE, String.class)).thenReturn("AdminToken");
+import com.sbi.epay.authentication.model.AccessTokenRequest;
+import com.sbi.epay.authentication.model.TransactionTokenRequest;
+import com.sbi.epay.authentication.model.UserTokenRequest;
+import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
+import com.sbi.epay.authentication.util.enums.TokenType;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Value;
 
-    // Ensure jwtService returns the mocked claims object
-    when(jwtService.verifyJwtTokenAndGetClaims(token)).thenReturn(claims);
+import java.security.Key;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
 
-    JwtAuthenticationToken authentication = (JwtAuthenticationToken) jwtAuthenticationProvider.authenticate(new JwtAuthenticationToken(token));
-    EPayPrincipal principal = authentication.getPrincipal();
+import static org.junit.jupiter.api.Assertions.*;
 
-    assertNotNull(principal);
-    assertEquals("adminUser", principal.getAuthenticationId());
-    assertEquals("MID123", principal.getMId());
-    assertEquals("ORD456", principal.getOrderRef());
-    assertEquals("ATRN789", principal.getTransactionRef());
-    assertEquals("AdminToken", principal.getTokenType());
-    assertEquals(List.of("ROLE_ADMIN"), principal.getUserRole());
+@ExtendWith(MockitoExtension.class)
+class JwtServiceTest {
+
+    @InjectMocks
+    private JwtService jwtService;
+
+    @Mock
+    private AuthenticationUserService authenticationUserService;
+
+    @Value("${security.jwt.secret.key}")
+    private String secretKey = "0123456789abcdef";
+
+    @Value("${security.jwt.secret.issuer}")
+    private String issuer = "testIssuer";
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+    @Test
+    void testGenerateUserLoginToken() {
+        UserTokenRequest request = new UserTokenRequest();
+        request.setUsername("testUser");
+        request.setRoles(Collections.singletonList("ROLE_USER"));
+        request.setTokenType(TokenType.USER);
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateUserLoginToken(request);
+        assertNotNull(token);
+    }
+
+    @Test
+    void testGenerateAccessToken() {
+        AccessTokenRequest request = new AccessTokenRequest();
+        request.setUsername("testUser");
+        request.setMId("MID123");
+        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
+        request.setTokenType(TokenType.ACCESS);
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateAccessToken(request);
+        assertNotNull(token);
+    }
+
+    @Test
+    void testGenerateTransactionToken() {
+        TransactionTokenRequest request = new TransactionTokenRequest();
+        request.setSbiOrderReferenceNumber("ORD123");
+        request.setMId("MID123");
+        request.setUsername("testUser");
+        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
+        request.setTokenType(TokenType.TRANSACTION);
+        request.setReferenceId("REF123");
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateTransactionToken(request);
+        assertNotNull(token);
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_Success() {
+        String token = Jwts.builder()
+                .setClaims(new HashMap<>())
+                .setIssuer(issuer)
+                .setSubject("testUser")
+                .setExpiration(new Date(System.currentTimeMillis() + 10000))
+                .signWith(getSignKey(), SignatureAlgorithm.HS512)
+                .compact();
+
+        Claims claims = jwtService.verifyJwtTokenAndGetClaims(token);
+        assertNotNull(claims);
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_ExpiredToken() {
+        String token = Jwts.builder()
+                .setClaims(new HashMap<>())
+                .setIssuer(issuer)
+                .setSubject("testUser")
+                .setExpiration(new Date(System.currentTimeMillis() - 10000))
+                .signWith(getSignKey(), SignatureAlgorithm.HS512)
+                .compact();
+
+        Exception exception = assertThrows(IllegalStateException.class, () -> jwtService.verifyJwtTokenAndGetClaims(token));
+        assertEquals(EPayAuthenticationErrorConstants.TOKEN_EXPIRED, exception.getMessage());
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_InvalidIssuer() {
+        String token = Jwts.builder()
+                .setClaims(new HashMap<>())
+                .setIssuer("WrongIssuer")
+                .setSubject("testUser")
+                .setExpiration(new Date(System.currentTimeMillis() + 10000))
+                .signWith(getSignKey(), SignatureAlgorithm.HS512)
+                .compact();
+
+        Exception exception = assertThrows(IllegalStateException.class, () -> jwtService.verifyJwtTokenAndGetClaims(token));
+        assertEquals(EPayAuthenticationErrorConstants.INVALID_ISSUER, exception.getMessage());
+    }
+
+    private Key getSignKey() {
+        return Keys.hmacShaKeyFor(secretKey.getBytes());
+    }
 }
 
-
-doReturn(claims).when(jwtService).verifyJwtTokenAndGetClaims(token);
-
-
-
-
-@Test
-    void testDerivePrincipal_WithRole() {
-        String token = "jwtToken";
-        when(claims.getIssuer()).thenReturn("expectedIssuer");
-        when(claims.getExpiration()).thenReturn(new Date(System.currentTimeMillis()+100000));
-        when(claims.get(EPayJwtClaimsSet.ROLE, ArrayList.class)).thenReturn(new ArrayList<>(List.of("ROLE_ADMIN")));
-        when(claims.get(EPayJwtClaimsSet.USERNAME, String.class)).thenReturn("adminUser");
-        when(claims.get(EPayJwtClaimsSet.MID, String.class)).thenReturn("MID123");
-        when(claims.get(EPayJwtClaimsSet.ORDER_NUMBER, String.class)).thenReturn("ORD456");
-        when(claims.get(EPayJwtClaimsSet.ATRN_NUMBER, String.class)).thenReturn("ATRN789");
-        when(claims.get(EPayJwtClaimsSet.TYPE, String.class)).thenReturn("AdminToken");
-        when(jwtService.verifyJwtTokenAndGetClaims(token)).thenReturn(claims);
-
-        JwtAuthenticationToken authentication = (JwtAuthenticationToken) jwtAuthenticationProvider.authenticate(new JwtAuthenticationToken("jwtToken"));
-        EPayPrincipal principal = authentication.getPrincipal();
-
-        assertNotNull(principal);
-        assertEquals("adminUser", principal.getAuthenticationId());
-        assertEquals("MID123", principal.getMId());
-        assertEquals("ORD456", principal.getOrderRef());
-        assertEquals("ATRN789", principal.getTransactionRef());
-        assertEquals("AdminToken", principal.getTokenType());
-        assertEquals(List.of("ROLE_ADMIN"), principal.getUserRole());
-    }
-Claims$MockitoMock$unEq0whf cannot be returned by entrySet()
-entrySet() should return Set
-***
-If you're unsure why you're getting above error read on.
-Due to the nature of the syntax above problem might occur because:
-1. This exception *might* occur in wrongly written multi-threaded tests.
-   Please refer to Mockito FAQ on limitations of concurrency testing.
-2. A spy is stubbed using when(spy.foo()).then() syntax. It is safer to stub spies - 
-   - with doReturn|Throw() family of methods. More in javadocs for Mockito.spy() method.
-
-org.mockito.exceptions.misusing.WrongTypeOfReturnValue: 
-Claims$MockitoMock$unEq0whf cannot be returned by entrySet()
-entrySet() should return Set
-***
-If you're unsure why you're getting above error read on.
-Due to the nature of the syntax above problem might occur because:
-1. This exception *might* occur in wrongly written multi-threaded tests.
-   Please refer to Mockito FAQ on limitations of concurrency testing.
-2. A spy is stubbed using when(spy.foo()).then() syntax. It is safer to stub spies - 
-   - with doReturn|Throw() family of methods. More in javadocs for Mockito.spy() method.
-
-	at com.sbi.epay.authentication.service.JwtAuthenticationProviderTest.testDerivePrincipal_WithRole(JwtAuthenticationProviderTest.java:104)
+The specified key byte array is 128 bits which is not secure enough for any JWT HMAC-SHA algorithm.  The JWT JWA Specification (RFC 7518, Section 3.2) states that keys used with HMAC-SHA algorithms MUST have a size >= 256 bits (the key size must be greater than or equal to the hash output size).  Consider using the io.jsonwebtoken.security.Keys#secretKeyFor(SignatureAlgorithm) method to create a key guaranteed to be secure enough for your preferred HMAC-SHA algorithm.  See https://tools.ietf.org/html/rfc7518#section-3.2 for more information.
+io.jsonwebtoken.security.WeakKeyException: The specified key byte array is 128 bits which is not secure enough for any JWT HMAC-SHA algorithm.  The JWT JWA Specification (RFC 7518, Section 3.2) states that keys used with HMAC-SHA algorithms MUST have a size >= 256 bits (the key size must be greater than or equal to the hash output size).  Consider using the io.jsonwebtoken.security.Keys#secretKeyFor(SignatureAlgorithm) method to create a key guaranteed to be secure enough for your preferred HMAC-SHA algorithm.  See https://tools.ietf.org/html/rfc7518#section-3.2 for more information.
+	at io.jsonwebtoken.security.Keys.hmacShaKeyFor(Keys.java:96)
+	at com.sbi.epay.authentication.service.JwtServiceTest.getSignKey(JwtServiceTest.java:130)
+	at com.sbi.epay.authentication.service.JwtServiceTest.testVerifyJwtTokenAndGetClaims_ExpiredToken(JwtServiceTest.java:108)
 	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
 	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+The specified key byte array is 128 bits which is not secure enough for any JWT HMAC-SHA algorithm.  The JWT JWA Specification (RFC 7518, Section 3.2) states that keys used with HMAC-SHA algorithms MUST have a size >= 256 bits (the key size must be greater than or equal to the hash output size).  Consider using the io.jsonwebtoken.security.Keys#secretKeyFor(SignatureAlgorithm) method to create a key guaranteed to be secure enough for your preferred HMAC-SHA algorithm.  See https://tools.ietf.org/html/rfc7518#section-3.2 for more information.
+io.jsonwebtoken.security.WeakKeyException: The specified key byte array is 128 bits which is not secure enough for any JWT HMAC-SHA algorithm.  The JWT JWA Specification (RFC 7518, Section 3.2) states that keys used with HMAC-SHA algorithms MUST have a size >= 256 bits (the key size must be greater than or equal to the hash output size).  Consider using the io.jsonwebtoken.security.Keys#secretKeyFor(SignatureAlgorithm) method to create a key guaranteed to be secure enough for your preferred HMAC-SHA algorithm.  See https://tools.ietf.org/html/rfc7518#section-3.2 for more information.
+	at io.jsonwebtoken.security.Keys.hmacShaKeyFor(Keys.java:96)
+	at com.sbi.epay.authentication.service.JwtServiceTest.getSignKey(JwtServiceTest.java:130)
+	at com.sbi.epay.authentication.service.JwtServiceTest.testVerifyJwtTokenAndGetClaims_InvalidIssuer(JwtServiceTest.java:122)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+The specified key byte array is 128 bits which is not secure enough for any JWT HMAC-SHA algorithm.  The JWT JWA Specification (RFC 7518, Section 3.2) states that keys used with HMAC-SHA algorithms MUST have a size >= 256 bits (the key size must be greater than or equal to the hash output size).  Consider using the io.jsonwebtoken.security.Keys#secretKeyFor(SignatureAlgorithm) method to create a key guaranteed to be secure enough for your preferred HMAC-SHA algorithm.  See https://tools.ietf.org/html/rfc7518#section-3.2 for more information.
+io.jsonwebtoken.security.WeakKeyException: The specified key byte array is 128 bits which is not secure enough for any JWT HMAC-SHA algorithm.  The JWT JWA Specification (RFC 7518, Section 3.2) states that keys used with HMAC-SHA algorithms MUST have a size >= 256 bits (the key size must be greater than or equal to the hash output size).  Consider using the io.jsonwebtoken.security.Keys#secretKeyFor(SignatureAlgorithm) method to create a key guaranteed to be secure enough for your preferred HMAC-SHA algorithm.  See https://tools.ietf.org/html/rfc7518#section-3.2 for more information.
+	at io.jsonwebtoken.security.Keys.hmacShaKeyFor(Keys.java:96)
+	at com.sbi.epay.authentication.service.JwtServiceTest.getSignKey(JwtServiceTest.java:130)
+	at com.sbi.epay.authentication.service.JwtServiceTest.testVerifyJwtTokenAndGetClaims_Success(JwtServiceTest.java:94)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+2025-03-11 03:41:06.218 INFO | com.sbi.epay.authentication.service.JwtService:79 | principal=  | scenario= | operation= | correlation= | generateUserLoginToken | ClassName - JwtService,MethodName - generateTokenWithUsernamePwd, Generates a JWT token using a username, expirationTime and role.
+2025-03-11 03:41:07.333 INFO | com.sbi.epay.authentication.service.JwtService:63 | principal=  | scenario= | operation= | correlation= | generateToken | ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, username, and expiration time.
+2025-03-11 03:41:10.502 INFO | com.sbi.epay.authentication.service.JwtService:169 | principal=  | scenario= | operation= | correlation= | getSignKey | ClassName - JwtService,MethodName - getSignKey, getting SigningKey.
+
+Decode argument cannot be null.
+java.lang.IllegalArgumentException: Decode argument cannot be null.
+	at io.jsonwebtoken.lang.Assert.notNull(Assert.java:82)
+	at io.jsonwebtoken.io.ExceptionPropagatingDecoder.decode(ExceptionPropagatingDecoder.java:34)
+	at com.sbi.epay.authentication.service.JwtService.getSignKey(JwtService.java:170)
+	at com.sbi.epay.authentication.service.JwtService.generateToken(JwtService.java:69)
+	at com.sbi.epay.authentication.service.JwtService.generateUserLoginToken(JwtService.java:84)
+	at com.sbi.epay.authentication.service.JwtServiceTest.testGenerateUserLoginToken(JwtServiceTest.java:55)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+2025-03-11 03:41:10.522 INFO | com.sbi.epay.authentication.service.JwtService:109 | principal=  | scenario= | operation= | correlation= | generateTransactionToken | ClassName - JwtService,MethodName - generateTokenWithHash, Generates a JWT token using a hash of the order reference number, expiration time and merchant ID.
+2025-03-11 03:41:10.524 INFO | com.sbi.epay.authentication.service.JwtService:63 | principal=  | scenario= | operation= | correlation= | generateToken | ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, username, and expiration time.
+2025-03-11 03:41:10.525 INFO | com.sbi.epay.authentication.service.JwtService:169 | principal=  | scenario= | operation= | correlation= | getSignKey | ClassName - JwtService,MethodName - getSignKey, getting SigningKey.
+
+Decode argument cannot be null.
+java.lang.IllegalArgumentException: Decode argument cannot be null.
+	at io.jsonwebtoken.lang.Assert.notNull(Assert.java:82)
+	at io.jsonwebtoken.io.ExceptionPropagatingDecoder.decode(ExceptionPropagatingDecoder.java:34)
+	at com.sbi.epay.authentication.service.JwtService.getSignKey(JwtService.java:170)
+	at com.sbi.epay.authentication.service.JwtService.generateToken(JwtService.java:69)
+	at com.sbi.epay.authentication.service.JwtService.generateTransactionToken(JwtService.java:117)
+	at com.sbi.epay.authentication.service.JwtServiceTest.testGenerateTransactionToken(JwtServiceTest.java:83)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+2025-03-11 03:41:10.538 INFO | com.sbi.epay.authentication.service.JwtService:63 | principal=  | scenario= | operation= | correlation= | generateToken | ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, username, and expiration time.
+2025-03-11 03:41:10.539 INFO | com.sbi.epay.authentication.service.JwtService:169 | principal=  | scenario= | operation= | correlation= | getSignKey | ClassName - JwtService,MethodName - getSignKey, getting SigningKey.
+
+Decode argument cannot be null.
+java.lang.IllegalArgumentException: Decode argument cannot be null.
+	at io.jsonwebtoken.lang.Assert.notNull(Assert.java:82)
+	at io.jsonwebtoken.io.ExceptionPropagatingDecoder.decode(ExceptionPropagatingDecoder.java:34)
+	at com.sbi.epay.authentication.service.JwtService.getSignKey(JwtService.java:170)
+	at com.sbi.epay.authentication.service.JwtService.generateToken(JwtService.java:69)
+	at com.sbi.epay.authentication.service.JwtService.generateAccessToken(JwtService.java:99)
+	at com.sbi.epay.authentication.service.JwtServiceTest.testGenerateAccessToken(JwtServiceTest.java:68)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :test
+JwtServiceTest > testVerifyJwtTokenAndGetClaims_ExpiredToken() FAILED
+    io.jsonwebtoken.security.WeakKeyException at JwtServiceTest.java:130
+JwtServiceTest > testVerifyJwtTokenAndGetClaims_InvalidIssuer() FAILED
+    io.jsonwebtoken.security.WeakKeyException at JwtServiceTest.java:130
+JwtServiceTest > testVerifyJwtTokenAndGetClaims_Success() FAILED
+    io.jsonwebtoken.security.WeakKeyException at JwtServiceTest.java:130
+JwtServiceTest > testGenerateUserLoginToken() FAILED
+    java.lang.IllegalArgumentException at JwtServiceTest.java:55
+JwtServiceTest > testGenerateTransactionToken() FAILED
+    java.lang.IllegalArgumentException at JwtServiceTest.java:83
+JwtServiceTest > testGenerateAccessToken() FAILED
+    java.lang.IllegalArgumentException at JwtServiceTest.java:68
+6 tests completed, 6 failed
