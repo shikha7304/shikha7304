@@ -1,5 +1,132 @@
 package com.sbi.epay.authentication.validator;
 
+import com.sbi.epay.authentication.dto.ErrorDto;
+import com.sbi.epay.authentication.exception.EPaySecurityException;
+import com.sbi.epay.authentication.model.*;
+import com.sbi.epay.authentication.util.enums.TokenType;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class AuthRequestValidatorTest {
+
+    @Test
+    void testValidAuthRequest_WithValidAccessTokenRequest() {
+        AccessTokenRequest request = new AccessTokenRequest();
+        request.setTokenType(TokenType.ACCESS);
+        request.setApiKey("validApiKey");
+        request.setSecretKey("validSecretKey");
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        assertDoesNotThrow(() -> AuthRequestValidator.validAuthRequest(request));
+    }
+
+    @Test
+    void testValidAuthRequest_WithInvalidAccessTokenRequest_ShouldThrowException() {
+        AccessTokenRequest request = new AccessTokenRequest();
+        request.setTokenType(TokenType.ACCESS);
+        request.setApiKey("");  // Invalid case
+
+        EPaySecurityException exception = assertThrows(EPaySecurityException.class, 
+            () -> AuthRequestValidator.validAuthRequest(request));
+
+        List<ErrorDto> errors = exception.getErrors();
+        assertEquals(1, errors.size());
+        assertEquals("MANDATORY_FIELD_MISSING", errors.get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidAuthRequest_WithValidTransactionTokenRequest() {
+        TransactionTokenRequest request = new TransactionTokenRequest();
+        request.setTokenType(TokenType.TRANSACTION);
+        request.setSbiOrderReferenceNumber("order123");
+        request.setMId("MID123");
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        assertDoesNotThrow(() -> AuthRequestValidator.validAuthRequest(request));
+    }
+
+    @Test
+    void testValidAuthRequest_WithInvalidTransactionTokenRequest_ShouldThrowException() {
+        TransactionTokenRequest request = new TransactionTokenRequest();
+        request.setTokenType(TokenType.TRANSACTION);
+        request.setSbiOrderReferenceNumber(""); // Invalid case
+
+        EPaySecurityException exception = assertThrows(EPaySecurityException.class, 
+            () -> AuthRequestValidator.validAuthRequest(request));
+
+        List<ErrorDto> errors = exception.getErrors();
+        assertEquals(1, errors.size());
+        assertEquals("MANDATORY_FIELD_MISSING", errors.get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidAuthRequest_WithValidUserTokenRequest() {
+        UserTokenRequest request = new UserTokenRequest();
+        request.setTokenType(TokenType.USER);
+        request.setUsername("testUser");
+        request.setPassword("password");
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        assertDoesNotThrow(() -> AuthRequestValidator.validAuthRequest(request));
+    }
+
+    @Test
+    void testValidAuthRequest_WithInvalidUserTokenRequest_ShouldThrowException() {
+        UserTokenRequest request = new UserTokenRequest();
+        request.setTokenType(TokenType.USER);
+        request.setUsername("");  // Invalid case
+
+        EPaySecurityException exception = assertThrows(EPaySecurityException.class, 
+            () -> AuthRequestValidator.validAuthRequest(request));
+
+        List<ErrorDto> errors = exception.getErrors();
+        assertEquals(1, errors.size());
+        assertEquals("MANDATORY_FIELD_MISSING", errors.get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidAuthRequest_WithInvalidExpirationTime_ShouldThrowException() {
+        UserTokenRequest request = new UserTokenRequest();
+        request.setTokenType(TokenType.USER);
+        request.setUsername("testUser");
+        request.setPassword("password");
+        request.setExpirationTime(System.currentTimeMillis() - 1000); // Expired time
+
+        EPaySecurityException exception = assertThrows(EPaySecurityException.class, 
+            () -> AuthRequestValidator.validAuthRequest(request));
+
+        List<ErrorDto> errors = exception.getErrors();
+        assertEquals(1, errors.size());
+        assertEquals("INVALID_FIELD_VALUE", errors.get(0).getErrorCode());
+    }
+
+    @Test
+    void testValidAuthRequest_WithInvalidTokenType_ShouldThrowException() {
+        TokenRequest request = new TokenRequest() {
+            @Override
+            public TokenType getTokenType() {
+                return null; // Invalid case
+            }
+        };
+
+        EPaySecurityException exception = assertThrows(EPaySecurityException.class, 
+            () -> AuthRequestValidator.validAuthRequest(request));
+
+        List<ErrorDto> errors = exception.getErrors();
+        assertEquals(1, errors.size());
+        assertEquals("INVALID_FIELD_VALUE", errors.get(0).getErrorCode());
+    }
+}
+
+
+
+
+
+package com.sbi.epay.authentication.validator;
+
 import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
 import com.sbi.epay.authentication.dto.ErrorDto;
 import com.sbi.epay.authentication.exception.EPaySecurityException;
