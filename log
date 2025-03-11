@@ -1,190 +1,102 @@
-package com.sbi.epay.authentication.service;
+package com.sbi.epay.authentication.validator;
 
-import com.sbi.epay.authentication.model.AccessTokenRequest;
-import com.sbi.epay.authentication.model.UserTokenRequest;
-import com.sbi.epay.authentication.util.enums.TokenType;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.security.Keys;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import com.sbi.epay.authentication.util.EPayAuthenticationErrorConstants;
+import com.sbi.epay.authentication.dto.ErrorDto;
+import com.sbi.epay.authentication.exception.EPaySecurityException;
+import com.sbi.epay.authentication.model.*;
+import com.sbi.epay.logging.utility.LoggerFactoryUtility;
+import com.sbi.epay.logging.utility.LoggerUtility;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.CollectionUtils;
 
-import java.security.Key;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@Nested
-@ExtendWith(MockitoExtension.class)
-class JwtServiceTest {
+/**
+ * Class Name: AuthRequestValidator
+ * *
+ * Description: This class contains authentication request validator and checks null/empty of request variable.
+ * *
+ * Author: V1018217(Nirvay K. Bikram)
+ * Copyright (c) 2024 [State Bank of India]
+ * All rights reserved
+ * *
+ * Version:1.0
+ */
+public class AuthRequestValidator {
+    public static final String TOKEN_TYPE = "Token Type";
+    public static final String EXPIRY_TIME = "Expiry Time";
+    private static final LoggerUtility logger = LoggerFactoryUtility.getLogger(AuthRequestValidator.class);
 
-    @InjectMocks
-    private JwtService jwtService;
+    /**
+     * Validate authentication respective request object based on token type.
+     *
+     * @param tokenRequest gets request for validation.
+     */
+    public static void validAuthRequest(TokenRequest tokenRequest) {
+        List<ErrorDto> errorDtoList = new ArrayList<>();
+        switch (tokenRequest.getTokenType()) {
+            case ACCESS -> validAccessTokenRequest((AccessTokenRequest) tokenRequest, errorDtoList);
+            case TRANSACTION -> validTransactionTokenRequest((TransactionTokenRequest) tokenRequest, errorDtoList);
+            case USER -> validUserTokenRequest((UserTokenRequest) tokenRequest, errorDtoList);
+            default ->
+                    errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, TOKEN_TYPE)));
+        }
 
-    @Mock
-    private AuthenticationUserService authenticationUserService;
-
-    private String secretKey;
-    private String issuer;
-    private Key signingKey;
-
-    @BeforeEach
-    void setUp() {
-        // Generate a secure key
-        signingKey = Keys.secretKeyFor(SignatureAlgorithm.HS512);
-        secretKey = Base64.getEncoder().encodeToString(signingKey.getEncoded()); // Encoded key
-        issuer = "testIssuer"; // Default issuer for testing
+        if (!CollectionUtils.isEmpty(errorDtoList)) {
+            logger.error("Error -> ", errorDtoList);
+            throw new EPaySecurityException(errorDtoList);
+        }
     }
 
-    @Test
-    void testGenerateUserLoginToken() {
-        UserTokenRequest request = new UserTokenRequest();
-        request.setUsername("testUser");
-        request.setRoles(Collections.singletonList("ROLE_USER"));
-        request.setTokenType(TokenType.USER);
-        request.setPassword("password");
-        request.setExpirationTime(System.currentTimeMillis() + 10000);
-
-        String token = jwtService.generateUserLoginToken(request);
-        assertNotNull(token);
+    /**
+     * Validate Customer authentication request object.
+     *
+     * @param tokenRequest gets request related to Customer.
+     * @param errorDtoList handles error/errorList while validations.
+     */
+    private static void validAccessTokenRequest(AccessTokenRequest tokenRequest, List<ErrorDto> errorDtoList) {
+        if (StringUtils.isEmpty(tokenRequest.getApiKey())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "apiKey")));
+        } else if (StringUtils.isEmpty(tokenRequest.getSecretKey())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "secretKey")));
+        } else if (tokenRequest.getExpirationTime() <= System.currentTimeMillis()) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, EXPIRY_TIME)));
+        }
     }
 
-    @Test
-    void testGenerateAccessToken() {
-        AccessTokenRequest request = new AccessTokenRequest();
-        request.setUsername("testUser");
-        request.setMId("MID123");
-        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
-        request.setTokenType(TokenType.ACCESS);
-        request.setExpirationTime(System.currentTimeMillis() + 10000);
-
-        String token = jwtService.generateAccessToken(request);
-        assertNotNull(token);
+    /**
+     * Validate Transaction authentication request object.
+     *
+     * @param tokenRequest gets request related to transaction.
+     * @param errorDtoList handles error/errorList while validations.
+     */
+    private static void validTransactionTokenRequest(TransactionTokenRequest tokenRequest, List<ErrorDto> errorDtoList) {
+        if (StringUtils.isEmpty(tokenRequest.getSbiOrderReferenceNumber())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "orderNumber")));
+        } else if (StringUtils.isEmpty(tokenRequest.getMId())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "merchant Id")));
+        } else if (tokenRequest.getExpirationTime() <= System.currentTimeMillis()) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, EXPIRY_TIME)));
+        }
     }
 
-    // Ensure JwtService uses this key
-    private Key getSignKey() {
-        return signingKey;
+    /**
+     * Validate Merchant authentication request object.
+     *
+     * @param userTokenRequest gets request related to merchant.
+     * @param errorDtoList         handles error/errorList while validations.
+     */
+    private static void validUserTokenRequest(UserTokenRequest userTokenRequest, List<ErrorDto> errorDtoList) {
+        if (StringUtils.isEmpty(userTokenRequest.getUsername())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "loginName")));
+        } else if (StringUtils.isEmpty(userTokenRequest.getPassword())) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.MANDATORY_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.MANDATORY_ERROR_MESSAGE, "loginPassword")));
+        } else if (userTokenRequest.getExpirationTime() <= System.currentTimeMillis()) {
+            errorDtoList.add(new ErrorDto(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, EXPIRY_TIME)));
+        }
     }
+
 }
-
-
-
-
-
-
-
-@Nested
-@ExtendWith(MockitoExtension.class)
-class JwtServiceTest {
-
-    @InjectMocks
-    private JwtService jwtService;
-
-    @Mock
-    Claims claims;
-
-    @Mock
-    private AuthenticationUserService authenticationUserService;
-
-    private final String secretKey= Base64.getEncoder().encodeToString(Keys.secretKeyFor(SignatureAlgorithm.HS512).getEncoded());
-
-    @Value("${security.jwt.secret.issuer}")
-    private String issuer = "testIssuer";
-
-
-
-    @BeforeEach
-    void setUp() {
-        Claims jwtClaims = Jwts.claims(claims);
-        claims.setIssuer(issuer);
-
-
-    }
-    @Test
-    void testGenerateUserLoginToken() {
-
-
-        UserTokenRequest request = new UserTokenRequest();
-        request.setUsername("testUser");
-        request.setRoles(Collections.singletonList("ROLE_USER"));
-        request.setTokenType(TokenType.USER);
-        request.setPassword("password");
-        request.setExpirationTime(System.currentTimeMillis() + 10000);
-
-        String token = jwtService.generateUserLoginToken(request);
-        assertNotNull(token);
-    }
-
-    @Test
-    void testGenerateAccessToken() {
-        AccessTokenRequest request = new AccessTokenRequest();
-        request.setUsername("testUser");
-        request.setMId("MID123");
-        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
-        request.setTokenType(TokenType.ACCESS);
-        request.setExpirationTime(System.currentTimeMillis() + 10000);
-
-        String token = jwtService.generateAccessToken(request);
-        assertNotNull(token);
-    }
-
-public String generateAccessToken(AccessTokenRequest accessTokenRequest) {
-        Map<String, Object> claims = new HashMap<>();
-        claims.put(USERNAME, accessTokenRequest.getUsername());
-        claims.put(MID, accessTokenRequest.getMId());
-        claims.put(ROLE, accessTokenRequest.getRoles());
-        claims.put(TYPE, accessTokenRequest.getTokenType());
-        return generateToken(claims, accessTokenRequest.getUsername(), accessTokenRequest.getExpirationTime());
-    }
-
- private String generateToken(Map<String, Object> claims, String userName, long expirationTime) {
-        logger.info("ClassName - JwtService,MethodName - generateToken,generate a JWT token  with the specified claims, username, and expiration time.");
-        Claims jwtClaims = Jwts.claims(claims);
-        jwtClaims.setSubject(userName);
-        jwtClaims.setIssuer(issuer);
-        jwtClaims.setIssuedAt(new Date(System.currentTimeMillis()));
-        jwtClaims.setExpiration(new Date(expirationTime));
-        return Jwts.builder().setClaims(jwtClaims).signWith(getSignKey(), SignatureAlgorithm.HS512).compact();
-    }
-
-    private final AuthenticationUserService authenticationUserService;
-    @Value("${security.jwt.secret.key}")
-    private String secretKey;
-    @Value("${security.jwt.secret.issuer}")
-    private String issuer;
-
-Decode argument cannot be null.
-java.lang.IllegalArgumentException: Decode argument cannot be null.
-	at io.jsonwebtoken.lang.Assert.notNull(Assert.java:82)
-	at io.jsonwebtoken.io.ExceptionPropagatingDecoder.decode(ExceptionPropagatingDecoder.java:34)
-	at com.sbi.epay.authentication.service.JwtService.getSignKey(JwtService.java:170)
-	at com.sbi.epay.authentication.service.JwtService.generateToken(JwtService.java:69)
-	at com.sbi.epay.authentication.service.JwtService.generateUserLoginToken(JwtService.java:84)
-	at com.sbi.epay.authentication.service.JwtServiceTest.testGenerateUserLoginToken(JwtServiceTest.java:69)
-	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
-
-
-OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
-> Task :test
-JwtServiceTest > testGenerateUserLoginToken() FAILED
-    java.lang.IllegalArgumentException at JwtServiceTest.java:69
-Disconnected from the target VM, address: 'localhost:51117', transport: 'socket'
-1 test completed, 1 failed
-> Task :test FAILED
-FAILURE: Build failed with an exception.
-* What went wrong:
-Execution failed for task ':test'.
-> There were failing tests. See the report at: file:///D:/Projects/epay_java_utilities/epay_java_utilities/authentication-service/build/reports/tests/test/index.html
