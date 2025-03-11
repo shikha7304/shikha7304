@@ -16,3 +16,14 @@
         assertNotNull(resultClaims);
         assertEquals("testUser", resultClaims.get("username"));
     }
+ protected Claims getAllClaimsFromToken(String token) {
+        try {
+            logger.info("ClassName - JwtService,MethodName - getAllClaimsFromToken, getting all claims from token.");
+            return Jwts.parserBuilder().setSigningKey(getSignKey()).build().parseClaimsJws(token).getBody();
+        } catch (ExpiredJwtException e) {
+            logger.error("Jwt Token is expired : {}", e.getLocalizedMessage());
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.TOKEN_EXPIRED);
+        }  catch (SignatureException e) {
+            logger.error("Jwt Token is expired : {}", e.getLocalizedMessage());
+            throw new IllegalStateException(EPayAuthenticationErrorConstants.INVALID_TOKEN);
+       }
