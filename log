@@ -1,3 +1,103 @@
+package com.sbi.epay.authentication.service;
+
+import com.sbi.epay.authentication.model.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import javax.crypto.SecretKey;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.Date;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class JwtServiceTest {
+
+    @InjectMocks
+    private JwtService jwtService;
+
+    @Mock
+    private AuthenticationUserService authenticationUserService;
+
+    private String secretKey;
+    private String issuer;
+
+    @BeforeEach
+    void setUp() {
+        // Manually setting values to avoid @Value injection issue
+        secretKey = Base64.getEncoder().encodeToString(Keys.secretKeyFor(SignatureAlgorithm.HS512).getEncoded());
+        issuer = "testIssuer";
+
+        // Mock the getSignKey() method to return a valid key
+        Mockito.doReturn(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey)))
+               .when(jwtService).getSignKey();
+    }
+
+    @Test
+    void testGenerateUserLoginToken() {
+        UserTokenRequest request = new UserTokenRequest();
+        request.setUsername("testUser");
+        request.setRoles(Collections.singletonList("ROLE_USER"));
+        request.setTokenType(TokenType.USER);
+        request.setPassword("password");
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateUserLoginToken(request);
+        assertNotNull(token);
+        assertTrue(token.length() > 0);
+    }
+
+    @Test
+    void testGenerateAccessToken() {
+        AccessTokenRequest request = new AccessTokenRequest();
+        request.setUsername("testUser");
+        request.setMId("MID123");
+        request.setRoles(Collections.singletonList("ROLE_ADMIN"));
+        request.setTokenType(TokenType.ACCESS);
+        request.setExpirationTime(System.currentTimeMillis() + 10000);
+
+        String token = jwtService.generateAccessToken(request);
+        assertNotNull(token);
+        assertTrue(token.length() > 0);
+    }
+
+    @Test
+    void testGenerateToken() {
+        String userName = "testUser";
+        long expirationTime = System.currentTimeMillis() + 10000;
+
+        Claims jwtClaims = Jwts.claims();
+        jwtClaims.setSubject(userName);
+        jwtClaims.setIssuer(issuer);
+        jwtClaims.setIssuedAt(new Date());
+        jwtClaims.setExpiration(new Date(expirationTime));
+
+        String token = Jwts.builder()
+                .setClaims(jwtClaims)
+                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey)), SignatureAlgorithm.HS512)
+                .compact();
+
+        assertNotNull(token);
+        assertFalse(token.isEmpty());
+    }
+}
+
+
+
+
+
+
 package com.sbi.epay.authentication.validator;
 
 import com.sbi.epay.authentication.dto.ErrorDto;
