@@ -1,5 +1,153 @@
 package com.sbi.epay.authentication.service;
 
+import com.sbi.epay.authentication.model.EPayPrincipal;
+import com.sbi.epay.authentication.model.JwtAuthenticationToken;
+import com.sbi.epay.authentication.util.EPayJwtClaimsSet;
+import io.jsonwebtoken.Claims;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.security.core.Authentication;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class JwtAuthenticationProviderTest {
+
+    @Mock
+    private JwtService jwtService;
+
+    @InjectMocks
+    private JwtAuthenticationProvider jwtAuthenticationProvider;
+
+    @Mock
+    private Claims claims;
+
+    @BeforeEach
+    void setUp() {
+        MockitoAnnotations.openMocks(this);
+    }
+
+    @Test
+    void testAuthenticate_Success() {
+        String token = "jwtToken";
+        JwtAuthenticationToken authentication = new JwtAuthenticationToken(token);
+
+        when(jwtService.verifyJwtTokenAndGetClaims(token)).thenReturn(claims);
+        when(claims.get(EPayJwtClaimsSet.USERNAME, String.class)).thenReturn("testUser");
+        when(claims.get(EPayJwtClaimsSet.MID, String.class)).thenReturn("MID123");
+        when(claims.get(EPayJwtClaimsSet.ORDER_NUMBER, String.class)).thenReturn("ORD123");
+        when(claims.get(EPayJwtClaimsSet.ATRN_NUMBER, String.class)).thenReturn("ATRN123");
+        when(claims.get(EPayJwtClaimsSet.TYPE, String.class)).thenReturn("Bearer");
+        when(claims.get(EPayJwtClaimsSet.ROLE, ArrayList.class)).thenReturn(new ArrayList<>(List.of("ROLE_USER")));
+
+        Authentication result = jwtAuthenticationProvider.authenticate(authentication);
+
+        assertNotNull(result);
+        assertTrue(result.isAuthenticated());
+        assertEquals(token, result.getCredentials());
+        assertInstanceOf(JwtAuthenticationToken.class, result);
+
+        JwtAuthenticationToken jwtToken = (JwtAuthenticationToken) result;
+        assertEquals("testUser", jwtToken.getPrincipal().getAuthenticationId());
+        assertEquals("MID123", jwtToken.getPrincipal().getMId());
+        assertEquals("ORD123", jwtToken.getPrincipal().getOrderRef());
+        assertEquals("ATRN123", jwtToken.getPrincipal().getTransactionRef());
+        assertEquals("Bearer", jwtToken.getPrincipal().getTokenType());
+        assertEquals(List.of("ROLE_USER"), jwtToken.getPrincipal().getUserRole());
+    }
+
+    @Test
+    void testCreateSuccessAuthentication() {
+        String token = "jwtToken";
+
+        when(claims.get(EPayJwtClaimsSet.USERNAME, String.class)).thenReturn("testUser");
+        when(claims.get(EPayJwtClaimsSet.MID, String.class)).thenReturn("MID123");
+        when(claims.get(EPayJwtClaimsSet.ORDER_NUMBER, String.class)).thenReturn("ORD123");
+        when(claims.get(EPayJwtClaimsSet.ATRN_NUMBER, String.class)).thenReturn("ATRN123");
+        when(claims.get(EPayJwtClaimsSet.TYPE, String.class)).thenReturn("Bearer");
+        when(claims.get(EPayJwtClaimsSet.ROLE, ArrayList.class)).thenReturn(new ArrayList<>(List.of("ROLE_USER")));
+
+        JwtAuthenticationToken result = jwtAuthenticationProvider.authenticate(new JwtAuthenticationToken(token));
+
+        assertNotNull(result);
+        assertTrue(result.isAuthenticated());
+        assertEquals(token, result.getCredentials());
+        assertEquals("testUser", result.getPrincipal().getAuthenticationId());
+        assertEquals("MID123", result.getPrincipal().getMId());
+        assertEquals("ORD123", result.getPrincipal().getOrderRef());
+        assertEquals("ATRN123", result.getPrincipal().getTransactionRef());
+        assertEquals("Bearer", result.getPrincipal().getTokenType());
+        assertEquals(List.of("ROLE_USER"), result.getPrincipal().getUserRole());
+    }
+
+    @Test
+    void testDerivePrincipal_WithRole() {
+        when(claims.get(EPayJwtClaimsSet.ROLE, ArrayList.class)).thenReturn(new ArrayList<>(List.of("ROLE_ADMIN")));
+        when(claims.get(EPayJwtClaimsSet.USERNAME, String.class)).thenReturn("adminUser");
+        when(claims.get(EPayJwtClaimsSet.MID, String.class)).thenReturn("MID123");
+        when(claims.get(EPayJwtClaimsSet.ORDER_NUMBER, String.class)).thenReturn("ORD456");
+        when(claims.get(EPayJwtClaimsSet.ATRN_NUMBER, String.class)).thenReturn("ATRN789");
+        when(claims.get(EPayJwtClaimsSet.TYPE, String.class)).thenReturn("AdminToken");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationProvider.authenticate(new JwtAuthenticationToken("jwtToken"));
+        EPayPrincipal principal = authentication.getPrincipal();
+
+        assertNotNull(principal);
+        assertEquals("adminUser", principal.getAuthenticationId());
+        assertEquals("MID123", principal.getMId());
+        assertEquals("ORD456", principal.getOrderRef());
+        assertEquals("ATRN789", principal.getTransactionRef());
+        assertEquals("AdminToken", principal.getTokenType());
+        assertEquals(List.of("ROLE_ADMIN"), principal.getUserRole());
+    }
+
+    @Test
+    void testDerivePrincipal_WithoutRole() {
+        when(claims.get(EPayJwtClaimsSet.ROLE)).thenReturn(null);
+        when(claims.get(EPayJwtClaimsSet.USERNAME, String.class)).thenReturn("defaultUser");
+        when(claims.get(EPayJwtClaimsSet.MID, String.class)).thenReturn("MID999");
+        when(claims.get(EPayJwtClaimsSet.ORDER_NUMBER, String.class)).thenReturn("ORD999");
+        when(claims.get(EPayJwtClaimsSet.ATRN_NUMBER, String.class)).thenReturn("ATRN999");
+        when(claims.get(EPayJwtClaimsSet.TYPE, String.class)).thenReturn("UserToken");
+
+        JwtAuthenticationToken authentication = jwtAuthenticationProvider.authenticate(new JwtAuthenticationToken("jwtToken"));
+        EPayPrincipal principal = authentication.getPrincipal();
+
+        assertNotNull(principal);
+        assertEquals("defaultUser", principal.getAuthenticationId());
+        assertEquals("MID999", principal.getMId());
+        assertEquals("ORD999", principal.getOrderRef());
+        assertEquals("ATRN999", principal.getTransactionRef());
+        assertEquals("UserToken", principal.getTokenType());
+        assertEquals(List.of("ROLE_USER"), principal.getUserRole());
+    }
+
+    @Test
+    void testSupports_ValidClass() {
+        assertTrue(jwtAuthenticationProvider.supports(JwtAuthenticationToken.class));
+    }
+
+    @Test
+    void testSupports_InvalidClass() {
+        assertFalse(jwtAuthenticationProvider.supports(Authentication.class));
+    }
+}
+
+
+
+
+
+
+
+
+package com.sbi.epay.authentication.service;
+
 import com.sbi.epay.authentication.exception.EPaySecurityException;
 import com.sbi.epay.authentication.model.AccessTokenRequest;
 import com.sbi.epay.authentication.model.TransactionTokenRequest;
