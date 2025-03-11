@@ -1,4 +1,65 @@
- @Test
+@ExtendWith(MockitoExtension.class)
+class JwtServiceTest {
+
+    @Spy  // Allows us to mock protected/private methods
+    private JwtService jwtService;
+
+    @Mock
+    private AuthenticationUserService authenticationUserService;
+
+    private String secretKey;
+    private String issuer;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        secretKey = Base64.getEncoder().encodeToString(Keys.secretKeyFor(SignatureAlgorithm.HS512).getEncoded());
+        issuer = "testIssuer";
+
+        // Use reflection to set private fields in JwtService
+        java.lang.reflect.Field secretKeyField = JwtService.class.getDeclaredField("secretKey");
+        secretKeyField.setAccessible(true);
+        secretKeyField.set(jwtService, secretKey);
+
+        java.lang.reflect.Field issuerField = JwtService.class.getDeclaredField("issuer");
+        issuerField.setAccessible(true);
+        issuerField.set(jwtService, issuer);
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_ValidToken() {
+        // Mock Claims object
+        Claims mockClaims = mock(Claims.class);
+        when(mockClaims.getIssuer()).thenReturn(issuer);
+        when(mockClaims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 10000));
+        when(mockClaims.get("username", String.class)).thenReturn("testUser");
+        when(mockClaims.get("type", String.class)).thenReturn("ACCESS");
+
+        // Mock getAllClaimsFromToken() to return mockClaims
+        doReturn(mockClaims).when(jwtService).getAllClaimsFromToken(anyString());
+
+        // Mock AuthenticationUserService
+        EPayPrincipal mockUser = mock(EPayPrincipal.class);
+        when(mockUser.getAuthenticationId()).thenReturn("testUser");
+        when(authenticationUserService.loadUserByUserName(anyString())).thenReturn(Optional.of(mockUser));
+        when(authenticationUserService.isTokenInValid(anyString(), anyString())).thenReturn(false);
+
+        // Generate a dummy token
+        String token = "dummyToken";
+
+        // Call the method under test
+        Claims resultClaims = jwtService.verifyJwtTokenAndGetClaims(token);
+
+        // Assertions
+        assertNotNull(resultClaims);
+        assertEquals("testUser", resultClaims.get("username", String.class));
+    }
+}
+
+
+
+
+
+@Test
     void testGetAllClaimsFromToken_ValidToken() {
         Claims claims = Jwts.claims();
         claims.put("username", "testUser");
