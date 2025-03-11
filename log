@@ -1,3 +1,60 @@
+@ExtendWith(MockitoExtension.class)
+class JwtServiceTest {
+
+    @Spy  // Change from @InjectMocks to @Spy to allow mocking private methods
+    private JwtService jwtService;
+
+    @Mock
+    private AuthenticationUserService authenticationUserService;
+
+    private String secretKey;
+    private String issuer;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        secretKey = Base64.getEncoder().encodeToString(Keys.secretKeyFor(SignatureAlgorithm.HS512).getEncoded());
+        issuer = "testIssuer";
+
+        java.lang.reflect.Field secretKeyField = JwtService.class.getDeclaredField("secretKey");
+        secretKeyField.setAccessible(true);
+        secretKeyField.set(jwtService, secretKey);
+
+        java.lang.reflect.Field issuerField = JwtService.class.getDeclaredField("issuer");
+        issuerField.setAccessible(true);
+        issuerField.set(jwtService, issuer);
+    }
+
+    @Test
+    void testVerifyJwtTokenAndGetClaims_ValidToken() throws Exception {
+        // Create mock claims
+        Claims mockClaims = mock(Claims.class);
+        when(mockClaims.getIssuer()).thenReturn(issuer);
+        when(mockClaims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 10000));
+        when(mockClaims.get("username", String.class)).thenReturn("testUser");
+        when(mockClaims.get("type", String.class)).thenReturn("ACCESS");
+
+        // Mock private method getAllClaimsFromToken()
+        doReturn(mockClaims).when(jwtService).getAllClaimsFromToken(anyString());
+
+        // Mock user service
+        EPayPrincipal ePayPrincipal = mock(EPayPrincipal.class);
+        when(ePayPrincipal.getAuthenticationId()).thenReturn("testUser");
+        when(authenticationUserService.isTokenInValid(anyString(), anyString())).thenReturn(false);
+        when(authenticationUserService.loadUserByUserName(anyString())).thenReturn(Optional.of(ePayPrincipal));
+
+        // Execute method
+        Claims resultClaims = jwtService.verifyJwtTokenAndGetClaims("dummyToken");
+
+        // Assertions
+        assertNotNull(resultClaims);
+        assertEquals("testUser", resultClaims.get("username"));
+    }
+}
+
+
+
+
+
 package com.sbi.epay.authentication.service;
 
 import com.sbi.epay.authentication.constant.EPayAuthenticationConstant;
