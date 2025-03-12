@@ -1,5 +1,39 @@
 @Test
 void testValidAuthRequest_InvalidTokenType() {
+    // Create a concrete subclass of TokenRequest
+    class InvalidTokenRequest extends TokenRequest {
+        @Override
+        public TokenType getTokenType() {
+            return null; // Simulating an invalid/null token type
+        }
+    }
+
+    TokenRequest invalidTokenRequest = new InvalidTokenRequest();
+
+    // Expect an EPaySecurityException due to invalid token type
+    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
+        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
+    });
+
+    // Verify the error messages list is not empty
+    assertNotNull(exception.getErrorMessages());
+    assertFalse(exception.getErrorMessages().isEmpty());
+
+    // Verify the error code
+    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
+                 exception.getErrorMessages().getFirst().getErrorCode());
+
+    // Verify the error message
+    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
+                 exception.getErrorMessages().getFirst().getErrorMessage());
+}
+
+
+
+
+
+@Test
+void testValidAuthRequest_InvalidTokenType() {
     // Create a custom subclass with an invalid token type
     TokenRequest invalidTokenRequest = new TokenRequest() {
         @Override
