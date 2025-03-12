@@ -1,3 +1,37 @@
+@Test
+void testGetAllClaimsFromToken_ExpiredToken() {
+    // Mock ExpiredJwtException scenario
+    String expiredToken = "expiredToken";
+    doThrow(new ExpiredJwtException(null, null, "Token expired")).when(spyJwtService)
+            .getAllClaimsFromToken(expiredToken);
+
+    // Assert that exception is thrown with expected message
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        spyJwtService.getAllClaimsFromToken(expiredToken);
+    });
+
+    assertEquals(EPayAuthenticationErrorConstants.TOKEN_EXPIRED, exception.getMessage());
+}
+
+
+@Test
+void testGetAllClaimsFromToken_InvalidSignature() {
+    // Mock SignatureException scenario
+    String invalidToken = "invalidToken";
+    doThrow(new SignatureException("Invalid token signature")).when(spyJwtService)
+            .getAllClaimsFromToken(invalidToken);
+
+    // Assert that exception is thrown with expected message
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        spyJwtService.getAllClaimsFromToken(invalidToken);
+    });
+
+    assertEquals(EPayAuthenticationErrorConstants.INVALID_TOKEN, exception.getMessage());
+}
+
+
+
+
 protected Claims getAllClaimsFromToken(String token) {
         try {
             logger.info("ClassName - JwtService,MethodName - getAllClaimsFromToken, getting all claims from token.");
