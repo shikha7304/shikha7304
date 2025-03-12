@@ -1,3 +1,26 @@
+@Test
+void testValidAuthRequest_InvalidTokenType() {
+    // ✅ Use a spy on an actual instance instead of a mock
+    TokenRequest invalidTokenRequest = spy(new TestTokenRequest(null));
+
+    // Expect an EPaySecurityException due to invalid token type
+    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
+        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
+    });
+
+    // ✅ Verify the exception details
+    assertNotNull(exception.getErrorMessages());
+    assertFalse(exception.getErrorMessages().isEmpty());
+    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
+                 exception.getErrorMessages().getFirst().getErrorCode());
+    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
+                 exception.getErrorMessages().getFirst().getErrorMessage());
+}
+
+
+
+
+
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
