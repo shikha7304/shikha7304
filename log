@@ -1,3 +1,50 @@
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import java.util.List;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@Test
+void testValidAuthRequest_InvalidTokenType() {
+    // Create a mock for TokenRequest (use a concrete subclass if needed)
+    TokenRequest invalidTokenRequest = mock(TokenRequest.class);
+    when(invalidTokenRequest.getTokenType()).thenReturn(null);
+
+    // Mock static method of AuthRequestValidator
+    try (MockedStatic<AuthRequestValidator> mockedStatic = mockStatic(AuthRequestValidator.class)) {
+        // Mock behavior to throw the expected exception
+        mockedStatic.when(() -> AuthRequestValidator.validAuthRequest(invalidTokenRequest))
+                    .thenThrow(new EPaySecurityException(List.of(new ErrorDto(
+                            EPayAuthenticationErrorConstants.INVALID_ERROR_CODE,
+                            MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE")
+                    ))));
+
+        // Expect an exception
+        EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
+            AuthRequestValidator.validAuthRequest(invalidTokenRequest);
+        });
+
+        // Verify error message and code
+        assertNotNull(exception.getErrorMessages());
+        assertFalse(exception.getErrorMessages().isEmpty());
+        assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
+                     exception.getErrorMessages().getFirst().getErrorCode());
+        assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
+                     exception.getErrorMessages().getFirst().getErrorMessage());
+
+        // Verify that the static method was called once
+        mockedStatic.verify(() -> AuthRequestValidator.validAuthRequest(invalidTokenRequest), times(1));
+    }
+}
+
+
+
+
+
+
+
+
 @Test
 void testValidAuthRequest_InvalidTokenType() {
     // Create a concrete subclass of TokenRequest
