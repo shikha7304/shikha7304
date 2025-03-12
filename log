@@ -1,4 +1,36 @@
 @Test
+void testGetAllClaimsFromToken_ExpiredToken() {
+    // Mock JWT parser to throw ExpiredJwtException
+    JwtParser jwtParserMock = mock(JwtParser.class);
+    JwtParserBuilder jwtParserBuilderMock = mock(JwtParserBuilder.class);
+
+    // Mock behavior of parserBuilder to return the mocked parser
+    mockStatic(Jwts.class);
+    when(Jwts.parserBuilder()).thenReturn(jwtParserBuilderMock);
+    when(jwtParserBuilderMock.setSigningKey(any(Key.class))).thenReturn(jwtParserBuilderMock);
+    when(jwtParserBuilderMock.build()).thenReturn(jwtParserMock);
+
+    // Create a dummy JWT exception
+    ExpiredJwtException expiredJwtException = new ExpiredJwtException(null, null, "Token expired");
+
+    // Force the mock parser to throw ExpiredJwtException
+    when(jwtParserMock.parseClaimsJws(anyString())).thenThrow(expiredJwtException);
+
+    String expiredToken = "expiredToken";
+
+    // Assert that IllegalStateException is thrown instead
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        jwtService.getAllClaimsFromToken(expiredToken);
+    });
+
+    // Validate that the re-thrown exception contains the correct error message
+    assertEquals(EPayAuthenticationErrorConstants.TOKEN_EXPIRED, exception.getMessage());
+}
+
+
+
+
+@Test
 void testGetAllClaimsFromToken_InvalidSignature() {
     // Mock JWT parser to throw SignatureException
     JwtParser jwtParserMock = mock(JwtParser.class);
