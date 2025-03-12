@@ -1,4 +1,49 @@
-   @Test
+@Test
+void testGetAllClaimsFromToken_InvalidSignature() {
+    // Mock JWT Parser to throw SignatureException
+    JwtService spyJwtService = Mockito.spy(jwtService);
+    
+    String invalidToken = "invalidToken";
+
+    // Mock behavior to throw SignatureException
+    doThrow(new SignatureException("Invalid token signature"))
+            .when(spyJwtService)
+            .getAllClaimsFromToken(invalidToken);
+
+    // Assert that IllegalStateException is thrown instead
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        spyJwtService.getAllClaimsFromToken(invalidToken);
+    });
+
+    assertEquals(EPayAuthenticationErrorConstants.INVALID_TOKEN, exception.getMessage());
+}
+
+
+@Test
+void testGetAllClaimsFromToken_TokenExpired() {
+    // Spy on JwtService
+    JwtService spyJwtService = Mockito.spy(jwtService);
+
+    String expiredToken = "expiredToken";
+
+    // Mock behavior to throw ExpiredJwtException
+    doThrow(new ExpiredJwtException(null, null, "Token expired"))
+            .when(spyJwtService)
+            .getAllClaimsFromToken(expiredToken);
+
+    // Assert that IllegalStateException is thrown instead
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        spyJwtService.getAllClaimsFromToken(expiredToken);
+    });
+
+    assertEquals(EPayAuthenticationErrorConstants.TOKEN_EXPIRED, exception.getMessage());
+}
+
+
+
+
+
+@Test
     void testGetAllClaimsFromToken_InvalidSignature() {
         // Mock SignatureException scenario
         // Mock Claims object
