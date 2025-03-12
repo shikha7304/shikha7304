@@ -1,4 +1,28 @@
-   /**
+@Test
+void testValidAuthRequest_InvalidTokenType() {
+    // Create a mock TokenRequest with an invalid token type
+    TokenRequest invalidTokenRequest = mock(TokenRequest.class);
+    when(invalidTokenRequest.getTokenType()).thenReturn(null); // Simulating an unexpected/null token type
+
+    // Expect an EPaySecurityException due to invalid token type
+    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
+        JwtService.validAuthRequest(invalidTokenRequest);
+    });
+
+    // Verify the error message and code
+    assertFalse(exception.getErrorDtoList().isEmpty());
+    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, exception.getErrorDtoList().get(0).getErrorCode());
+    assertEquals(
+        MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
+        exception.getErrorDtoList().get(0).getErrorMessage()
+    );
+}
+
+
+
+
+
+/**
      * Validate authentication respective request object based on token type.
      *
      * @param tokenRequest gets request for validation.
