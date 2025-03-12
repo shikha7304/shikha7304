@@ -1,3 +1,63 @@
+@Test
+void testGetAllClaimsFromToken_ExpiredToken() {
+    try (MockedStatic<Jwts> mockedJwts = mockStatic(Jwts.class)) {
+        JwtParser jwtParserMock = mock(JwtParser.class);
+        JwtParserBuilder jwtParserBuilderMock = mock(JwtParserBuilder.class);
+
+        // Mock behavior of parserBuilder to return the mocked parser
+        mockedJwts.when(Jwts::parserBuilder).thenReturn(jwtParserBuilderMock);
+        when(jwtParserBuilderMock.setSigningKey(any(Key.class))).thenReturn(jwtParserBuilderMock);
+        when(jwtParserBuilderMock.build()).thenReturn(jwtParserMock);
+
+        // Create a dummy JWT exception
+        ExpiredJwtException expiredJwtException = new ExpiredJwtException(null, null, "Token expired");
+
+        // Force the mock parser to throw ExpiredJwtException
+        when(jwtParserMock.parseClaimsJws(anyString())).thenThrow(expiredJwtException);
+
+        String expiredToken = "expiredToken";
+
+        // Assert that IllegalStateException is thrown instead
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            jwtService.getAllClaimsFromToken(expiredToken);
+        });
+
+        // Validate that the re-thrown exception contains the correct error message
+        assertEquals(EPayAuthenticationErrorConstants.TOKEN_EXPIRED, exception.getMessage());
+    } // <- mockStatic(Jwts.class) will be automatically closed here
+}
+
+
+@Test
+void testGetAllClaimsFromToken_InvalidSignature() {
+    try (MockedStatic<Jwts> mockedJwts = mockStatic(Jwts.class)) {
+        JwtParser jwtParserMock = mock(JwtParser.class);
+        JwtParserBuilder jwtParserBuilderMock = mock(JwtParserBuilder.class);
+
+        // Mock behavior of parserBuilder to return the mocked parser
+        mockedJwts.when(Jwts::parserBuilder).thenReturn(jwtParserBuilderMock);
+        when(jwtParserBuilderMock.setSigningKey(any(Key.class))).thenReturn(jwtParserBuilderMock);
+        when(jwtParserBuilderMock.build()).thenReturn(jwtParserMock);
+
+        // Force the mock parser to throw SignatureException
+        when(jwtParserMock.parseClaimsJws(anyString())).thenThrow(new SignatureException("Invalid token signature"));
+
+        String invalidToken = "invalidToken";
+
+        // Assert that IllegalStateException is thrown instead
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            jwtService.getAllClaimsFromToken(invalidToken);
+        });
+
+        // Validate that the re-thrown exception contains the correct error message
+        assertEquals(EPayAuthenticationErrorConstants.INVALID_TOKEN, exception.getMessage());
+    } // <- mockStatic(Jwts.class) will be automatically closed here
+}
+
+
+
+
+
 package com.sbi.epay.authentication.service;
 
 import com.sbi.epay.authentication.model.AccessTokenRequest;
