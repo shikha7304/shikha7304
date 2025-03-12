@@ -1,3 +1,68 @@
+   @Test
+    void testGetAllClaimsFromToken_InvalidSignature() {
+        // Mock SignatureException scenario
+        // Mock Claims object
+        Claims mockClaims = mock(Claims.class);
+        when(mockClaims.getIssuer()).thenReturn(issuer);
+        when(mockClaims.getSubject()).thenReturn("User");
+        when(mockClaims.getExpiration()).thenReturn(new Date(System.currentTimeMillis() + 100000));
+        when(mockClaims.get("username", String.class)).thenReturn("testUser");
+        when(mockClaims.get("type", String.class)).thenReturn("ACCESS");
+
+        // Mock getAllClaimsFromToken() to return mockClaims
+        JwtService spyJwtService= Mockito.spy(jwtService);
+        doReturn(mockClaims).when(spyJwtService).getAllClaimsFromToken(anyString());
+
+        String invalidToken = "invalidToken";
+        doThrow(new SignatureException("Invalid token signature")).when(spyJwtService)
+                .getAllClaimsFromToken(invalidToken);
+
+        // Assert that exception is thrown with expected message
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            spyJwtService.getAllClaimsFromToken(invalidToken);
+        });
+
+        assertEquals(EPayAuthenticationErrorConstants.INVALID_TOKEN, exception.getMessage());
+    }
+Unexpected exception type thrown, expected: <java.lang.IllegalStateException> but was: <io.jsonwebtoken.security.SignatureException>
+Expected :class java.lang.IllegalStateException
+Actual   :class io.jsonwebtoken.security.SignatureException
+<Click to see difference>
+
+org.opentest4j.AssertionFailedError: Unexpected exception type thrown, expected: <java.lang.IllegalStateException> but was: <io.jsonwebtoken.security.SignatureException>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:67)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:35)
+	at org.junit.jupiter.api.Assertions.assertThrows(Assertions.java:3111)
+	at com.sbi.epay.authentication.service.JwtServiceTest.testGetAllClaimsFromToken_InvalidSignature(JwtServiceTest.java:202)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+Caused by: io.jsonwebtoken.security.SignatureException: Invalid token signature
+	at com.sbi.epay.authentication.service.JwtService.getAllClaimsFromToken(JwtService.java:151)
+	at com.sbi.epay.authentication.service.JwtServiceTest.lambda$testGetAllClaimsFromToken_InvalidSignature$0(JwtServiceTest.java:203)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:53)
+	... 6 more
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @Test
 void testGetAllClaimsFromToken_ExpiredToken() {
     // Mock ExpiredJwtException scenario
