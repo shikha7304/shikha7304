@@ -1,5 +1,29 @@
 @Test
 void testGetAllClaimsFromToken_InvalidSignature() {
+    // Spy on JwtService
+    JwtService spyJwtService = Mockito.spy(jwtService);
+
+    // Mock behavior of Jwts.parserBuilder() to throw SignatureException
+    doThrow(new SignatureException("Invalid token signature"))
+            .when(spyJwtService)
+            .getAllClaimsFromToken(anyString());
+
+    String invalidToken = "invalidToken";
+
+    // Assert that IllegalStateException is thrown instead
+    IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        spyJwtService.getAllClaimsFromToken(invalidToken);
+    });
+
+    // Validate that the re-thrown exception contains the correct error message
+    assertEquals(EPayAuthenticationErrorConstants.INVALID_TOKEN, exception.getMessage());
+}
+
+
+
+
+@Test
+void testGetAllClaimsFromToken_InvalidSignature() {
     // Mock JWT Parser to throw SignatureException
     JwtService spyJwtService = Mockito.spy(jwtService);
     
