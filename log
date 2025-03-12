@@ -1,5 +1,34 @@
 @Test
 void testValidAuthRequest_InvalidTokenType() {
+    // Spy on a real TokenRequest object
+    TokenRequest invalidTokenRequest = spy(new TokenRequest() {});
+
+    // Use a token type that is outside expected cases (assuming there's no UNKNOWN in production)
+    doReturn(TokenType.UNKNOWN).when(invalidTokenRequest).getTokenType();
+
+    // Expect an EPaySecurityException due to invalid token type
+    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
+        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
+    });
+
+    // Verify that the error messages list is not empty
+    assertNotNull(exception.getErrorMessages());
+    assertFalse(exception.getErrorMessages().isEmpty());
+
+    // Verify the error code
+    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
+                 exception.getErrorMessages().getFirst().getErrorCode());
+
+    // Verify the error message
+    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
+                 exception.getErrorMessages().getFirst().getErrorMessage());
+}
+
+
+
+
+@Test
+void testValidAuthRequest_InvalidTokenType() {
     // Use a spy instead of a mock to allow method stubbing while preserving real behavior
     TokenRequest invalidTokenRequest = spy(new TokenRequest() {});
 
