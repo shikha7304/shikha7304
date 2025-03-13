@@ -1,4 +1,45 @@
 public TransactionResponse<CustomerResponse> updateCustomerStatus(String customerId, String status) {
+    logger.debug(" updateCustomerStatus for customerId {} and status{}", customerId, status);
+    
+    CustomerDto customerDto = customerDao.getCustomerByCustomerId(customerId)
+            .orElseThrow(() -> new TransactionException(CustomerErrorConstant.NOT_FOUND_ERROR_CODE,
+                    MessageFormat.format(CustomerErrorConstant.NOT_FOUND_ERROR_MESSAGE, TransactionConstant.VALID_CUSTOMER)));
+    
+    logger.debug("customerDto {}", customerDto);
+    
+    // Prevent status update if current status is "D" (Deleted)
+    if ("D".equals(customerDto.getStatus()) && !"D".equals(status)) {
+        throw new TransactionException(CustomerErrorConstant.INVALID_ERROR_CODE, 
+                "Cannot change status from 'Delete' to '" + status + "'");
+    }
+
+    EncryptionKeyDto encryptionKeyDto = kmsServiceClient.getKekAndMekByMID(EPayIdentityUtil.getUserPrincipal().getMId());
+
+    switch (status) {
+        case "active" -> customerDto.setStatus("A");
+        case "inactive" -> customerDto.setStatus("I");
+        case "delete" -> customerDto.setStatus("D");
+        case "blocked" -> customerDto.setStatus("B");
+        default ->
+                throw new TransactionException(CustomerErrorConstant.INVALID_ERROR_CODE, 
+                        MessageFormat.format(CustomerErrorConstant.INVALID_ERROR_MESSAGE, "customer status"));
+    }
+
+    // Update customer status
+    logger.info("update customer status");
+    customerDao.updateCustomerStatus(customerDto);
+    
+    String encryptedResponse = customerUtil.encryptCustomerData(customerDto, encryptionKeyDto);
+    logger.debug("encrypted customerResponse{}", encryptedResponse);
+    
+    return CustomerUtil.buildTransactionResponse(encryptedResponse);
+}
+
+
+
+
+
+public TransactionResponse<CustomerResponse> updateCustomerStatus(String customerId, String status) {
 logger.debug(" updateCustomerStatus for customerId {} and status{}",customerId,customerId);
         CustomerDto customerDto = customerDao.getCustomerByCustomerId(customerId)
                 .orElseThrow(() -> new TransactionException(CustomerErrorConstant.NOT_FOUND_ERROR_CODE,
