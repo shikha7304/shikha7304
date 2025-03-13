@@ -1,266 +1,69 @@
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // ✅ Use Mockito spy instead of a mock
-    TokenRequest invalidTokenRequest = spy(TokenRequest.class);
-    doReturn(null).when(invalidTokenRequest).getTokenType(); // Simulating an invalid token type
+public TransactionResponse<CustomerResponse> updateCustomerStatus(String customerId, String status) {
+logger.debug(" updateCustomerStatus for customerId {} and status{}",customerId,customerId);
+        CustomerDto customerDto = customerDao.getCustomerByCustomerId(customerId)
+                .orElseThrow(() -> new TransactionException(CustomerErrorConstant.NOT_FOUND_ERROR_CODE,
+                        MessageFormat.format(CustomerErrorConstant.NOT_FOUND_ERROR_MESSAGE, TransactionConstant.VALID_CUSTOMER)));
+        logger.debug("customerDto {}",customerDto);
+        EncryptionKeyDto encryptionKeyDto = kmsServiceClient.getKekAndMekByMID(EPayIdentityUtil.getUserPrincipal().getMId());
 
-    // ✅ Expect an EPaySecurityException due to invalid token type
-    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-    });
-
-    // ✅ Verify the exception details
-    assertNotNull(exception.getErrorMessages());
-    assertFalse(exception.getErrorMessages().isEmpty());
-    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                 exception.getErrorMessages().getFirst().getErrorCode());
-    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                 exception.getErrorMessages().getFirst().getErrorMessage());
-}
+        switch (status) {
+            case "active" -> customerDto.setStatus("A");
+            case "inactive" -> customerDto.setStatus("I");
+            case "delete" -> customerDto.setStatus("D");
+            case "blocked" -> customerDto.setStatus("B");
+            default ->
+                    throw new TransactionException(CustomerErrorConstant.INVALID_ERROR_CODE, MessageFormat.format(CustomerErrorConstant.INVALID_ERROR_MESSAGE, "customer status"));
+        };
 
 
-
-
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // ✅ Use a spy on an actual instance instead of a mock
-    TokenRequest invalidTokenRequest = spy(new TestTokenRequest(null));
-
-    // Expect an EPaySecurityException due to invalid token type
-    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-    });
-
-    // ✅ Verify the exception details
-    assertNotNull(exception.getErrorMessages());
-    assertFalse(exception.getErrorMessages().isEmpty());
-    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                 exception.getErrorMessages().getFirst().getErrorCode());
-    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                 exception.getErrorMessages().getFirst().getErrorMessage());
-}
-
-
-
-
-
-import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import java.util.List;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // Create a mock for TokenRequest (use a concrete subclass if needed)
-    TokenRequest invalidTokenRequest = mock(TokenRequest.class);
-    when(invalidTokenRequest.getTokenType()).thenReturn(null);
-
-    // Mock static method of AuthRequestValidator
-    try (MockedStatic<AuthRequestValidator> mockedStatic = mockStatic(AuthRequestValidator.class)) {
-        // Mock behavior to throw the expected exception
-        mockedStatic.when(() -> AuthRequestValidator.validAuthRequest(invalidTokenRequest))
-                    .thenThrow(new EPaySecurityException(List.of(new ErrorDto(
-                            EPayAuthenticationErrorConstants.INVALID_ERROR_CODE,
-                            MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE")
-                    ))));
-
-        // Expect an exception
-        EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-            AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-        });
-
-        // Verify error message and code
-        assertNotNull(exception.getErrorMessages());
-        assertFalse(exception.getErrorMessages().isEmpty());
-        assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                     exception.getErrorMessages().getFirst().getErrorCode());
-        assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                     exception.getErrorMessages().getFirst().getErrorMessage());
-
-        // Verify that the static method was called once
-        mockedStatic.verify(() -> AuthRequestValidator.validAuthRequest(invalidTokenRequest), times(1));
-    }
-}
-
-
-
-
-
-
-
-
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // Create a concrete subclass of TokenRequest
-    class InvalidTokenRequest extends TokenRequest {
-        @Override
-        public TokenType getTokenType() {
-            return null; // Simulating an invalid/null token type
-        }
+      //update customer status
+        logger.info("update customer status");
+        customerDao.updateCustomerStatus(customerDto);
+        String encryptedResponse = customerUtil.encryptCustomerData(customerDto, encryptionKeyDto);
+logger.debug("encrypted customerResponse{}",encryptedResponse);
+        return CustomerUtil.buildTransactionResponse(encryptedResponse);
     }
 
-    TokenRequest invalidTokenRequest = new InvalidTokenRequest();
 
-    // Expect an EPaySecurityException due to invalid token type
-    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-    });
+@Setter
+@Getter
+@AllArgsConstructor
+@NoArgsConstructor
+@ToString
+@Builder
+public class CustomerDto extends BaseDto {
 
-    // Verify the error messages list is not empty
-    assertNotNull(exception.getErrorMessages());
-    assertFalse(exception.getErrorMessages().isEmpty());
+    private String merchantId;
+    private String customerId;
+    private String customerName;
+    private String email;
+    private String gstIn;
+    private String gstInAddress;
+    private String phoneNumber;
+    private String address1;
+    private String address2;
+    private String city;
+    private String state;
+    private String country;
+    private String pinCode;
+    private String status;
 
-    // Verify the error code
-    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                 exception.getErrorMessages().getFirst().getErrorCode());
-
-    // Verify the error message
-    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                 exception.getErrorMessages().getFirst().getErrorMessage());
 }
 
 
 
 
 
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // Create a custom subclass with an invalid token type
-    TokenRequest invalidTokenRequest = new TokenRequest() {
-        @Override
-        public TokenType getTokenType() {
-            return null; // Simulating an unexpected/null token type
-        }
-    };
 
-    // Expect an EPaySecurityException due to invalid token type
-    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-    });
 
-    // Verify that the error messages list is not empty
-    assertNotNull(exception.getErrorMessages());
-    assertFalse(exception.getErrorMessages().isEmpty());
 
-    // Verify the error code
-    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                 exception.getErrorMessages().getFirst().getErrorCode());
-
-    // Verify the error message
-    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                 exception.getErrorMessages().getFirst().getErrorMessage());
+    /**
+     * Update customer status
+     *
+     * @param customerDto
+     * @return CustomerDto
+     */
+public CustomerDto updateCustomerStatus(CustomerDto customerDto) {
+    MerchantCustomer merchantCustomer= customerRepository.save(customerMapper.customerDtoToEntity(customerDto));
+    return customerMapper.customerEntityToDto(merchantCustomer);
 }
-
-
-
-
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // Spy on a real TokenRequest object
-    TokenRequest invalidTokenRequest = spy(new TokenRequest() {});
-
-    // Use a token type that is outside expected cases (assuming there's no UNKNOWN in production)
-    doReturn(TokenType.UNKNOWN).when(invalidTokenRequest).getTokenType();
-
-    // Expect an EPaySecurityException due to invalid token type
-    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-    });
-
-    // Verify that the error messages list is not empty
-    assertNotNull(exception.getErrorMessages());
-    assertFalse(exception.getErrorMessages().isEmpty());
-
-    // Verify the error code
-    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                 exception.getErrorMessages().getFirst().getErrorCode());
-
-    // Verify the error message
-    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                 exception.getErrorMessages().getFirst().getErrorMessage());
-}
-
-
-
-
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // Use a spy instead of a mock to allow method stubbing while preserving real behavior
-    TokenRequest invalidTokenRequest = spy(new TokenRequest() {});
-
-    // Ensure getTokenType() returns null to simulate an invalid token type scenario
-    doReturn(null).when(invalidTokenRequest).getTokenType();
-
-    // Expect an EPaySecurityException due to invalid token type
-    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-    });
-
-    // Verify that the error messages list is not empty
-    assertNotNull(exception.getErrorMessages());
-    assertFalse(exception.getErrorMessages().isEmpty());
-
-    // Verify the error code
-    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                 exception.getErrorMessages().getFirst().getErrorCode());
-
-    // Verify the error message
-    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                 exception.getErrorMessages().getFirst().getErrorMessage());
-}
-
-
-
-
-
-@Test
-void testValidAuthRequest_InvalidTokenType() {
-    // Create a real TokenRequest object with null tokenType
-    TokenRequest invalidTokenRequest = new TokenRequest() {};
-    invalidTokenRequest.setTokenType(null); // Simulating a null token type
-
-    // Expect an EPaySecurityException due to invalid token type
-    EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-        AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-    });
-
-    // Verify that the error messages list is not empty
-    assertNotNull(exception.getErrorMessages());
-    assertFalse(exception.getErrorMessages().isEmpty());
-
-    // Verify the error code
-    assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, 
-                 exception.getErrorMessages().getFirst().getErrorCode());
-
-    // Verify the error message
-    assertEquals(MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                 exception.getErrorMessages().getFirst().getErrorMessage());
-}
-
-
-
-
-
-@Test
-    void testValidAuthRequest_InvalidTokenType() {
-        // Create a mock TokenRequest with an invalid token type
-        TokenRequest invalidTokenRequest = mock(TokenRequest.class);
-        when(invalidTokenRequest.getTokenType()).thenReturn(null); // Simulating an unexpected/null token type
-
-        // Expect an EPaySecurityException due to invalid token type
-        EPaySecurityException exception = assertThrows(EPaySecurityException.class, () -> {
-            AuthRequestValidator.validAuthRequest(invalidTokenRequest);
-        });
-
-        // Verify the error message and code
-        assertFalse(exception.getErrorMessage().isEmpty());
-        assertEquals(EPayAuthenticationErrorConstants.INVALID_ERROR_CODE, exception.getErrorMessages().getFirst().getErrorCode());
-        assertEquals(
-                MessageFormat.format(EPayAuthenticationErrorConstants.INVALID_ERROR_MESSAGE, "TOKEN_TYPE"),
-                exception.getErrorMessage());
-
-    }
-
-Cannot invoke "com. sbi. epay. authentication. util. enums. TokenType. ordinal()" because the return value of "com. sbi. epay. authentication. model. TokenRequest. getTokenType()" is nul
