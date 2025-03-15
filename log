@@ -51,3 +51,25 @@ public void validateUpdateOrderRequest(OrderUpdateRequest orderUpdateRequest){
         logger.debug("update order request successfully in DB:{}",saveOrder);
         return  orderMapper.orderToOrderDto(order);
     }
+
+
+{
+    "status": 0,
+    "errors": [
+        {
+            "errorCode": "409",
+            "errorMessage": "No enum constant com.epay.transaction.util.enums.OrderStatus. ATTEMPTED"
+        }
+    ]
+}
+
+"Error: 200 – Ok
+{
+    ""status"": 0,
+    ""errors"": [
+        {
+            ""errorCode"": ""3209"",
+            ""errorMessage"": ""Please Check status format""
+        }
+    ]
+}"
