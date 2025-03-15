@@ -28,20 +28,27 @@ public class OrderUpdateRequest {
         logger.debug("update order status: "+orderDto);
         return TransactionResponse.<String>builder().data(List.of("Order Status updated Successfully.")).status(1).count(1L).build();
     }
-public void validateUpdateOrderRequest(OrderUpdateRequest orderUpdateRequest){
-        System.out.println("================>>>" + String.valueOf(orderUpdateRequest.getStatus()));
-        validateOrderStatus((orderUpdateRequest.getStatus()));
 
+    public void validateUpdateOrderRequest(OrderUpdateRequest orderUpdateRequest){
+        String OriginalStatus=orderUpdateRequest.getStatus();
+        String trimmedStatus=orderUpdateRequest.getStatus().trim();
+        // Validate the status format
+        if(!OriginalStatus.equals(trimmedStatus))
+        {
+            throw  new TransactionException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Order Status"));
+        }
+        validateOrderStatus(trimmedStatus);
+        orderUpdateRequest.setStatus(trimmedStatus);
     }
     private void validateOrderStatus(String orderStatus) {
         if(StringUtils.isNotBlank(orderStatus)) {
-            if (!validateLeadingTrailingSpaces("orderStatus", orderStatus) && !EnumUtils.isValidEnum(OrderStatus.class, orderStatus)) {
+            if (!EnumUtils.isValidEnum(OrderStatus.class, orderStatus)) {
                 addError(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "orderStatus"));
             }
         }
     }
 
- public OrderDto updateOrderStatus(OrderUpdateRequest orderUpdateRequest) {
+  public OrderDto updateOrderStatus(OrderUpdateRequest orderUpdateRequest) {
 
         Order order = orderRepository.findByOrderRefNumberAndSbiOrderRefNumber(orderUpdateRequest.getOrderRefNumber(),orderUpdateRequest.getSbiOrderRefNumber()).orElseThrow(() -> new TransactionException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Order")));
         order.setStatus(OrderStatus.valueOf(orderUpdateRequest.getStatus()));
@@ -53,23 +60,35 @@ public void validateUpdateOrderRequest(OrderUpdateRequest orderUpdateRequest){
     }
 
 
+
+request 
+
+{
+    "orderRefNumber": "sbi23d2i",
+    "sbiOrderRefNumber": "5EBF1413362543EEA626",
+    "status": "@ATTEMPTED"
+}
+
+
+Response 
 {
     "status": 0,
     "errors": [
         {
             "errorCode": "409",
-            "errorMessage": "No enum constant com.epay.transaction.util.enums.OrderStatus. ATTEMPTED"
+            "errorMessage": "No enum constant com.epay.transaction.util.enums.OrderStatus.@ATTEMPTED"
         }
     ]
 }
 
-"Error: 200 – Ok
+expected response 
+Error: 200 – Ok
 {
-    ""status"": 0,
-    ""errors"": [
+    "status": 0,
+    "errors": [
         {
-            ""errorCode"": ""3209"",
-            ""errorMessage"": ""Please Check status format""
+            "errorCode": "3209",
+            "errorMessage": "Please Check status format"
         }
     ]
-}"
+}
