@@ -1,3 +1,24 @@
+{
+    "status": 0,
+    "errors": [
+        {
+            "errorCode": "1002",
+            "errorMessage": "101 is invalid. Reason : contains leading or trailing spaces. Please provide a valid value."
+        }
+    ]
+}
+
+package com.epay.admin.validator;
+
+import com.epay.admin.model.request.GatewayConfigDetailsRequestDto;
+import com.epay.admin.util.ErrorConstants;
+import org.apache.commons.lang3.EnumUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Component;
+
+import java.text.MessageFormat;
+import java.util.ArrayList;
+
 @Component
 public class GatewayConfigDetailsValidator  extends  BaseValidator{
 
@@ -15,8 +36,8 @@ public class GatewayConfigDetailsValidator  extends  BaseValidator{
     }
 
     private void  validateFieldValues(GatewayConfigDetailsRequestDto requestDto) {
-        validateFieldWithRegex(requestDto.getMID(), "^[0-9]+$", "mId", MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "mId", "Special characters or alpha numeric not allowed"));
-        validateFieldWithRegex(requestDto.getAggGtwMapId(), "^[0-9]+$", "aggGtwMapId", MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "aggGtwMapId", "Special characters or alpha numeric not allowed"));
+        validateFieldWithRegex(requestDto.getMID().trim(), "^[0-9]+$", "mId", MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "mId", "Special characters or alpha numeric not allowed"));
+        validateFieldWithRegex(requestDto.getAggGtwMapId().trim(), "^[0-9]+$", "aggGtwMapId", MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "aggGtwMapId", "Special characters or alpha numeric not allowed"));
         throwIfErrors();
     }
 
@@ -31,18 +52,4 @@ public class GatewayConfigDetailsValidator  extends  BaseValidator{
         }
         throwIfErrors();
     }
-}
-{
-    "mID": " 1000003",
-    "aggGtwMapId": "101"
-}
-
-{
-    "status": 0,
-    "errors": [
-        {
-            "errorCode": "1002",
-            "errorMessage": "mId is invalid. Reason : Special characters or alpha numeric not allowed"
-        }
-    ]
 }
