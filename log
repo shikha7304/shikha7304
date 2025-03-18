@@ -1,94 +1,48 @@
- @PostMapping("/updateStatus")
-    @Operation(summary = "Update Order Details")
-    public TransactionResponse<String> updateOrderStatus(@Valid @RequestBody OrderUpdateRequest orderUpdateRequest) {
-        logger.info("Initiated update order status:",orderUpdateRequest);
-        return orderService.updateOrderStatus(orderUpdateRequest);
+@Component
+public class GatewayConfigDetailsValidator  extends  BaseValidator{
+
+    public void validateGetGatewayConfigDetailsRequest(GatewayConfigDetailsRequestDto request) {
+        errorDtoList = new ArrayList<>();
+        validateMandatoryFields(request);
+        validateFieldValues(request);
+        validateLeadingTrailingSpaces(request.getAggGtwMapId(),request.getMID());
     }
 
-public class OrderUpdateRequest {
+    private void validateMandatoryFields(GatewayConfigDetailsRequestDto requestDto) {
+        checkMandatoryField(requestDto.getMID(), "mID");
+        checkMandatoryField(requestDto.getAggGtwMapId(), "aggGtwMapId");
+        throwIfErrors();
+    }
 
-    @JsonProperty("orderRefNumber")
-    private String orderRefNumber;
-    @NotNull
-    @JsonProperty("sbiOrderRefNumber")
-    private String sbiOrderRefNumber;
-    @NotNull
-  //  @Enumerated(EnumType.STRING)
-    @JsonProperty("status") // Optional, if you need to map to specific JSON keys
-    private String status;
+    private void  validateFieldValues(GatewayConfigDetailsRequestDto requestDto) {
+        validateFieldWithRegex(requestDto.getMID(), "^[0-9]+$", "mId", MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "mId", "Special characters or alpha numeric not allowed"));
+        validateFieldWithRegex(requestDto.getAggGtwMapId(), "^[0-9]+$", "aggGtwMapId", MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "aggGtwMapId", "Special characters or alpha numeric not allowed"));
+        throwIfErrors();
+    }
+
+    /**
+     * Validating given field value starts or ends with space
+     * @param fieldName String
+     * @param fieldValue String
+     */
+    private void validateLeadingTrailingSpaces(String fieldName, String fieldValue) {
+        if (StringUtils.startsWith(fieldValue, " ") || StringUtils.endsWith(fieldValue, " ")) {
+            addError(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, fieldName,"contains leading or trailing spaces. Please provide a valid value."));
+        }
+        throwIfErrors();
+    }
 }
- public TransactionResponse<String> updateOrderStatus(OrderUpdateRequest orderUpdateRequest) {
-        EPayPrincipal ePayPrincipal= EPayIdentityUtil.getUserPrincipal();
-
-        //Validate request
-        orderValidator.validateUpdateOrderRequest(orderUpdateRequest);
-
-        OrderDto orderDto =orderDao.updateOrderStatus(orderUpdateRequest);
-
-        logger.debug("update order status: "+orderDto);
-        return TransactionResponse.<String>builder().data(List.of("Order Status updated Successfully.")).status(1).count(1L).build();
-    }
-
-    public void validateUpdateOrderRequest(OrderUpdateRequest orderUpdateRequest){
-        String OriginalStatus=orderUpdateRequest.getStatus();
-        String trimmedStatus=orderUpdateRequest.getStatus().trim();
-        // Validate the status format
-        if(!OriginalStatus.equals(trimmedStatus))
-        {
-            throw  new TransactionException(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "Order Status"));
-        }
-        validateOrderStatus(trimmedStatus);
-        orderUpdateRequest.setStatus(trimmedStatus);
-    }
-    private void validateOrderStatus(String orderStatus) {
-        if(StringUtils.isNotBlank(orderStatus)) {
-            if (!EnumUtils.isValidEnum(OrderStatus.class, orderStatus)) {
-                addError(ErrorConstants.INVALID_ERROR_CODE, MessageFormat.format(ErrorConstants.INVALID_ERROR_MESSAGE, "orderStatus"));
-            }
-        }
-    }
-
-  public OrderDto updateOrderStatus(OrderUpdateRequest orderUpdateRequest) {
-
-        Order order = orderRepository.findByOrderRefNumberAndSbiOrderRefNumber(orderUpdateRequest.getOrderRefNumber(),orderUpdateRequest.getSbiOrderRefNumber()).orElseThrow(() -> new TransactionException(ErrorConstants.NOT_FOUND_ERROR_CODE, MessageFormat.format(ErrorConstants.NOT_FOUND_ERROR_MESSAGE, "Order")));
-        order.setStatus(OrderStatus.valueOf(orderUpdateRequest.getStatus()));
-        order.setUpdatedBy(order.getMId());
-        order.setUpdatedDate(DateTimeUtils.currentTimeMillis());
-        Order saveOrder = orderRepository.save(order);
-        logger.debug("update order request successfully in DB:{}",saveOrder);
-        return  orderMapper.orderToOrderDto(order);
-    }
-
-
-
-request 
-
 {
-    "orderRefNumber": "sbi23d2i",
-    "sbiOrderRefNumber": "5EBF1413362543EEA626",
-    "status": "@ATTEMPTED"
+    "mID": " 1000003",
+    "aggGtwMapId": "101"
 }
 
-
-Response 
 {
     "status": 0,
     "errors": [
         {
-            "errorCode": "409",
-            "errorMessage": "No enum constant com.epay.transaction.util.enums.OrderStatus.@ATTEMPTED"
-        }
-    ]
-}
-
-expected response 
-Error: 200 – Ok
-{
-    "status": 0,
-    "errors": [
-        {
-            "errorCode": "3209",
-            "errorMessage": "Please Check status format"
+            "errorCode": "1002",
+            "errorMessage": "mId is invalid. Reason : Special characters or alpha numeric not allowed"
         }
     ]
 }
